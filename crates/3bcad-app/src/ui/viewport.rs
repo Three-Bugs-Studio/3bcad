@@ -56,7 +56,7 @@ fn draw_triad(painter: &egui::Painter, rect: egui::Rect, camera: &OrbitCamera) {
     ] {
         let v = view.transform_vector3(axis);
         let dir = egui::vec2(v.x, -v.y);
-        painter.line_segment([origin, origin + dir * 34.0], egui::Stroke::new(2.5, color));
+        painter.line_segment([origin, origin + dir * 34.0], egui::Stroke::new(2.5_f32, color));
         painter.text(
             origin + dir * 44.0,
             egui::Align2::CENTER_CENTER,
