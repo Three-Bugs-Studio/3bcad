@@ -1,0 +1,40 @@
+name: Bug report
+description: Something is broken or produces wrong geometry
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Click Features > Box
+        2. Set Depth to ...
+        3. Export 3MF
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: 3BCAD version or commit
+    validations:
+      required: true
+  - type: input
+    id: system
+    attributes:
+      label: OS and GPU
+      placeholder: Windows 11, NVIDIA RTX 3060 (Vulkan)
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Run with `RUST_LOG=warn` and paste relevant output.
+      render: text

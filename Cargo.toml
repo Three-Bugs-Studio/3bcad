@@ -1,0 +1,54 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/3bcad-core",
+    "crates/3bcad-sketch",
+    "crates/3bcad-kernel",
+    "crates/3bcad-render",
+    "crates/3bcad-io",
+    "crates/3bcad-app",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Three-Bugs-Studio/3bcad"
+rust-version = "1.87"
+
+[workspace.dependencies]
+# Internal crates (Cargo package names cannot start with a digit, hence `threebcad-*`)
+threebcad-core = { path = "crates/3bcad-core" }
+threebcad-sketch = { path = "crates/3bcad-sketch" }
+threebcad-kernel = { path = "crates/3bcad-kernel" }
+threebcad-render = { path = "crates/3bcad-render" }
+threebcad-io = { path = "crates/3bcad-io" }
+
+# Rendering & windowing (eframe = winit + egui-winit + egui-wgpu; egui 0.31 pins wgpu 24 / winit 0.30)
+eframe = { version = "0.31", default-features = false, features = ["wgpu", "default_fonts", "x11", "wayland"] }
+egui = { version = "0.31", default-features = false }
+egui-wgpu = "0.31"
+bytemuck = { version = "1", features = ["derive"] }
+rfd = "0.15"
+
+# Linear algebra & graphs
+glam = { version = "0.29", features = ["bytemuck"] }
+nalgebra = "0.33"
+petgraph = "0.7"
+
+# Pure-Rust B-Rep kernel
+truck-modeling = "0.6"
+truck-meshalgo = "0.4"
+truck-stepio = "0.3"
+
+# Export
+zip = { version = "2", default-features = false, features = ["deflate"] }
+
+# Utilities
+log = "0.4"
+env_logger = "0.11"
+anyhow = "1.0"
+
+# truck tessellation and the LM solver are painfully slow unoptimised.
+[profile.dev.package."*"]
+opt-level = 2

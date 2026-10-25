@@ -1,0 +1,13 @@
+[package]
+name = "threebcad-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+threebcad-sketch.workspace = true
+threebcad-kernel.workspace = true
+petgraph.workspace = true
+anyhow.workspace = true
