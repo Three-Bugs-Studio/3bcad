@@ -10,6 +10,13 @@ use threebcad_render::{LineVertex, MeshVertex, OrbitCamera, SceneGeometry};
 
 use crate::ui::{self, ribbon::RibbonTab};
 
+/// From the workspace `version`; release tags must match it.
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+pub const RELEASE_NOTES_URL: &str = concat!(
+    env!("CARGO_PKG_REPOSITORY"),
+    "/releases/tag/v",
+    env!("CARGO_PKG_VERSION")
+);
 pub const MSAA: u32 = 4;
 pub const DEPTH_BITS: u8 = 24;
 /// Viewport tessellation: max chord deviation in mm.

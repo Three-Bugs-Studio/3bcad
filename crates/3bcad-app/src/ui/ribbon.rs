@@ -5,7 +5,7 @@ use threebcad_core::FeatureKind;
 use threebcad_io::Slicer;
 use threebcad_sketch::Sketch;
 
-use crate::app::{App, ExportFormat};
+use crate::app::{App, ExportFormat, RELEASE_NOTES_URL, VERSION};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum RibbonTab {
@@ -19,6 +19,8 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
         ui.add_space(4.0);
         ui.horizontal(|ui| {
             ui.strong("3BCAD");
+            ui.hyperlink_to(format!("v{VERSION}"), RELEASE_NOTES_URL)
+                .on_hover_text("What's new in this version");
             ui.separator();
             ui.selectable_value(&mut app.tab, RibbonTab::Features, "Features");
             ui.selectable_value(&mut app.tab, RibbonTab::Sketch, "Sketch");

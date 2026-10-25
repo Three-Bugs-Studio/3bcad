@@ -20,7 +20,20 @@ feature history, GPU viewport, print tooling) and builds each part in memory-saf
 - **3D-print export**: watertight binary STL and 3MF (one object per body), exact STEP, and
   **Send to Slicer** for OrcaSlicer, Bambu Studio and PrusaSlicer.
 
-## Getting started
+## Download
+
+Get the desktop app from the [Releases page](https://github.com/Three-Bugs-Studio/3bcad/releases/latest):
+
+| Platform | File | How to run |
+| --- | --- | --- |
+| Windows 10/11 (x64) | `3BCAD-<version>-windows-x64.zip` | Unzip, run `3bcad.exe` |
+| macOS 11+ (Apple Silicon and Intel) | `3BCAD-<version>-macos-universal.zip` | Unzip, right-click `3BCAD.app` → **Open** |
+| Linux (x64) | `3BCAD-<version>-linux-x64.tar.gz` | Extract, run `./3bcad` |
+
+Builds are not code-signed yet, so Windows SmartScreen and macOS Gatekeeper warn on first launch.
+The version you are running is shown in the title bar; see [CHANGELOG.md](CHANGELOG.md) for what changed in each release.
+
+## Build from source
 
 You need Rust **1.87+** ([rustup.rs](https://rustup.rs)) and a GPU with Vulkan, DirectX 12 or Metal.
 

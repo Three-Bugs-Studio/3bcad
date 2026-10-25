@@ -2,3 +2,4 @@
 *.stl
 *.3mf
 *.step
+.pudo/

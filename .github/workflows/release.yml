@@ -1,0 +1,127 @@
+name: Release
+
+# Push a tag like v0.2.0 to build the desktop app and publish a GitHub Release. See RELEASING.md.
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: version
+        name: Tag must match Cargo.toml version
+        run: |
+          tag_version="${GITHUB_REF_NAME#v}"
+          cargo_version=$(cargo metadata --no-deps --format-version 1 \
+            | jq -r '.packages[] | select(.name == "threebcad-app") | .version')
+          if [ "$tag_version" != "$cargo_version" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match Cargo.toml version $cargo_version"
+            exit 1
+          fi
+          echo "version=$tag_version" >> "$GITHUB_OUTPUT"
+      - name: CHANGELOG.md must have notes for this version
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: sh .github/scripts/changelog-section.sh "$VERSION"
+
+  build:
+    needs: verify
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: windows-latest, name: windows-x64 }
+          - { os: macos-latest, name: macos-universal }
+          # Oldest supported runner, so the binary works on older glibc distros.
+          - { os: ubuntu-22.04, name: linux-x64 }
+    runs-on: ${{ matrix.os }}
+    env:
+      VERSION: ${{ needs.verify.outputs.version }}
+      PKG: 3BCAD-${{ needs.verify.outputs.version }}-${{ matrix.name }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ runner.os == 'macOS' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libxkbcommon-dev libwayland-dev
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          cargo build --release --locked
+          mkdir -p "dist/$PKG"
+          cp target/release/3bcad.exe README.md CHANGELOG.md LICENSE-MIT LICENSE-APACHE "dist/$PKG/"
+          cd dist && 7z a "$PKG.zip" "$PKG"
+
+      - name: Package (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          cargo build --release --locked --target aarch64-apple-darwin
+          cargo build --release --locked --target x86_64-apple-darwin
+          app="dist/$PKG/3BCAD.app"
+          mkdir -p "$app/Contents/MacOS"
+          lipo -create -output "$app/Contents/MacOS/3bcad" \
+            target/aarch64-apple-darwin/release/3bcad target/x86_64-apple-darwin/release/3bcad
+          # Bundle versions must be plain dotted numbers, so drop any -beta.N suffix.
+          sed "s/@VERSION@/${VERSION%%-*}/g" packaging/macos/Info.plist > "$app/Contents/Info.plist"
+          plutil -lint "$app/Contents/Info.plist"
+          # Ad-hoc signature: required for Apple Silicon to launch it (not a Developer ID signature).
+          codesign --force --deep --sign - "$app"
+          cp README.md CHANGELOG.md LICENSE-MIT LICENSE-APACHE "dist/$PKG/"
+          cd dist && ditto -c -k --keepParent "$PKG" "$PKG.zip"
+
+      - name: Package (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          cargo build --release --locked
+          mkdir -p "dist/$PKG"
+          cp target/release/3bcad README.md CHANGELOG.md LICENSE-MIT LICENSE-APACHE "dist/$PKG/"
+          tar -C dist -czf "dist/$PKG.tar.gz" "$PKG"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.PKG }}
+          path: |
+            dist/*.zip
+            dist/*.tar.gz
+          if-no-files-found: error
+
+  release:
+    needs: [verify, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.verify.outputs.version }}
+        run: |
+          sh .github/scripts/changelog-section.sh "$VERSION" > notes.md
+          (cd dist && sha256sum -- * > SHA256SUMS.txt)
+          prerelease=""
+          case "$VERSION" in *-*) prerelease="--prerelease" ;; esac
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --title "3BCAD $GITHUB_REF_NAME" --notes-file notes.md --verify-tag $prerelease
