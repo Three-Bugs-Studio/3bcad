@@ -8,15 +8,20 @@ feature history, GPU viewport, print tooling) and builds each part in memory-saf
 > **Status: early prototype (Phase 1).** You can model boxes and cylinders from parametric sketches,
 > edit dimensions, roll back the feature tree, and export to STL / 3MF / STEP. Expect breaking changes.
 
-## Features (Phase 1)
+## Features
 
-- **wgpu 3D viewport**: shaded faces, B-Rep edge highlights, ground grid, XYZ triad, orbit/pan/zoom camera.
+- **wgpu 3D viewport**: shaded faces, B-Rep edge highlights, ground grid, reference planes, XYZ triad,
+  orbit/pan/zoom camera, hover and selection highlighting of faces, edges and vertices.
 - **SolidWorks-style layout (egui)**: CommandManager ribbon, FeatureManager tree with a draggable
   rollback bar, PropertyManager for live dimension editing, undo/redo.
-- **Parametric sketches**: points, lines and circles with Fix, Coincident, Horizontal, Vertical, Distance,
-  Angle, Tangent and Radius constraints, solved with Levenberg-Marquardt least squares.
+- **Interactive sketcher**: sketch on the Front/Top/Right plane or a flat face. Draw lines, rectangles,
+  circles, arcs, splines, slots and polygons; fillet, chamfer, trim, extend, offset, mirror and pattern them.
+  Inferencing adds relations as you draw, Smart Dimension drives the size, and colours show whether the
+  sketch is under (blue), fully (black) or over (red) defined.
+- **Parametric solver**: Coincident, Horizontal, Vertical, Parallel, Perpendicular, Collinear, Equal,
+  Midpoint, Concentric, Symmetric, Tangent and more, solved by Levenberg-Marquardt with exact Jacobians.
 - **B-Rep modelling** on the pure-Rust [`truck`](https://github.com/ricosjp/truck) kernel: Extruded Boss/Base
-  from rectangle and circle profiles.
+  from any closed sketch profile, holes included.
 - **3D-print export**: watertight binary STL and 3MF (one object per body), exact STEP, and
   **Send to Slicer** for OrcaSlicer, Bambu Studio and PrusaSlicer.
 
@@ -59,6 +64,10 @@ sudo apt-get install libgtk-3-dev libxkbcommon-dev libwayland-dev
 | Zoom to fit | `F` or double-click |
 | Undo / Redo | `Ctrl+Z` / `Ctrl+Y` |
 | Roll back | Drag the blue bar in the FeatureManager, or right-click a feature |
+| Start a sketch | Select a plane or flat face, then Sketch tab → Sketch |
+| Edit a sketch | Double-click it in the FeatureManager or the graphics area |
+| Disable snapping while drawing | Hold `Ctrl` |
+| Edit a dimension | Double-click its value |
 
 ## Workspace layout
 
@@ -92,7 +101,8 @@ Cargo package names cannot start with a digit, so packages are named `threebcad-
 
 ## Contributing
 
-Contributions are welcome! Read [CONTRIBUTING.md](CONTRIBUTING.md) and our
+Contributions are welcome! Read [CONTRIBUTING.md](CONTRIBUTING.md), the
+[architecture guide](docs/architecture.md) and our
 [Code of Conduct](CODE_OF_CONDUCT.md). To report a vulnerability, see [SECURITY.md](SECURITY.md).
 
 ## License

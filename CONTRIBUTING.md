@@ -13,6 +13,10 @@ By taking part you agree to follow our [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Development setup
 
+Start with the [architecture guide](docs/architecture.md): it explains how the crates fit together and
+walks through adding a feature or a sketch relation.
+
+
 ```bash
 git clone https://github.com/Three-Bugs-Studio/3bcad.git
 cd 3bcad

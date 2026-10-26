@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
-use threebcad_kernel::Solid;
-use threebcad_sketch::Sketch;
+use threebcad_kernel::{Plane, Solid};
+use threebcad_sketch::{Sketch, Status};
 
 use crate::{FeatureId, History, Rebuild};
 
@@ -38,9 +38,9 @@ impl PartDocument {
     pub fn demo() -> Self {
         let mut doc = Self::new("Part1");
         doc.edit(|h| -> anyhow::Result<()> {
-            let s = h.add_sketch(Sketch::rectangle(30.0, 30.0));
+            let s = h.add_sketch(Sketch::rectangle(30.0, 30.0), Plane::TOP);
             h.add_extrude(s, 30.0)?;
-            let c = h.add_sketch(Sketch::circle([55.0, 15.0], 10.0));
+            let c = h.add_sketch(Sketch::circle([55.0, 15.0], 10.0), Plane::TOP);
             h.add_extrude(c, 40.0)?;
             Ok(())
         })
@@ -59,6 +59,11 @@ impl PartDocument {
 
     pub fn errors(&self) -> &HashMap<FeatureId, String> {
         &self.built.errors
+    }
+
+    /// Definition status and degrees of freedom of a sketch above the rollback bar.
+    pub fn sketch_status(&self, id: FeatureId) -> Option<(Status, usize)> {
+        self.built.sketch_status.get(&id).copied()
     }
 
     /// Bumps on every rebuild; viewers compare it to know when to re-mesh.
@@ -128,6 +133,46 @@ mod tests {
         assert!(doc.errors().is_empty());
         let names: Vec<_> = doc.history().iter().map(|(_, f)| f.name.as_str()).collect();
         assert_eq!(names, ["Sketch1", "Boss-Extrude1", "Sketch2", "Boss-Extrude2"]);
+        let sketch1 = doc.history().iter().next().unwrap().0;
+        assert_eq!(doc.sketch_status(sketch1), Some((Status::FullyDefined, 0)));
+    }
+
+    #[test]
+    fn sketch_with_a_hole_on_the_front_plane() {
+        let mut doc = PartDocument::new("Part");
+        let mut sketch = Sketch::rectangle(20.0, 20.0);
+        let c = sketch.add_point(10.0, 10.0);
+        sketch.add_circle(c, 5.0);
+        let id = doc.edit(|h| {
+            let s = h.add_sketch(sketch, Plane::FRONT);
+            h.add_extrude(s, 4.0).map(|_| s)
+        });
+        assert!(doc.errors().is_empty(), "{:?}", doc.errors());
+        assert_eq!(doc.bodies().len(), 1);
+        // The circle is free to move and resize: under-defined.
+        assert!(matches!(
+            doc.sketch_status(id.unwrap()),
+            Some((Status::UnderDefined, 3))
+        ));
+        let m = threebcad_kernel::mesher::render_mesh(&doc.bodies()[0].1, 0.1);
+        assert!(
+            m.positions.iter().all(|p| p[1] <= 1e-4 && p[1] >= -4.0 - 1e-4),
+            "grows towards -Y"
+        );
+    }
+
+    #[test]
+    fn open_sketch_reports_why_it_cannot_extrude() {
+        let mut doc = PartDocument::new("Part");
+        let mut sketch = Sketch::default();
+        let a = sketch.add_point(0.0, 0.0);
+        let b = sketch.add_point(5.0, 0.0);
+        sketch.add_line(a, b);
+        let e = doc.edit(|h| {
+            let s = h.add_sketch(sketch, Plane::TOP);
+            h.add_extrude(s, 4.0)
+        });
+        assert!(doc.errors()[&e.unwrap()].starts_with("Open contour"));
     }
 
     #[test]
@@ -135,7 +180,7 @@ mod tests {
         let mut doc = PartDocument::demo();
         doc.edit(|h| h.set_rollback(2));
         assert_eq!(doc.bodies().len(), 1);
-        let s = doc.edit(|h| h.add_sketch(Sketch::circle([0.0, 0.0], 3.0)));
+        let s = doc.edit(|h| h.add_sketch(Sketch::circle([0.0, 0.0], 3.0), Plane::TOP));
         assert_eq!(doc.history().iter().position(|(id, _)| id == s), Some(2));
         assert!(doc.edit(|h| h.add_extrude(s, 5.0)).is_ok());
         assert_eq!(doc.bodies().len(), 2);

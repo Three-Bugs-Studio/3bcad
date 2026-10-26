@@ -4,4 +4,4 @@ pub mod mesher;
 pub mod operations;
 pub mod solid;
 
-pub use solid::Solid;
+pub use solid::{Plane, Solid};

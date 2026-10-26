@@ -1,45 +1,70 @@
-//! FeatureManager design tree with a draggable rollback bar.
+//! FeatureManager design tree: reference planes, features with sketch status, rollback bar.
 
 use eframe::egui::{self, Color32, RichText, Sense};
 use threebcad_core::{FeatureId, FeatureKind};
+use threebcad_sketch::Status;
 
-use crate::app::App;
+use crate::app::{App, ModelRef, RefPlane};
 
 const ROLLBACK_KEY: u64 = u64::MAX;
 
 enum Action {
     Rollback(usize),
     Delete(FeatureId),
+    Edit(FeatureId),
 }
 
 pub fn show(app: &mut App, ctx: &egui::Context) {
     egui::SidePanel::left("feature_manager")
         .resizable(true)
-        .default_width(220.0)
+        .default_width(230.0)
         .show(ctx, |ui| {
             ui.heading("FeatureManager");
             ui.separator();
             ui.label(RichText::new(&app.doc.name).strong());
-            ui.label("    Front Plane (XY)");
-            ui.label("    Origin");
+            for rp in RefPlane::ALL {
+                ui.horizontal(|ui| {
+                    let visible = app.plane_visible.get_mut(&rp).unwrap();
+                    ui.checkbox(visible, "").on_hover_text("Show / hide");
+                    let selected = app.selection.contains(&ModelRef::Plane(rp));
+                    if ui.selectable_label(selected, format!("▱  {}", rp.name())).clicked() {
+                        app.selection = vec![ModelRef::Plane(rp)];
+                        app.selected = None;
+                    }
+                });
+            }
+            ui.label("    ⊕  Origin");
 
             let h = app.doc.history();
             let rollback = h.rollback();
             let rows: Vec<_> = h
                 .iter()
                 .map(|(id, f)| {
-                    let icon = match f.kind {
-                        FeatureKind::Sketch(_) => "✏",
-                        FeatureKind::ExtrudeBoss { .. } => "⬆",
+                    let (icon, prefix) = match f.kind {
+                        FeatureKind::Sketch { .. } => (
+                            "✏",
+                            match app.doc.sketch_status(id).map(|s| s.0) {
+                                Some(Status::UnderDefined) => "(-) ",
+                                Some(Status::OverDefined) => "(+) ",
+                                _ => "",
+                            },
+                        ),
+                        FeatureKind::ExtrudeBoss { .. } => ("⬆", ""),
                     };
-                    (id, format!("{icon}  {}", f.name), app.doc.errors().get(&id).cloned())
+                    let is_sketch = matches!(f.kind, FeatureKind::Sketch { .. });
+                    (
+                        id,
+                        format!("{icon}  {prefix}{}", f.name),
+                        app.doc.errors().get(&id).cloned(),
+                        is_sketch,
+                    )
                 })
                 .collect();
 
             let mut rects = Vec::new();
             let mut bar = None;
             let mut action = None;
-            for (i, (id, text, error)) in rows.iter().enumerate() {
+            for (i, (id, text, error, is_sketch)) in rows.iter().enumerate() {
                 if i == rollback {
                     bar = Some(rollback_bar(ui));
                 }
@@ -49,14 +74,23 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                 } else if error.is_some() {
                     label = label.color(Color32::LIGHT_RED);
                 }
-                let mut resp = ui.selectable_label(app.selected == Some(*id), label);
+                let editing = app.sketch.as_ref().is_some_and(|s| s.feature == Some(*id));
+                let mut resp = ui.selectable_label(app.selected == Some(*id) || editing, label);
                 if let Some(e) = error {
                     resp = resp.on_hover_text(e);
                 }
                 if resp.clicked() {
                     app.selected = Some(*id);
+                    app.selection.clear();
+                }
+                if resp.double_clicked() && *is_sketch {
+                    action = Some(Action::Edit(*id));
                 }
                 resp.context_menu(|ui| {
+                    if *is_sketch && ui.button("Edit Sketch").clicked() {
+                        action = Some(Action::Edit(*id));
+                        ui.close_menu();
+                    }
                     if ui.button("Roll Back to Here").clicked() {
                         action = Some(Action::Rollback(i));
                         ui.close_menu();
@@ -87,6 +121,12 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                 Some(Action::Delete(id)) => {
                     app.doc.edit(|h| h.remove(id));
                     app.selected = None;
+                }
+                Some(Action::Edit(id)) => {
+                    if app.sketch.is_some() {
+                        app.exit_sketch(true);
+                    }
+                    app.edit_sketch(id);
                 }
                 None => {}
             }

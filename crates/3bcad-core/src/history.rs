@@ -3,8 +3,9 @@ use std::collections::HashMap;
 use anyhow::{bail, ensure, Result};
 use petgraph::stable_graph::{NodeIndex, StableDiGraph};
 use petgraph::visit::Dfs;
-use threebcad_kernel::{operations, Solid};
-use threebcad_sketch::{Profile, Sketch};
+use threebcad_kernel::operations::{self, ProfileRegion, ProfileSegment};
+use threebcad_kernel::{Plane, Solid};
+use threebcad_sketch::{Segment, Sketch, Status};
 
 use crate::{Feature, FeatureKind};
 
@@ -25,19 +26,21 @@ pub struct History {
 pub struct Rebuild {
     pub bodies: Vec<(FeatureId, Solid)>,
     pub errors: HashMap<FeatureId, String>,
+    /// Definition status and remaining degrees of freedom of each built sketch.
+    pub sketch_status: HashMap<FeatureId, (Status, usize)>,
 }
 
 impl History {
-    pub fn add_sketch(&mut self, sketch: Sketch) -> FeatureId {
+    pub fn add_sketch(&mut self, sketch: Sketch, plane: Plane) -> FeatureId {
         let name = self.next_name("Sketch");
         self.insert(Feature {
             name,
-            kind: FeatureKind::Sketch(sketch),
+            kind: FeatureKind::Sketch { sketch, plane },
         })
     }
 
     pub fn add_extrude(&mut self, sketch: FeatureId, depth: f64) -> Result<FeatureId> {
-        let is_sketch = matches!(self.get(sketch).map(|f| &f.kind), Some(FeatureKind::Sketch(_)));
+        let is_sketch = matches!(self.get(sketch).map(|f| &f.kind), Some(FeatureKind::Sketch { .. }));
         ensure!(is_sketch && self.is_active(sketch), "Extrude needs an active sketch");
         let name = self.next_name("Boss-Extrude");
         let id = self.insert(Feature {
@@ -125,11 +128,13 @@ impl History {
             let id = self.order[i];
             let extrude = match self.graph[id].kind {
                 FeatureKind::ExtrudeBoss { sketch, depth } => Some((sketch, depth)),
-                FeatureKind::Sketch(_) => None,
+                FeatureKind::Sketch { .. } => None,
             };
             let result = match extrude {
-                Some((sketch, depth)) => self.extrude(sketch, depth).map(|solid| out.bodies.push((id, solid))),
-                None => self.solve_sketch(id),
+                Some((sketch, depth)) => self
+                    .extrude(sketch, depth)
+                    .map(|solids| out.bodies.extend(solids.into_iter().map(|s| (id, s)))),
+                None => self.solve_sketch(id, &mut out),
             };
             if let Err(e) = result {
                 out.errors.insert(id, e.to_string());
@@ -138,11 +143,13 @@ impl History {
         out
     }
 
-    fn solve_sketch(&mut self, id: FeatureId) -> Result<()> {
-        let FeatureKind::Sketch(sketch) = &mut self.graph[id].kind else {
+    fn solve_sketch(&mut self, id: FeatureId, out: &mut Rebuild) -> Result<()> {
+        let FeatureKind::Sketch { sketch, .. } = &mut self.graph[id].kind else {
             unreachable!()
         };
         let report = sketch.solve();
+        let analysis = sketch.analyze();
+        out.sketch_status.insert(id, (analysis.status, analysis.dof));
         ensure!(
             report.converged,
             "Sketch cannot be solved: over-defined or conflicting (residual {:.1e})",
@@ -151,14 +158,28 @@ impl History {
         Ok(())
     }
 
-    fn extrude(&self, sketch: FeatureId, depth: f64) -> Result<Solid> {
-        let Some(FeatureKind::Sketch(s)) = self.get(sketch).map(|f| &f.kind) else {
+    fn extrude(&self, sketch: FeatureId, depth: f64) -> Result<Vec<Solid>> {
+        let Some(FeatureKind::Sketch { sketch, plane }) = self.get(sketch).map(|f| &f.kind) else {
             bail!("Referenced sketch is missing")
         };
-        match s.profile() {
-            Some(Profile::Polygon(pts)) => operations::extrude_polygon(&pts, depth),
-            Some(Profile::Circle { center, radius }) => operations::extrude_circle(center, radius, depth),
-            None => bail!("Sketch has no closed profile"),
-        }
+        let regions: Vec<ProfileRegion> = sketch
+            .regions()
+            .map_err(anyhow::Error::msg)?
+            .iter()
+            .map(|r| ProfileRegion {
+                outer: r.outer.iter().map(to_kernel).collect(),
+                holes: r.holes.iter().map(|h| h.iter().map(to_kernel).collect()).collect(),
+            })
+            .collect();
+        operations::extrude(&regions, depth, plane)
+    }
+}
+
+fn to_kernel(s: &Segment) -> ProfileSegment {
+    match *s {
+        Segment::Line { from, to } => ProfileSegment::Line { from, to },
+        Segment::Arc { center, from, to, ccw } => ProfileSegment::Arc { center, from, to, ccw },
+        Segment::Circle { center, radius, ccw } => ProfileSegment::Circle { center, radius, ccw },
+        Segment::Bezier(b) => ProfileSegment::Bezier(b),
     }
 }
