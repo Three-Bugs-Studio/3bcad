@@ -22,6 +22,12 @@ cargo test --workspace
 
 Rust 1.87+ is required. Linux needs `libgtk-3-dev libxkbcommon-dev libwayland-dev`.
 
+## How changes reach `main`
+
+`main` is protected: nobody pushes to it directly. Every change goes through a pull request that needs
+passing CI (`fmt` and `check` on Linux, Windows and macOS), resolved review threads, and an approving review
+from a code owner (see [`.github/CODEOWNERS`](.github/CODEOWNERS)), who is requested automatically.
+
 ## Before you open a pull request
 
 CI runs these; please run them locally first:

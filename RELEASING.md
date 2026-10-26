@@ -15,8 +15,9 @@
 2. Set the new `version` in the root `Cargo.toml`, then run `cargo build` so `Cargo.lock` updates.
 3. In `CHANGELOG.md`, rename `## [Unreleased]` to `## [X.Y.Z] - YYYY-MM-DD`, add a fresh empty
    `## [Unreleased]` above it, and update the compare links at the bottom.
-4. Commit: `git commit -am "Release vX.Y.Z"`, then push to `main`.
-5. Tag and push the tag:
+4. `main` is protected, so release through a pull request: on a `release/vX.Y.Z` branch,
+   `git commit -am "Release vX.Y.Z"`, push, open a PR, wait for CI and merge it.
+5. Update your local `main` (`git checkout main && git pull`), then tag the merged commit and push the tag:
 
    ```bash
    git tag -a vX.Y.Z -m "3BCAD vX.Y.Z"
