@@ -75,11 +75,20 @@ Cargo package names cannot start with a digit, so packages are named `threebcad-
 
 ## Roadmap
 
-- [ ] Extruded Cut, Revolve, Fillet/Chamfer (boolean ops via `truck-shapeops`)
-- [ ] Interactive sketch mode (draw and pick in the viewport), arcs, sketch on faces/planes
-- [ ] Save/load native documents, STEP import
-- [ ] Incremental rebuild (only re-evaluate dirty features)
-- [ ] Assemblies and mates
+3BCAD is working toward the everyday SolidWorks workflow (parts, assemblies, drawings) plus first-class
+3D-printing tools. See [ROADMAP.md](ROADMAP.md) for every planned task, each tracked as a GitHub issue:
+
+| Milestone | Focus |
+| --- | --- |
+| v0.2.0 | Interactive sketcher: picking, sketch tools, relations, Smart Dimension |
+| v0.3.0 | Core part features: cut, revolve, fillet, chamfer, shell, Hole Wizard, patterns |
+| v0.4.0 | Advanced modeling: sweep, loft, multibody, threads |
+| v0.5.0 | Files: native save/load, STEP/DXF/mesh import, units, materials |
+| v0.6.0 | 3D Print Studio: overhang/thin-wall checks, orientation, rich 3MF |
+| v0.7.0 | Assemblies: mates, interference, exploded views, BOM |
+| v0.8.0 | Drawings: views, sections, dimensions, PDF/DXF |
+| v0.9.0 | Design intent: equations, configurations, appearances |
+| v1.0.0 | Production ready: installers, signing, performance, docs, accessibility |
 
 ## Contributing
 
