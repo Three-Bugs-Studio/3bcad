@@ -1,0 +1,59 @@
+name: Release PR
+
+# Keeps a "chore(release): vX.Y.Z" pull request open while main has releasable changes
+# (feat/fix/perf commits, breaking changes, or entries under [Unreleased] in CHANGELOG.md).
+# Merging it publishes the release (release.yml). See RELEASING.md.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: release-pr
+  cancel-in-progress: true
+
+jobs:
+  release-pr:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          # Pushes made with the default GITHUB_TOKEN do not start other workflows, so CI would not run on
+          # the release PR. A RELEASE_TOKEN secret (fine-grained PAT: contents + pull requests) fixes that.
+          token: ${{ secrets.RELEASE_TOKEN || github.token }}
+      - id: plan
+        name: Work out the next version
+        run: echo "version=$(python3 .github/scripts/release.py plan)" >> "$GITHUB_OUTPUT"
+      - if: steps.plan.outputs.version != ''
+        uses: dtolnay/rust-toolchain@stable
+      - name: Open or update the release pull request
+        if: steps.plan.outputs.version != ''
+        env:
+          VERSION: ${{ steps.plan.outputs.version }}
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN || github.token }}
+        run: |
+          python3 .github/scripts/release.py apply "$VERSION"
+          cargo update --workspace
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B release/next
+          git commit -am "chore(release): v$VERSION"
+          git push --force origin release/next
+          {
+            printf 'Merging this pull request releases **v%s**: the Release workflow tags it, builds the\n' "$VERSION"
+            printf 'Windows, macOS and Linux downloads and publishes the GitHub Release with these notes.\n\n'
+            printf 'This pull request is updated automatically while more changes land on `main`.\n\n---\n\n'
+            sh .github/scripts/changelog-section.sh "$VERSION"
+          } > "$RUNNER_TEMP/body.md"
+          if [ "$(gh pr view release/next --json state -q .state 2>/dev/null)" = "OPEN" ]; then
+            gh pr edit release/next --title "chore(release): v$VERSION" --body-file "$RUNNER_TEMP/body.md"
+          else
+            gh pr create --base main --head release/next \
+              --title "chore(release): v$VERSION" --body-file "$RUNNER_TEMP/body.md"
+          fi

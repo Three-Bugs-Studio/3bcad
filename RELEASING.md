@@ -1,38 +1,63 @@
 # Releasing 3BCAD
 
-3BCAD uses [Semantic Versioning](https://semver.org). The version lives in one place, `version` under
-`[workspace.package]` in the root `Cargo.toml`. The app shows it in its title bar and ribbon.
+Releases are automated. 3BCAD uses [Semantic Versioning](https://semver.org); the version lives in one place,
+`version` under `[workspace.package]` in the root `Cargo.toml`, and the app shows it in its title bar and ribbon.
 
-| Change | Bump | Example |
-| --- | --- | --- |
-| Bug fixes only | patch | 0.1.0 -> 0.1.1 |
-| New features, or (before 1.0) breaking changes | minor | 0.1.1 -> 0.2.0 |
-| Pre-release for testers | pre-release suffix | 0.2.0-beta.1 |
+## How it works
 
-## Steps
+```mermaid
+flowchart LR
+    A["PRs merged into main<br/>(Conventional Commits)"] --> B["Release PR workflow<br/>opens / updates<br/>chore(release): vX.Y.Z"]
+    B --> C["Maintainer merges<br/>the release PR"]
+    C --> D["Release workflow<br/>tags vX.Y.Z, builds, publishes"]
+```
 
-1. Make sure `main` is green in CI.
-2. Set the new `version` in the root `Cargo.toml`, then run `cargo build` so `Cargo.lock` updates.
-3. In `CHANGELOG.md`, rename `## [Unreleased]` to `## [X.Y.Z] - YYYY-MM-DD`, add a fresh empty
-   `## [Unreleased]` above it, and update the compare links at the bottom.
-4. `main` is protected, so release through a pull request: on a `release/vX.Y.Z` branch,
-   `git commit -am "Release vX.Y.Z"`, push, open a PR, wait for CI and merge it.
-5. Update your local `main` (`git checkout main && git pull`), then tag the merged commit and push the tag:
+1. **Every commit is a [Conventional Commit](https://www.conventionalcommits.org)**, e.g.
+   `feat(sketch): add arc tool`, `fix(io): correct STL header`, `docs: update README`. The `Commits` check
+   enforces it on every pull request.
+2. **After each push to `main`**, the [Release PR workflow](.github/workflows/release-pr.yml) works out
+   whether a release is due and the next version:
 
-   ```bash
-   git tag -a vX.Y.Z -m "3BCAD vX.Y.Z"
-   git push origin vX.Y.Z
-   ```
+   | Since the last release | Bump | Example |
+   | --- | --- | --- |
+   | `fix:` or `perf:` commits, or `### Fixed` in `[Unreleased]` | patch | 0.2.0 → 0.2.1 |
+   | `feat:` commits, or `### Added` / `### Changed` in `[Unreleased]` | minor | 0.2.1 → 0.3.0 |
+   | `feat!:` / `BREAKING CHANGE:` commits, or `### Removed` | major (minor before 1.0) | 1.4.0 → 2.0.0 |
+   | only `docs`, `ci`, `test`, `chore`, `refactor`, `style`, `build` | no release | |
 
-The [Release workflow](.github/workflows/release.yml) then:
+   If one is due it opens (or updates) a pull request **`chore(release): vX.Y.Z`** that bumps `Cargo.toml` and
+   `Cargo.lock` and turns `[Unreleased]` in `CHANGELOG.md` into the `[X.Y.Z]` section. Hand-written
+   `[Unreleased]` notes are used as they are; if the section is empty, notes are generated from the commit messages.
+3. **Merging the release PR publishes the release.** The [Release workflow](.github/workflows/release.yml)
+   sees a `Cargo.toml` version that has no tag yet, then:
+   - checks that `CHANGELOG.md` has notes for it,
+   - builds Windows (x64 `.zip`), macOS (universal `.app` in a `.zip`) and Linux (x64 `.tar.gz`),
+   - creates the `vX.Y.Z` tag and GitHub Release with those files, `SHA256SUMS.txt` and the changelog notes.
 
-- fails early if the tag does not match the `Cargo.toml` version or `CHANGELOG.md` has no section for it,
-- builds the desktop app for Windows (x64 `.zip`), macOS (universal `.app` in a `.zip`) and Linux (x64 `.tar.gz`),
-- publishes a GitHub Release with those files plus `SHA256SUMS.txt`, using the changelog section as release notes.
-  Tags with a suffix such as `-beta.1` are marked as pre-releases.
+The one manual step is merging the release PR: `main` requires a code-owner review, which a bot cannot give.
+Edit the release PR's CHANGELOG section before merging if you want to polish the notes.
 
-If a release build fails, fix it on `main`, delete the tag (`git push --delete origin vX.Y.Z` and
-`git tag -d vX.Y.Z`) and tag again. Never reuse a version number that users have already downloaded.
+## Writing good release notes
+
+Add user-facing changes to `## [Unreleased]` in `CHANGELOG.md` as part of each feature PR (under `### Added`,
+`### Changed`, `### Fixed`, `### Removed`). Commit messages are only the fallback.
+
+## One-time setup
+
+- **Repository setting**: Settings → Actions → General → "Allow GitHub Actions to create and approve pull
+  requests" must be on, so the workflow can open the release PR.
+- **Optional `RELEASE_TOKEN` secret**: pull requests opened with the default `GITHUB_TOKEN` do not trigger CI, so
+  the required checks never run on the release PR and it can only be merged with the admin bypass. Add a
+  fine-grained personal access token (or GitHub App token) with *Contents: read & write* and *Pull requests:
+  read & write* on this repository as the `RELEASE_TOKEN` Actions secret to get normal CI on release PRs.
+
+## When something goes wrong
+
+- **Release build failed**: fix it on `main` through a normal PR, then re-run the Release workflow from the
+  Actions tab (*Run workflow* on `main`). It only releases versions that have no tag yet.
+- **Wrong version in the release PR**: edit `Cargo.toml` and `CHANGELOG.md` on the `release/next` branch before
+  merging, or add the missing `feat`/`fix` changes to `[Unreleased]` on `main`.
+- Never delete or reuse a version tag that users may have downloaded; release a new patch version instead.
 
 ## Known limitations
 
