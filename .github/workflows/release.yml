@@ -1,9 +1,12 @@
 name: Release
 
-# Push a tag like v0.2.0 to build the desktop app and publish a GitHub Release. See RELEASING.md.
+# Publishes a release whenever main carries a Cargo.toml version that has no tag yet (merging the
+# "chore(release): vX.Y.Z" pull request opened by release-pr.yml). See RELEASING.md.
 on:
   push:
-    tags: ["v*.*.*"]
+    branches: [main]
+    paths: [Cargo.toml]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -13,29 +16,36 @@ env:
 
 jobs:
   verify:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
+      release: ${{ steps.version.outputs.release }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - id: version
-        name: Tag must match Cargo.toml version
+        name: Release only versions that are not tagged yet
         run: |
-          tag_version="${GITHUB_REF_NAME#v}"
-          cargo_version=$(cargo metadata --no-deps --format-version 1 \
+          version=$(cargo metadata --no-deps --format-version 1 \
             | jq -r '.packages[] | select(.name == "threebcad-app") | .version')
-          if [ "$tag_version" != "$cargo_version" ]; then
-            echo "::error::Tag $GITHUB_REF_NAME does not match Cargo.toml version $cargo_version"
-            exit 1
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if git rev-parse -q --verify "refs/tags/v$version" >/dev/null; then
+            echo "v$version is already released; nothing to do"
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "release=true" >> "$GITHUB_OUTPUT"
           fi
-          echo "version=$tag_version" >> "$GITHUB_OUTPUT"
       - name: CHANGELOG.md must have notes for this version
+        if: steps.version.outputs.release == 'true'
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: sh .github/scripts/changelog-section.sh "$VERSION"
 
   build:
     needs: verify
+    if: needs.verify.outputs.release == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -123,5 +133,6 @@ jobs:
           (cd dist && sha256sum -- * > SHA256SUMS.txt)
           prerelease=""
           case "$VERSION" in *-*) prerelease="--prerelease" ;; esac
-          gh release create "$GITHUB_REF_NAME" dist/* \
-            --title "3BCAD $GITHUB_REF_NAME" --notes-file notes.md --verify-tag $prerelease
+          # Creates the tag on the commit that was built.
+          gh release create "v$VERSION" dist/* --target "$GITHUB_SHA" \
+            --title "3BCAD v$VERSION" --notes-file notes.md $prerelease
