@@ -1,3 +1,4 @@
+use threebcad_kernel::Plane;
 use threebcad_sketch::Sketch;
 
 use crate::FeatureId;
@@ -10,7 +11,14 @@ pub struct Feature {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum FeatureKind {
-    // shortcut: sketches live on the XY plane only; add a plane/face reference when sketch-on-face lands.
-    Sketch(Sketch),
-    ExtrudeBoss { sketch: FeatureId, depth: f64 },
+    /// A sketch on a reference plane or on a planar face.
+    // shortcut: a sketch on a face stores the face's plane when it was created; follow the face once faces have persistent ids (#42).
+    Sketch {
+        sketch: Sketch,
+        plane: Plane,
+    },
+    ExtrudeBoss {
+        sketch: FeatureId,
+        depth: f64,
+    },
 }
