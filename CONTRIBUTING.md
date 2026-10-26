@@ -47,7 +47,21 @@ cargo test --workspace
 
 ## Commit messages
 
-Use short imperative subjects, optionally prefixed by the crate: `sketch: add arc entity`, `io: write 3MF colours`.
+Releases are automated from commit messages, so every commit must be a
+[Conventional Commit](https://www.conventionalcommits.org): `type(scope): short imperative summary`.
+The `Commits` check fails a pull request that has other messages.
+
+| Type | Use for | Releases |
+| --- | --- | --- |
+| `feat` | a new user-facing feature | minor |
+| `fix` | a bug fix | patch |
+| `perf` | a speed-up with no behaviour change | patch |
+| `refactor`, `test`, `docs`, `ci`, `build`, `chore`, `style` | everything else | no |
+
+Scopes are crate names: `feat(sketch): add arc tool`, `fix(io): correct STL header`, `docs: update README`.
+Mark breaking changes with `!` (`feat(io)!: new file format`) or a `BREAKING CHANGE:` line in the body.
+Also add user-facing changes to `## [Unreleased]` in `CHANGELOG.md`; those notes become the release notes
+(see [RELEASING.md](RELEASING.md)).
 
 ## Licensing of contributions
 
