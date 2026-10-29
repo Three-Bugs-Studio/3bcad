@@ -53,3 +53,7 @@ anyhow = "1.0"
 # truck tessellation and the LM solver are painfully slow unoptimised.
 [profile.dev.package."*"]
 opt-level = 2
+
+# Our kernel bridge runs the same hot loops (naming, topology) on every rebuild.
+[profile.dev.package.threebcad-kernel]
+opt-level = 2
