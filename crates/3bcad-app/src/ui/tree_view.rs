@@ -13,6 +13,7 @@ enum Action {
     Rollback(usize),
     Delete(FeatureId),
     EditSketch(FeatureId),
+    SketchOn(FeatureId),
     Suppress(FeatureId, bool),
     Move(FeatureId, usize),
     Rename(FeatureId, String),
@@ -24,6 +25,8 @@ struct Row {
     error: Option<String>,
     warning: Option<String>,
     is_sketch: bool,
+    /// A reference plane or coordinate system: you can sketch on it.
+    is_plane: bool,
     suppressed: bool,
     own_suppressed: bool,
 }
@@ -41,9 +44,22 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                     let visible = app.plane_visible.get_mut(&rp).unwrap();
                     ui.checkbox(visible, "").on_hover_text("Show / hide");
                     let selected = app.selection.contains(&ModelRef::Plane(rp));
-                    if ui.selectable_label(selected, format!("•  {}", rp.name())).clicked() {
+                    let resp = ui
+                        .selectable_label(selected, format!("•  {}", rp.name()))
+                        .on_hover_text("Double-click to sketch on it");
+                    if resp.clicked() {
                         app.selection = vec![ModelRef::Plane(rp)];
                         app.selected = None;
+                    }
+                    let mut sketch = resp.double_clicked();
+                    resp.context_menu(|ui| {
+                        if ui.button("✏ Sketch on it").clicked() {
+                            sketch = true;
+                            ui.close_menu();
+                        }
+                    });
+                    if sketch {
+                        app.sketch_on(ModelRef::Plane(rp));
                     }
                 });
             }
@@ -68,6 +84,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                         error: app.doc.errors().get(&id).cloned(),
                         warning: app.doc.warnings().get(&id).cloned(),
                         is_sketch: f.kind.is_sketch(),
+                        is_plane: matches!(f.kind, FeatureKind::RefPlane(_) | FeatureKind::CoordSys(_)),
                         suppressed: h.is_suppressed(id),
                         own_suppressed: f.suppressed,
                     }
@@ -131,6 +148,9 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                 if resp.double_clicked() && row.is_sketch {
                     action = Some(Action::EditSketch(id));
                 }
+                if resp.double_clicked() && row.is_plane {
+                    action = Some(Action::SketchOn(id));
+                }
                 if let Some(dragged) = inner.response.dnd_release_payload::<FeatureId>() {
                     if *dragged != id {
                         action = Some(Action::Move(*dragged, i));
@@ -146,6 +166,10 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                 resp.context_menu(|ui| {
                     if ui.button("Edit Feature").clicked() {
                         app.selected = Some(id);
+                        ui.close_menu();
+                    }
+                    if row.is_plane && ui.button("✏ Sketch on it").clicked() {
+                        action = Some(Action::SketchOn(id));
                         ui.close_menu();
                     }
                     if row.is_sketch && ui.button("Edit Sketch").clicked() {
@@ -205,6 +229,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                     app.doc.edit(|h| h.remove(id));
                     app.selected = None;
                 }
+                Some(Action::SketchOn(id)) => app.sketch_on(ModelRef::Feature(id)),
                 Some(Action::EditSketch(id)) => {
                     if app.sketch.is_some() {
                         app.exit_sketch(true);

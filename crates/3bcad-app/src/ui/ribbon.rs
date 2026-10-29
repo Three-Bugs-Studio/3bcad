@@ -31,6 +31,13 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
             ui.selectable_value(&mut app.tab, RibbonTab::Evaluate, "Evaluate");
             ui.selectable_value(&mut app.tab, RibbonTab::Print, "3D Print");
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if ui
+                    .selectable_label(app.show_shortcuts, " ? ")
+                    .on_hover_text("Keyboard shortcuts (F1)")
+                    .clicked()
+                {
+                    app.show_shortcuts = !app.show_shortcuts;
+                }
                 let (can_undo, can_redo) = (
                     app.doc.can_undo() || app.sketch.is_some(),
                     app.doc.can_redo() || app.sketch.is_some(),
@@ -533,18 +540,67 @@ const EDIT_TOOLS: &[&[Tool]] = &[
     &[Tool::Mirror, Tool::LinearPattern, Tool::CircularPattern],
 ];
 
+/// "Sketch on": one click starts a sketch on a standard plane, a reference plane or the selection.
+fn plane_chooser(app: &mut App, ui: &mut egui::Ui) {
+    ui.label("✏ Sketch on:");
+    let mut pick = None;
+    for p in StdPlane::ALL {
+        let tip = match p {
+            StdPlane::Front => "XZ plane, looking from the front",
+            StdPlane::Top => "XY plane, the build plate",
+            StdPlane::Right => "YZ plane, looking from the right",
+        };
+        if ui.button(p.name()).on_hover_text(tip).clicked() {
+            pick = Some(ModelRef::Plane(p));
+        }
+    }
+    let h = app.doc.history();
+    let ref_planes: Vec<(FeatureId, String)> = h
+        .iter()
+        .filter(|(id, f)| {
+            matches!(f.kind, FeatureKind::RefPlane(_) | FeatureKind::CoordSys(_)) && app.doc.plane_of(*id).is_some()
+        })
+        .map(|(id, f)| (id, f.name.clone()))
+        .collect();
+    for (id, name) in ref_planes {
+        if ui.button(name).on_hover_text("Reference plane").clicked() {
+            pick = Some(ModelRef::Feature(id));
+        }
+    }
+    ui.separator();
+    let target = app.sketch_target().map(|(_, name, _)| name);
+    let label = match &target {
+        Some(name) => format!("Selected: {name}"),
+        None => "Selected face".to_string(),
+    };
+    if ui
+        .add_enabled(target.is_some(), egui::Button::new(label))
+        .on_hover_text("Sketch on the selected flat face or plane")
+        .on_disabled_hover_text("Click a flat face of the part first")
+        .clicked()
+    {
+        app.start_sketch();
+    }
+    let editable = app
+        .selected
+        .filter(|&id| app.doc.history().get(id).is_some_and(|f| f.kind.is_sketch()));
+    if ui
+        .add_enabled(editable.is_some(), egui::Button::new("Edit Sketch"))
+        .on_disabled_hover_text("Select a sketch in the FeatureManager first")
+        .clicked()
+    {
+        if let Some(id) = editable {
+            app.edit_sketch(id);
+        }
+    }
+    if let Some(r) = pick {
+        app.sketch_on(r);
+    }
+}
+
 fn sketch(app: &mut App, ui: &mut egui::Ui) {
     if app.sketch.is_none() {
-        if ui
-            .button("✏ Sketch")
-            .on_hover_text("Select a plane or planar face (or a sketch to edit), then click")
-            .clicked()
-        {
-            app.start_sketch();
-        }
-        ui.weak(
-            "Pick the Front, Top or Right plane, a reference plane or a flat face in the FeatureManager or the graphics area first.",
-        );
+        plane_chooser(app, ui);
         return;
     }
     if ui.button("✔ Exit Sketch").clicked() {

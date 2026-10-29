@@ -101,6 +101,7 @@ pub struct App {
     pub show_whats_wrong: bool,
     pub show_measure: bool,
     pub show_mass: bool,
+    pub show_shortcuts: bool,
     /// g/cm³
     pub density: f64,
     pub mass: Option<(u64, MassProperties)>,
@@ -135,6 +136,7 @@ impl App {
             show_whats_wrong: false,
             show_measure: false,
             show_mass: false,
+            show_shortcuts: false,
             density: 1.24,
             mass: None,
             renaming: None,
@@ -662,6 +664,19 @@ impl App {
         if !typing && ctx.input(|i| i.key_pressed(Key::F)) {
             self.zoom_to_fit();
         }
+        if ctx.input(|i| i.key_pressed(Key::F1)) {
+            self.show_shortcuts = !self.show_shortcuts;
+        }
+    }
+
+    /// Starts a sketch on a plane, a planar face or a reference plane, closing any open sketch first.
+    pub fn sketch_on(&mut self, r: ModelRef) {
+        if self.sketch.is_some() {
+            self.exit_sketch(true);
+        }
+        self.selected = None;
+        self.selection = vec![r];
+        self.start_sketch();
     }
 }
 
@@ -710,6 +725,7 @@ impl eframe::App for App {
         ui::properties::show(self, ctx);
         self.sync_geometry();
         ui::evaluate::windows(self, ctx);
+        ui::help::window(self, ctx);
         egui::CentralPanel::default()
             .frame(egui::Frame::new().fill(VIEWPORT_BG))
             .show(ctx, |ui| ui::viewport::show(self, ui));
