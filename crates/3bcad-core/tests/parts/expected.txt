@@ -1,0 +1,5 @@
+plate_holes bodies=1 faces=27 volume=10759.960
+bracket bodies=1 faces=12 volume=4656.162
+shelled_box bodies=1 faces=11 volume=7152.000
+flange bodies=1 faces=30 volume=21253.108
+mirrored bodies=2 faces=20 volume=8803.663
