@@ -25,7 +25,12 @@ saved files and workflows; patch versions (0.x.y) only fix bugs.
 - Sketch pattern instance counts can be changed after the pattern is made.
 - Sketch tab "Sketch on" buttons start a sketch on the Front, Top or Right plane, a reference plane or the
   selected face in one click; double-click a plane in the FeatureManager to sketch on it.
-- Keyboard Shortcuts window (F1 or the ? button in the ribbon).
+- Keyboard Shortcuts window (F1 or the Shortcuts button in the ribbon).
+
+### Changed
+
+- Light, SolidWorks-style look: light panels, a CommandManager with large icons above each command and
+  the tabs underneath, icons in the FeatureManager, and a white-to-grey gradient behind the model.
 - Geometry regression corpus (`crates/3bcad-core/tests/parts`) and `cargo bench -p threebcad-core`.
 
 ### Changed

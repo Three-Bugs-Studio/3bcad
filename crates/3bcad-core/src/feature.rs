@@ -415,29 +415,6 @@ impl FeatureKind {
         }
     }
 
-    /// Only glyphs egui's default fonts have (others draw as empty boxes); a bullet otherwise.
-    pub fn icon(&self) -> &'static str {
-        match self {
-            FeatureKind::Sketch { .. } => "✏",
-            FeatureKind::Extrude(e) if e.cut => "⬇",
-            FeatureKind::Extrude(_) => "⬆",
-            FeatureKind::Revolve(_) => "↻",
-            FeatureKind::Fillet { .. } => "○",
-            FeatureKind::Chamfer { .. } => "◊",
-            FeatureKind::Shell { .. } => "•",
-            FeatureKind::Hole(_) => "•",
-            FeatureKind::LinearPattern(_) => "•",
-            FeatureKind::CircularPattern(_) => "•",
-            FeatureKind::Mirror(_) => "↔",
-            FeatureKind::RefPlane(_) => "•",
-            FeatureKind::RefAxis(_) => "•",
-            FeatureKind::RefPoint(_) => "•",
-            FeatureKind::CoordSys(_) => "•",
-            FeatureKind::Draft { .. } => "•",
-            FeatureKind::Rib { .. } => "•",
-        }
-    }
-
     pub fn is_sketch(&self) -> bool {
         matches!(self, FeatureKind::Sketch { .. })
     }

@@ -15,6 +15,7 @@ const COM_COLOR: Color32 = Color32::from_rgb(160, 30, 160);
 
 pub fn show(app: &mut App, ui: &mut egui::Ui) {
     let (rect, resp) = ui.allocate_exact_size(ui.available_size(), Sense::click_and_drag());
+    crate::ui::theme::paint_sky(ui.painter(), rect);
     let ctx = ui.ctx().clone();
     let ctrl = ctx.input(|i| i.modifiers.command);
     let size = GVec2::new(rect.width(), rect.height());

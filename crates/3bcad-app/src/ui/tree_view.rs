@@ -6,6 +6,7 @@ use threebcad_core::{FeatureId, FeatureKind};
 use threebcad_sketch::Status;
 
 use crate::app::{App, ModelRef, RefPlane};
+use crate::ui::{icons, theme};
 
 const ROLLBACK_KEY: u64 = u64::MAX;
 
@@ -22,6 +23,7 @@ enum Action {
 struct Row {
     id: FeatureId,
     text: String,
+    icon: &'static str,
     error: Option<String>,
     warning: Option<String>,
     is_sketch: bool,
@@ -45,7 +47,11 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                     ui.checkbox(visible, "").on_hover_text("Show / hide");
                     let selected = app.selection.contains(&ModelRef::Plane(rp));
                     let resp = ui
-                        .selectable_label(selected, format!("•  {}", rp.name()))
+                        .horizontal(|ui| {
+                            icons::inline(ui, "plane", true);
+                            ui.selectable_label(selected, rp.name())
+                        })
+                        .inner
                         .on_hover_text("Double-click to sketch on it");
                     if resp.clicked() {
                         app.selection = vec![ModelRef::Plane(rp)];
@@ -63,7 +69,11 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                     }
                 });
             }
-            ui.label("    •  Origin");
+            ui.horizontal(|ui| {
+                ui.add_space(22.0);
+                icons::inline(ui, "origin", true);
+                ui.label("Origin");
+            });
 
             let h = app.doc.history();
             let rollback = h.rollback();
@@ -80,7 +90,8 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                     };
                     Row {
                         id,
-                        text: format!("{}  {prefix}{}", f.kind.icon(), f.name),
+                        text: format!("{prefix}{}", f.name),
+                        icon: icons::of_feature(&f.kind),
                         error: app.doc.errors().get(&id).cloned(),
                         warning: app.doc.warnings().get(&id).cloned(),
                         is_sketch: f.kind.is_sketch(),
@@ -115,17 +126,24 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                 }
                 let mut label = RichText::new(&row.text);
                 if i >= rollback || row.suppressed {
-                    label = label.color(Color32::GRAY).italics();
+                    label = label.color(theme::MUTED).italics();
                 } else if row.error.is_some() {
-                    label = label.color(Color32::LIGHT_RED);
+                    label = label.color(theme::ERROR);
                 } else if row.warning.is_some() {
-                    label = label.color(Color32::from_rgb(200, 150, 20));
+                    label = label.color(theme::WARNING);
                 }
                 let editing = app.sketch.as_ref().is_some_and(|s| s.feature == Some(id));
                 let selected = app.selected == Some(id) || editing || app.selection.contains(&ModelRef::Feature(id));
                 // Rows are drag sources; dropping one on another moves it there.
                 let drag_id = egui::Id::new(("feature_row", id));
-                let inner = ui.dnd_drag_source(drag_id, id, |ui| ui.selectable_label(selected, label.clone()));
+                let inactive = i >= rollback || row.suppressed;
+                let inner = ui.dnd_drag_source(drag_id, id, |ui| {
+                    ui.horizontal(|ui| {
+                        icons::inline(ui, row.icon, !inactive);
+                        ui.selectable_label(selected, label.clone())
+                    })
+                    .inner
+                });
                 let mut resp = inner.inner;
                 if let Some(e) = row.error.as_ref().or(row.warning.as_ref()) {
                     resp = resp.on_hover_text(e);

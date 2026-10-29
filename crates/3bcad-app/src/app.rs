@@ -35,7 +35,7 @@ pub const MASS_TOL: f64 = 0.005;
 const EDGE_COLOR: [f32; 3] = [0.08, 0.08, 0.1];
 const PLANE_COLOR: [f32; 3] = [0.25, 0.45, 0.85];
 const REF_COLOR: [f32; 3] = [0.85, 0.5, 0.1];
-pub const VIEWPORT_BG: egui::Color32 = egui::Color32::from_rgb(214, 220, 230);
+pub const VIEWPORT_BG: egui::Color32 = ui::theme::SKY_BOTTOM;
 
 pub use threebcad_core::StdPlane as RefPlane;
 
@@ -115,6 +115,7 @@ impl App {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Result<Self, &'static str> {
         let rs = cc.wgpu_render_state.as_ref().ok_or("3BCAD needs the wgpu renderer")?;
         threebcad_render::install(rs, eframe::egui_wgpu::depth_format_from_bits(DEPTH_BITS, 0), MSAA);
+        ui::theme::apply(&cc.egui_ctx);
         let mut app = Self {
             doc: PartDocument::demo(),
             camera: OrbitCamera::default(),

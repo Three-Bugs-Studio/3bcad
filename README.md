@@ -65,7 +65,7 @@ sudo apt-get install libgtk-3-dev libxkbcommon-dev libwayland-dev
 | Undo / Redo | `Ctrl+Z` / `Ctrl+Y` |
 | Roll back | Drag the blue bar in the FeatureManager, or right-click a feature |
 | Start a sketch | Sketch tab → Front / Top / Right (or a reference plane), double-click a plane in the FeatureManager, or select a flat face → Selected |
-| Keyboard shortcuts | `F1` or the `?` button |
+| Keyboard shortcuts | `F1` or the Shortcuts button (top right) |
 | Edit a sketch | Double-click it in the FeatureManager or the graphics area |
 | Disable snapping while drawing | Hold `Ctrl` |
 | Edit a dimension | Double-click its value |

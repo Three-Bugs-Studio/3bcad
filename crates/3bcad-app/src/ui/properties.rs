@@ -267,7 +267,7 @@ fn feature_panel(app: &mut App, ctx: &egui::Context) {
             });
             ui.separator();
             if let Some(e) = &error {
-                ui.colored_label(Color32::LIGHT_RED, e);
+                ui.colored_label(crate::ui::theme::ERROR, e);
                 ui.weak(crate::ui::evaluate::suggestion(e));
                 ui.separator();
             }
