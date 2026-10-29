@@ -40,6 +40,7 @@ petgraph = "0.7"
 truck-modeling = "0.6"
 truck-meshalgo = "0.4"
 truck-stepio = "0.3"
+truck-shapeops = { version = "0.4", default-features = false }
 
 # Export
 zip = { version = "2", default-features = false, features = ["deflate"] }

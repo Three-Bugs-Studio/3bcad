@@ -3582,8 +3582,10 @@ name = "threebcad-kernel"
 version = "0.2.0"
 dependencies = [
  "anyhow",
+ "nalgebra",
  "truck-meshalgo",
  "truck-modeling",
+ "truck-shapeops",
 ]
 
 [[package]]
@@ -3815,6 +3817,22 @@ dependencies = [
  "thiserror 1.0.69",
  "truck-base",
  "truck-geotrait",
+]
+
+[[package]]
+name = "truck-shapeops"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fd6e83ea4d36d00229d38ab985a991e32f58c3ed2971083011ac66fb57e26d5c"
+dependencies = [
+ "derive_more",
+ "itertools 0.13.0",
+ "rustc-hash 2.1.3",
+ "truck-base",
+ "truck-geometry",
+ "truck-geotrait",
+ "truck-meshalgo",
+ "truck-topology",
 ]
 
 [[package]]

@@ -47,9 +47,9 @@ pub fn extrude(regions: &[ProfileRegion], depth: f64, plane: &Plane) -> Result<V
     regions
         .iter()
         .map(|r| {
-            let mut wires = vec![wire(&r.outer)?];
+            let mut wires = vec![wire_at(&r.outer, 0.0)?];
             for h in &r.holes {
-                wires.push(wire(h)?);
+                wires.push(wire_at(h, 0.0)?);
             }
             // The profile face must face the sweep direction, otherwise the solid comes out inside-out.
             if depth < 0.0 {
@@ -64,11 +64,9 @@ pub fn extrude(regions: &[ProfileRegion], depth: f64, plane: &Plane) -> Result<V
         .collect()
 }
 
-fn pt([x, y]: [f64; 2]) -> Point3 {
-    Point3::new(x, y, 0.0)
-}
-
-fn wire(lp: &[ProfileSegment]) -> Result<Wire> {
+/// A closed loop as a truck wire at height `z` of the sketch plane's local frame.
+pub fn wire_at(lp: &[ProfileSegment], z: f64) -> Result<Wire> {
+    let pt = |[x, y]: [f64; 2]| Point3::new(x, y, z);
     if let [ProfileSegment::Circle { center, radius, ccw }] = *lp {
         ensure!(radius > TOLERANCE, "circle radius must be positive");
         let v = builder::vertex(pt(center) + Vector3::new(radius, 0.0, 0.0));

@@ -40,6 +40,13 @@ impl Plane {
         std::array::from_fn(|i| self.origin[i] + self.x[i] * p[0] + self.y[i] * p[1])
     }
 
+    /// A point `w` along the normal from the plane point `p`.
+    pub fn to_world_3d(&self, p: [f64; 2], w: f64) -> [f64; 3] {
+        let n = self.normal();
+        let q = self.to_world(p);
+        std::array::from_fn(|i| q[i] + n[i] * w)
+    }
+
     /// Projects a world point into plane coordinates.
     pub fn to_local(&self, p: [f64; 3]) -> [f64; 2] {
         let d = sub(p, self.origin);
