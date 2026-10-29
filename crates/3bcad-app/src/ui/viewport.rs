@@ -112,7 +112,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                 .project(Vec3::new(c[0] as f32, c[1] as f32, c[2] as f32), size)
             {
                 let at = rect.min + egui::vec2(s.x, s.y);
-                let stroke = egui::Stroke::new(2.0, COM_COLOR);
+                let stroke = egui::Stroke::new(2.0_f32, COM_COLOR);
                 painter.circle_stroke(at, 7.0, stroke);
                 painter.line_segment([at - egui::vec2(11.0, 0.0), at + egui::vec2(11.0, 0.0)], stroke);
                 painter.line_segment([at - egui::vec2(0.0, 11.0), at + egui::vec2(0.0, 11.0)], stroke);

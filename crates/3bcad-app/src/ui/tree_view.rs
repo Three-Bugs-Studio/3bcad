@@ -140,7 +140,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                     ui.painter().hline(
                         inner.response.rect.x_range(),
                         inner.response.rect.top(),
-                        egui::Stroke::new(2.0, Color32::from_rgb(60, 130, 230)),
+                        egui::Stroke::new(2.0_f32, Color32::from_rgb(60, 130, 230)),
                     );
                 }
                 resp.context_menu(|ui| {
