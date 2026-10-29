@@ -263,6 +263,9 @@ fn ray_hit(o: P3, d: P3, tris: impl Iterator<Item = [P3; 3]>, min_t: f64) -> Opt
     best
 }
 
+/// A solid with its topology and face names.
+type Tagged = (Solid, Arc<Topology>, Vec<FaceTag>);
+
 struct Eval {
     s: Rebuild,
     id: FeatureId,
@@ -459,7 +462,7 @@ impl Eval {
     }
 
     /// Builds each solid of a tool with its face tags.
-    fn tool_bodies(&self, tool: &Tool, instance: u32) -> Result<Vec<(Solid, Arc<Topology>, Vec<FaceTag>)>> {
+    fn tool_bodies(&self, tool: &Tool, instance: u32) -> Result<Vec<Tagged>> {
         tool.solids()?
             .into_iter()
             .enumerate()
@@ -490,9 +493,9 @@ impl Eval {
                             keep.push(b);
                             continue;
                         }
-                        let (cur_solid, cur_sources): (Solid, Vec<(Arc<Topology>, Vec<FaceTag>)>) = match &merged {
-                            Some(m) => (m.solid.clone(), vec![(m.topo.clone(), m.tags.clone())]),
-                            None => (tool.clone(), vec![(ttopo.clone(), ttags.clone())]),
+                        let (cur_solid, cur_topo, cur_tags) = match &merged {
+                            Some(m) => (m.solid.clone(), m.topo.clone(), m.tags.clone()),
+                            None => (tool.clone(), ttopo.clone(), ttags.clone()),
                         };
                         match boolean::union(&b.solid, &cur_solid) {
                             Ok(Some(u)) => {
@@ -502,8 +505,7 @@ impl Eval {
                                 } else {
                                     csg.push(step.clone());
                                 }
-                                let mut src: Vec<(&Topology, &[FaceTag])> = vec![(&b.topo, &b.tags)];
-                                src.extend(cur_sources.iter().map(|(t, g)| (&**t, &g[..])));
+                                let src: [(&Topology, &[FaceTag]); 2] = [(&b.topo, &b.tags), (&cur_topo, &cur_tags)];
                                 merged = Some(self.make_body(u, &src, csg));
                             }
                             Ok(None) => keep.push(b),
@@ -1378,7 +1380,7 @@ impl Eval {
 
     /// Replays a body's history with some steps changed; keeps the piece nearest the old body.
     fn replay(&self, csg: &[Step], near: P3) -> Result<Body> {
-        let mut bodies: Vec<(Solid, Arc<Topology>, Vec<FaceTag>)> = Vec::new();
+        let mut bodies: Vec<Tagged> = Vec::new();
         for (i, s) in csg.iter().enumerate() {
             let sub_eval = Eval {
                 s: Rebuild::default(),

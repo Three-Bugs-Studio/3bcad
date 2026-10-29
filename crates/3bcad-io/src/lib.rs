@@ -50,4 +50,28 @@ mod tests {
 
         std::fs::remove_dir_all(dir).ok();
     }
+
+    #[test]
+    fn step_exports_a_boolean_result() {
+        // A cut leaves intersection-curve edges; the exporter must still write them.
+        let cube = extrude_polygon(&[[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 10.0]], 10.0).unwrap();
+        let hole = threebcad_kernel::operations::extrude_circle([5.0, 5.0], 2.0, 20.0).unwrap();
+        let hole = threebcad_kernel::boolean::transformed(
+            &hole,
+            [
+                [1.0, 0.0, 0.0, 0.0],
+                [0.0, 1.0, 0.0, 0.0],
+                [0.0, 0.0, 1.0, 0.0],
+                [0.0, 0.0, -5.0, 1.0],
+            ],
+        );
+        let cut = threebcad_kernel::boolean::subtract(&cube, &hole).unwrap().remove(0);
+        let path = std::env::temp_dir().join(format!("3bcad-step-bool-{}.step", std::process::id()));
+        write_step(&path, [&cut]).unwrap();
+        let text = std::fs::read_to_string(&path).unwrap();
+        let faces = text.matches("= ADVANCED_FACE(").count() + text.matches("= FACE_SURFACE(").count();
+        assert!(text.contains("MANIFOLD_SOLID_BREP"));
+        assert_eq!(faces, cut.face_iter().count(), "every face is written");
+        std::fs::remove_file(path).ok();
+    }
 }

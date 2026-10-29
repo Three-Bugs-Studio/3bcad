@@ -19,6 +19,8 @@ pub struct HoleSize {
     pub csk_angle: f64,
 }
 
+// One row of the ISO table, in the order of the columns.
+#[allow(clippy::too_many_arguments)]
 const fn iso(name: &'static str, major: f64, pitch: f64, clr: f64, tap: f64, cb: f64, cbd: f64, csk: f64) -> HoleSize {
     HoleSize {
         name,

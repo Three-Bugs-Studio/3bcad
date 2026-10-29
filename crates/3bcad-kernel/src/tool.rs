@@ -96,7 +96,7 @@ fn dist_to_segment(p: [f64; 2], s: &ProfileSegment) -> f64 {
             }
         }
         ProfileSegment::Circle { center, radius, .. } => (d(p, center) - radius).abs(),
-        ProfileSegment::Bezier(b) => offset::sample_loop(&[s.clone()], 8)
+        ProfileSegment::Bezier(b) => offset::sample_loop(std::slice::from_ref(s), 8)
             .iter()
             .chain(std::iter::once(&b[3]))
             .map(|q| d(p, *q))
@@ -390,14 +390,16 @@ impl Tool {
     }
 }
 
-/// Profile segment as a rational curve in the z = 0 plane: (control points, weights, knots, degree).
-fn segment_nurbs(s: &ProfileSegment) -> Option<(Vec<Point3>, Vec<f64>, Vec<f64>, usize)> {
+/// A rational curve: control points, weights, knots.
+type Net = (Vec<Point3>, Vec<f64>, Vec<f64>);
+
+/// Profile segment as a rational curve in the z = 0 plane.
+fn segment_nurbs(s: &ProfileSegment) -> Option<Net> {
     match *s {
         ProfileSegment::Line { from, to } => Some((
             vec![Point3::new(from[0], from[1], 0.0), Point3::new(to[0], to[1], 0.0)],
             vec![1.0, 1.0],
             vec![0.0, 0.0, 1.0, 1.0],
-            1,
         )),
         ProfileSegment::Arc { center, from, to, ccw } => {
             let a0 = (from[1] - center[1]).atan2(from[0] - center[0]);
@@ -410,7 +412,7 @@ fn segment_nurbs(s: &ProfileSegment) -> Option<(Vec<Point3>, Vec<f64>, Vec<f64>,
             let (pts, w, k) = circle_net(sweep, |a| {
                 Point3::new(center[0] + r * (a0 + a).cos(), center[1] + r * (a0 + a).sin(), 0.0)
             });
-            Some((pts, w, k, 2))
+            Some((pts, w, k))
         }
         _ => None,
     }
@@ -418,7 +420,7 @@ fn segment_nurbs(s: &ProfileSegment) -> Option<(Vec<Point3>, Vec<f64>, Vec<f64>,
 
 /// Rational quadratic control net of a circular arc of `sweep` radians: `at(angle)` gives the point
 /// on the circle; middle control points sit on the tangent intersections (`at` scaled out).
-fn circle_net(sweep: f64, at: impl Fn(f64) -> Point3) -> (Vec<Point3>, Vec<f64>, Vec<f64>) {
+fn circle_net(sweep: f64, at: impl Fn(f64) -> Point3) -> Net {
     let n = ((sweep.abs() / (std::f64::consts::PI / 2.0)).ceil() as usize).max(1);
     let d = sweep / n as f64;
     let wm = (d / 2.0).cos();
@@ -560,7 +562,7 @@ fn revolve_region(r: &ProfileRegion, o: Point3, axis: Vector3, a0: f64, sweep: f
                 }
                 let mut ring: Vec<Edge> = (0..sections + usize::from(!full))
                     .map(|j| {
-                        let (pts, w, knots, _) = nets[s].clone();
+                        let (pts, w, knots) = nets[s].clone();
                         let pts: Vec<Point3> = pts.iter().map(|p| rot(*p, angles[j])).collect();
                         let curve = match lp[s] {
                             ProfileSegment::Line { .. } => Curve::Line(Line(pts[0], pts[1])),
@@ -576,7 +578,7 @@ fn revolve_region(r: &ProfileRegion, o: Point3, axis: Vector3, a0: f64, sweep: f
             })
             .collect();
         for s in (0..n).filter(|&s| !lies_on_axis(s)) {
-            let (cp, cw, ck, _) = &nets[s];
+            let (cp, cw, ck) = &nets[s];
             for j in 0..sections {
                 let mut knots_v = Vec::new();
                 let rows: Vec<Vec<Vector4>> = cp
