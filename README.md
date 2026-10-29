@@ -68,14 +68,17 @@ sudo apt-get install libgtk-3-dev libxkbcommon-dev libwayland-dev
 | Edit a sketch | Double-click it in the FeatureManager or the graphics area |
 | Disable snapping while drawing | Hold `Ctrl` |
 | Edit a dimension | Double-click its value |
+| Fillet / Chamfer / Shell | Select edges or faces (Ctrl+click for more), then the Features tab |
+| Rename a feature | Select it and press `F2` |
+| Rebuild everything | `Ctrl+Q` |
 
 ## Workspace layout
 
 | Crate (folder) | Package | Role |
 | --- | --- | --- |
-| `crates/3bcad-core` | `threebcad-core` | Feature history DAG (`petgraph`), rollback, part document, undo/redo |
+| `crates/3bcad-core` | `threebcad-core` | Feature history DAG (`petgraph`), rebuild with face naming and caching, part document, undo/redo |
 | `crates/3bcad-sketch` | `threebcad-sketch` | 2D entities, constraints, Levenberg-Marquardt solver |
-| `crates/3bcad-kernel` | `threebcad-kernel` | `truck` B-Rep bridge: extrude operations, tessellation |
+| `crates/3bcad-kernel` | `threebcad-kernel` | `truck` B-Rep bridge: feature tools, booleans, edge tools, tessellation, mass properties |
 | `crates/3bcad-render` | `threebcad-render` | wgpu pipelines, orbit camera, scene buffers |
 | `crates/3bcad-io` | `threebcad-io` | STL, 3MF, STEP export, slicer launcher |
 | `crates/3bcad-app` | `threebcad-app` | Desktop app (`eframe` = winit + egui + egui-wgpu), binary `3bcad` |
