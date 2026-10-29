@@ -1,4 +1,5 @@
-//! FeatureManager design tree: reference planes, features with sketch status, rollback bar.
+//! FeatureManager design tree: reference planes, features with sketch status, rollback bar,
+//! rename (F2), suppress, drag-to-reorder.
 
 use eframe::egui::{self, Color32, RichText, Sense};
 use threebcad_core::{FeatureId, FeatureKind};
@@ -11,13 +12,26 @@ const ROLLBACK_KEY: u64 = u64::MAX;
 enum Action {
     Rollback(usize),
     Delete(FeatureId),
-    Edit(FeatureId),
+    EditSketch(FeatureId),
+    Suppress(FeatureId, bool),
+    Move(FeatureId, usize),
+    Rename(FeatureId, String),
+}
+
+struct Row {
+    id: FeatureId,
+    text: String,
+    error: Option<String>,
+    warning: Option<String>,
+    is_sketch: bool,
+    suppressed: bool,
+    own_suppressed: bool,
 }
 
 pub fn show(app: &mut App, ctx: &egui::Context) {
     egui::SidePanel::left("feature_manager")
         .resizable(true)
-        .default_width(230.0)
+        .default_width(240.0)
         .show(ctx, |ui| {
             ui.heading("FeatureManager");
             ui.separator();
@@ -27,76 +41,145 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                     let visible = app.plane_visible.get_mut(&rp).unwrap();
                     ui.checkbox(visible, "").on_hover_text("Show / hide");
                     let selected = app.selection.contains(&ModelRef::Plane(rp));
-                    if ui.selectable_label(selected, format!("▱  {}", rp.name())).clicked() {
+                    if ui.selectable_label(selected, format!("•  {}", rp.name())).clicked() {
                         app.selection = vec![ModelRef::Plane(rp)];
                         app.selected = None;
                     }
                 });
             }
-            ui.label("    ⊕  Origin");
+            ui.label("    •  Origin");
 
             let h = app.doc.history();
             let rollback = h.rollback();
-            let rows: Vec<_> = h
+            let rows: Vec<Row> = h
                 .iter()
                 .map(|(id, f)| {
-                    let (icon, prefix) = match f.kind {
-                        FeatureKind::Sketch { .. } => (
-                            "✏",
-                            match app.doc.sketch_status(id).map(|s| s.0) {
-                                Some(Status::UnderDefined) => "(-) ",
-                                Some(Status::OverDefined) => "(+) ",
-                                _ => "",
-                            },
-                        ),
-                        FeatureKind::ExtrudeBoss { .. } => ("⬆", ""),
+                    let prefix = match f.kind {
+                        FeatureKind::Sketch { .. } => match app.doc.sketch_status(id).map(|s| s.0) {
+                            Some(Status::UnderDefined) => "(-) ",
+                            Some(Status::OverDefined) => "(+) ",
+                            _ => "",
+                        },
+                        _ => "",
                     };
-                    let is_sketch = matches!(f.kind, FeatureKind::Sketch { .. });
-                    (
+                    Row {
                         id,
-                        format!("{icon}  {prefix}{}", f.name),
-                        app.doc.errors().get(&id).cloned(),
-                        is_sketch,
-                    )
+                        text: format!("{}  {prefix}{}", f.kind.icon(), f.name),
+                        error: app.doc.errors().get(&id).cloned(),
+                        warning: app.doc.warnings().get(&id).cloned(),
+                        is_sketch: f.kind.is_sketch(),
+                        suppressed: h.is_suppressed(id),
+                        own_suppressed: f.suppressed,
+                    }
                 })
                 .collect();
 
             let mut rects = Vec::new();
             let mut bar = None;
             let mut action = None;
-            for (i, (id, text, error, is_sketch)) in rows.iter().enumerate() {
+            for (i, row) in rows.iter().enumerate() {
                 if i == rollback {
                     bar = Some(rollback_bar(ui));
                 }
-                let mut label = RichText::new(text);
-                if i >= rollback {
-                    label = label.color(Color32::GRAY).italics();
-                } else if error.is_some() {
-                    label = label.color(Color32::LIGHT_RED);
+                let id = row.id;
+                if let Some((rid, text)) = &mut app.renaming {
+                    if *rid == id {
+                        let r = ui.add(egui::TextEdit::singleline(text).desired_width(f32::INFINITY));
+                        r.request_focus();
+                        if r.lost_focus() {
+                            if ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                                action = Some(Action::Rename(id, text.clone()));
+                            }
+                            app.renaming = None;
+                        }
+                        rects.push(r.rect);
+                        continue;
+                    }
                 }
-                let editing = app.sketch.as_ref().is_some_and(|s| s.feature == Some(*id));
-                let mut resp = ui.selectable_label(app.selected == Some(*id) || editing, label);
-                if let Some(e) = error {
+                let mut label = RichText::new(&row.text);
+                if i >= rollback || row.suppressed {
+                    label = label.color(Color32::GRAY).italics();
+                } else if row.error.is_some() {
+                    label = label.color(Color32::LIGHT_RED);
+                } else if row.warning.is_some() {
+                    label = label.color(Color32::from_rgb(200, 150, 20));
+                }
+                let editing = app.sketch.as_ref().is_some_and(|s| s.feature == Some(id));
+                let selected = app.selected == Some(id) || editing || app.selection.contains(&ModelRef::Feature(id));
+                // Rows are drag sources; dropping one on another moves it there.
+                let drag_id = egui::Id::new(("feature_row", id));
+                let inner = ui.dnd_drag_source(drag_id, id, |ui| ui.selectable_label(selected, label.clone()));
+                let mut resp = inner.inner;
+                if let Some(e) = row.error.as_ref().or(row.warning.as_ref()) {
                     resp = resp.on_hover_text(e);
                 }
                 if resp.clicked() {
-                    app.selected = Some(*id);
+                    app.selected = Some(id);
                     app.selection.clear();
+                    if matches!(
+                        app.doc.history().get(id).map(|f| &f.kind),
+                        Some(
+                            FeatureKind::RefPlane(_)
+                                | FeatureKind::RefAxis(_)
+                                | FeatureKind::RefPoint(_)
+                                | FeatureKind::CoordSys(_)
+                        )
+                    ) {
+                        app.selection = vec![ModelRef::Feature(id)];
+                    }
                 }
-                if resp.double_clicked() && *is_sketch {
-                    action = Some(Action::Edit(*id));
+                if resp.double_clicked() && row.is_sketch {
+                    action = Some(Action::EditSketch(id));
+                }
+                if let Some(dragged) = inner.response.dnd_release_payload::<FeatureId>() {
+                    if *dragged != id {
+                        action = Some(Action::Move(*dragged, i));
+                    }
+                }
+                if inner.response.dnd_hover_payload::<FeatureId>().is_some() {
+                    ui.painter().hline(
+                        inner.response.rect.x_range(),
+                        inner.response.rect.top(),
+                        egui::Stroke::new(2.0, Color32::from_rgb(60, 130, 230)),
+                    );
                 }
                 resp.context_menu(|ui| {
-                    if *is_sketch && ui.button("Edit Sketch").clicked() {
-                        action = Some(Action::Edit(*id));
+                    if ui.button("Edit Feature").clicked() {
+                        app.selected = Some(id);
+                        ui.close_menu();
+                    }
+                    if row.is_sketch && ui.button("Edit Sketch").clicked() {
+                        action = Some(Action::EditSketch(id));
+                        ui.close_menu();
+                    }
+                    if ui.button("Rename (F2)").clicked() {
+                        app.renaming = Some((
+                            id,
+                            app.doc.history().get(id).map(|f| f.name.clone()).unwrap_or_default(),
+                        ));
+                        ui.close_menu();
+                    }
+                    let label = if row.own_suppressed { "Unsuppress" } else { "Suppress" };
+                    if ui.button(label).clicked() {
+                        action = Some(Action::Suppress(id, !row.own_suppressed));
+                        ui.close_menu();
+                    }
+                    ui.separator();
+                    if i > 0 && ui.button("Move Up").clicked() {
+                        action = Some(Action::Move(id, i - 1));
+                        ui.close_menu();
+                    }
+                    if i + 1 < rows.len() && ui.button("Move Down").clicked() {
+                        action = Some(Action::Move(id, i + 1));
                         ui.close_menu();
                     }
                     if ui.button("Roll Back to Here").clicked() {
                         action = Some(Action::Rollback(i));
                         ui.close_menu();
                     }
+                    ui.separator();
                     if ui.button("Delete (with children)").clicked() {
-                        action = Some(Action::Delete(*id));
+                        action = Some(Action::Delete(id));
                         ui.close_menu();
                     }
                 });
@@ -122,12 +205,33 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                     app.doc.edit(|h| h.remove(id));
                     app.selected = None;
                 }
-                Some(Action::Edit(id)) => {
+                Some(Action::EditSketch(id)) => {
                     if app.sketch.is_some() {
                         app.exit_sketch(true);
                     }
                     app.edit_sketch(id);
                 }
+                Some(Action::Suppress(id, on)) => {
+                    app.doc.edit(|h| h.set_suppressed(id, on));
+                    app.status = format!(
+                        "{} {}",
+                        if on { "Suppressed" } else { "Unsuppressed" },
+                        app.describe(ModelRef::Feature(id))
+                    );
+                }
+                // Try on a copy first so a refused move or name leaves no undo step behind.
+                Some(Action::Move(id, to)) => match app.doc.history().clone().move_to(id, to) {
+                    Ok(()) => {
+                        let _ = app.doc.edit(|h| h.move_to(id, to));
+                    }
+                    Err(e) => app.status = e.to_string(),
+                },
+                Some(Action::Rename(id, name)) => match app.doc.history().clone().rename(id, &name) {
+                    Ok(()) => {
+                        let _ = app.doc.edit(|h| h.rename(id, &name));
+                    }
+                    Err(e) => app.status = e.to_string(),
+                },
                 None => {}
             }
         });

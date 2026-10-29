@@ -6,11 +6,12 @@ use glam::{Vec2 as GVec2, Vec3};
 use threebcad_core::{FeatureId, FeatureKind};
 use threebcad_render::{pick, HitKind, OrbitCamera, ViewportCallback};
 
-use crate::app::App;
+use crate::app::{App, ModelRef};
 use crate::ui::sketch_mode::{self, View};
 
 const SKETCH_COLOR: Color32 = Color32::from_rgb(70, 90, 140);
 const SKETCH_SELECTED: Color32 = Color32::from_rgb(20, 160, 255);
+const COM_COLOR: Color32 = Color32::from_rgb(160, 30, 160);
 
 pub fn show(app: &mut App, ui: &mut egui::Ui) {
     let (rect, resp) = ui.allocate_exact_size(ui.available_size(), Sense::click_and_drag());
@@ -104,6 +105,27 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
         }
     }
 
+    if app.show_mass {
+        if let Some(c) = app.mass.as_ref().map(|(_, m)| m.center) {
+            if let Some(s) = app
+                .camera
+                .project(Vec3::new(c[0] as f32, c[1] as f32, c[2] as f32), size)
+            {
+                let at = rect.min + egui::vec2(s.x, s.y);
+                let stroke = egui::Stroke::new(2.0, COM_COLOR);
+                painter.circle_stroke(at, 7.0, stroke);
+                painter.line_segment([at - egui::vec2(11.0, 0.0), at + egui::vec2(11.0, 0.0)], stroke);
+                painter.line_segment([at - egui::vec2(0.0, 11.0), at + egui::vec2(0.0, 11.0)], stroke);
+                painter.text(
+                    at + egui::vec2(12.0, -12.0),
+                    egui::Align2::LEFT_BOTTOM,
+                    "Center of mass",
+                    egui::FontId::proportional(12.0),
+                    COM_COLOR,
+                );
+            }
+        }
+    }
     draw_triad(&painter, rect, &app.camera);
     painter.text(
         rect.right_bottom() - egui::vec2(10.0, 10.0),
@@ -117,17 +139,16 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
 /// Sketches above the rollback bar that no feature has used yet (shown in the model).
 fn loose_sketches(app: &App) -> Vec<(FeatureId, &threebcad_sketch::Sketch, threebcad_kernel::Plane)> {
     let h = app.doc.history();
+    // A sketch is used once a feature is built from it (an extrude, a hole, a rib...).
     let used: Vec<FeatureId> = h
         .iter()
-        .filter_map(|(_, f)| match f.kind {
-            FeatureKind::ExtrudeBoss { sketch, .. } => Some(sketch),
-            _ => None,
-        })
+        .filter(|(_, f)| !f.kind.is_sketch())
+        .flat_map(|(_, f)| f.kind.references())
         .collect();
     h.iter()
         .filter(|(id, _)| h.is_active(*id) && !used.contains(id))
         .filter_map(|(id, f)| match &f.kind {
-            FeatureKind::Sketch { sketch, plane } => Some((id, sketch, *plane)),
+            FeatureKind::Sketch { sketch, plane, .. } => Some((id, sketch, *plane)),
             _ => None,
         })
         .collect()
@@ -183,7 +204,7 @@ fn model_input(app: &mut App, resp: &egui::Response, rect: egui::Rect, size: GVe
         None => {}
     }
     if let Some(r) = app.selection.last() {
-        app.status = format!("Selected {}", r.describe());
+        app.status = format!("Selected {}", app.describe(*r));
     }
 }
 
@@ -194,6 +215,8 @@ fn paint_vertex_markers(app: &App, painter: &egui::Painter, rect: egui::Rect, si
         let color = match r {
             Some(r) if app.selection.contains(&r) => Color32::from_rgb(20, 130, 255),
             Some(r) if app.hover == Some(r) => Color32::from_rgb(255, 140, 20),
+            // Reference points are always shown.
+            Some(ModelRef::Feature(_)) => Color32::from_rgb(200, 110, 20),
             _ => continue,
         };
         if let Some(s) = app.camera.project(Vec3::from(p), size) {
