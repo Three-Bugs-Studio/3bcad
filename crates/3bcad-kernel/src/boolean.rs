@@ -38,11 +38,23 @@ fn overlaps(a: &([f64; 3], [f64; 3]), b: &([f64; 3], [f64; 3]), margin: f64) -> 
     (0..3).all(|i| a.0[i] <= b.1[i] + margin && b.0[i] <= a.1[i] + margin)
 }
 
-/// Signed volume from a coarse tessellation; `None` when truck cannot mesh the solid.
+/// Signed volume from a tessellation fine enough for about 0.1 % on typical parts; `None` when
+/// truck cannot mesh the solid.
 pub fn volume(s: &Solid) -> Option<f64> {
+    volume_at(s, 1e-3, 1e-3, 0.05)
+}
+
+/// For the boolean sanity checks, which allow 1 % slack: a 5x coarser mesh, since meshing is most
+/// of their cost.
+fn rough_volume(s: &Solid) -> Option<f64> {
+    volume_at(s, 5e-3, 5e-3, 0.25)
+}
+
+/// Volume meshed at `rel` x the bounding-box diagonal, clamped to `min..=max` mm.
+fn volume_at(s: &Solid, rel: f64, min: f64, max: f64) -> Option<f64> {
     let (lo, hi) = bbox(s);
     let diag = (0..3).map(|i| (hi[i] - lo[i]).powi(2)).sum::<f64>().sqrt();
-    let tol = (diag * 1e-3).clamp(1e-3, 0.05);
+    let tol = (diag * rel).clamp(min, max);
     catch_unwind(AssertUnwindSafe(|| {
         let mut poly = s.triangulation(tol).to_polygon();
         poly.put_together_same_attrs(TOLERANCE);
@@ -92,8 +104,8 @@ fn raw(op: Op, a: &Solid, b: &Solid) -> Option<Solid> {
 /// Runs `op`, checks the volume is plausible, and retries with the tool grown when it is not.
 fn checked(op: Op, a: &Solid, b: &Solid) -> Result<Solid> {
     let (va, vb) = (
-        volume(a).ok_or_else(|| anyhow!("a body cannot be meshed"))?,
-        volume(b).ok_or_else(|| anyhow!("the feature's tool cannot be meshed"))?,
+        rough_volume(a).ok_or_else(|| anyhow!("a body cannot be meshed"))?,
+        rough_volume(b).ok_or_else(|| anyhow!("the feature's tool cannot be meshed"))?,
     );
     let slack = 0.01 * va.max(vb) + 1e-6;
     let plausible = |v: f64| match op {
@@ -104,7 +116,7 @@ fn checked(op: Op, a: &Solid, b: &Solid) -> Result<Solid> {
     for grow in [0.0, GROW, 10.0 * GROW] {
         let tool = if grow == 0.0 { b.clone() } else { grown(b, grow) };
         if let Some(s) = raw(op, a, &tool) {
-            if volume(&s).is_some_and(plausible) {
+            if rough_volume(&s).is_some_and(plausible) {
                 return Ok(s);
             }
         }
@@ -138,8 +150,8 @@ pub fn subtract(a: &Solid, b: &Solid) -> Result<Vec<Solid>> {
         Err(e) => {
             // The tool swallowed the body whole: nothing is left.
             let swallowed = raw(Op::Intersect, a, b)
-                .and_then(|s| volume(&s))
-                .zip(volume(a))
+                .and_then(|s| rough_volume(&s))
+                .zip(rough_volume(a))
                 .is_some_and(|(v, va)| (v - va).abs() < 1e-3 * va.abs() + 1e-6);
             if swallowed {
                 Ok(Vec::new())

@@ -203,14 +203,16 @@ fn cylinder_of(face: &Face, tf: &TopoFace) -> Option<(P3, P3, f64)> {
     if pts.len() < 6 {
         return None;
     }
-    // Axis direction from the normals: all normals are perpendicular to it.
+    // Axis direction from the normals: all normals are perpendicular to it. Exact normals are
+    // costly (a surface search each), so compare a few spread-out samples, not every vertex.
     let n0 = face_normal(face, tf, tf.tris[0][0]);
-    let far = tf.tris.iter().map(|t| t[0]).max_by(|a, b| {
-        let na = face_normal(face, tf, *a);
-        let nb = face_normal(face, tf, *b);
-        norm(cross(na, n0)).total_cmp(&norm(cross(nb, n0)))
-    })?;
-    let n1 = face_normal(face, tf, far);
+    let step = (tf.tris.len() / 16).max(1);
+    let (far, n1) = tf
+        .tris
+        .iter()
+        .step_by(step)
+        .map(|t| (t[0], face_normal(face, tf, t[0])))
+        .max_by(|a, b| norm(cross(a.1, n0)).total_cmp(&norm(cross(b.1, n0))))?;
     let axis = cross(n0, n1);
     if norm(axis) < 1e-6 {
         return None;
