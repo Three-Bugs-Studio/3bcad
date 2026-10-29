@@ -26,15 +26,12 @@ saved files and workflows; patch versions (0.x.y) only fix bugs.
 - Sketch tab "Sketch on" buttons start a sketch on the Front, Top or Right plane, a reference plane or the
   selected face in one click; double-click a plane in the FeatureManager to sketch on it.
 - Keyboard Shortcuts window (F1 or the Shortcuts button in the ribbon).
+- Geometry regression corpus (`crates/3bcad-core/tests/parts`) and `cargo bench -p threebcad-core`.
 
 ### Changed
 
 - Light, SolidWorks-style look: light panels, a CommandManager with large icons above each command and
   the tabs underneath, icons in the FeatureManager, and a white-to-grey gradient behind the model.
-- Geometry regression corpus (`crates/3bcad-core/tests/parts`) and `cargo bench -p threebcad-core`.
-
-### Changed
-
 - Faces and edges keep stable names across rebuilds, so fillets and sketches on faces survive dimension
   changes; a reference that is really gone is reported on its feature.
 - Rebuilds reuse cached results: editing the last feature only re-evaluates that feature (Ctrl+Q rebuilds all).
