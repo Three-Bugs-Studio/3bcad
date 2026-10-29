@@ -32,6 +32,8 @@ saved files and workflows; patch versions (0.x.y) only fix bugs.
 
 - Light, SolidWorks-style look: light panels, a CommandManager with large icons above each command and
   the tabs underneath, icons in the FeatureManager, and a white-to-grey gradient behind the model.
+- Command, sketch-tool and FeatureManager icons are shaded 3D icons in the SolidWorks style: lit gold
+  solids, blue sketches and translucent planes, green "add" and red "remove" arrows.
 - Faces and edges keep stable names across rebuilds, so fillets and sketches on faces survive dimension
   changes; a reference that is really gone is reported on its feature.
 - Rebuilds reuse cached results: editing the last feature only re-evaluates that feature (Ctrl+Q rebuilds all).
