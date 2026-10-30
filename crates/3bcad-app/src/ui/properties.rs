@@ -77,6 +77,12 @@ fn picks(app: &App) -> Picks {
 }
 
 /// Edits made by the panel: the new feature kind, and whether a value is being dragged.
+/// A model parameter: a typed value counts once it is finished, not at every key press, which
+/// would rebuild the part and add an undo step each time.
+fn number<Num: egui::emath::Numeric>(v: &mut Num) -> egui::DragValue<'_> {
+    egui::DragValue::new(v).update_while_editing(false)
+}
+
 struct Ed {
     changed: bool,
     dragging: bool,
@@ -96,7 +102,7 @@ impl Ed {
     fn length(&mut self, ui: &mut egui::Ui, label: &str, v: &mut f64, min: f64) {
         ui.horizontal(|ui| {
             ui.label(label);
-            self.track(ui.add(egui::DragValue::new(v).speed(0.1).range(min..=10_000.0).suffix(" mm")));
+            self.track(ui.add(number(v).speed(0.1).range(min..=10_000.0).suffix(" mm")));
         });
     }
 
@@ -105,7 +111,7 @@ impl Ed {
             ui.label(label);
             let mut deg = rad.to_degrees();
             if self
-                .track(ui.add(egui::DragValue::new(&mut deg).speed(0.5).range(range).suffix("°")))
+                .track(ui.add(number(&mut deg).speed(0.5).range(range).suffix("°")))
                 .changed()
             {
                 *rad = deg.to_radians();
@@ -120,7 +126,7 @@ impl Ed {
     fn count(&mut self, ui: &mut egui::Ui, label: &str, v: &mut usize) {
         ui.horizontal(|ui| {
             ui.label(label);
-            self.track(ui.add(egui::DragValue::new(v).range(1..=500)));
+            self.track(ui.add(number(v).range(1..=500)));
         });
     }
 
@@ -207,7 +213,7 @@ fn end_editor(ed: &mut Ed, ui: &mut egui::Ui, salt: &str, end: &mut End, p: &Pic
         End::OffsetFromSurface(_, d) => {
             ui.horizontal(|ui| {
                 ui.label("Offset");
-                ed.track(ui.add(egui::DragValue::new(d).speed(0.1).suffix(" mm")));
+                ed.track(ui.add(number(d).speed(0.1).suffix(" mm")));
             });
         }
         End::UpToVertex(_) | End::UpToSurface(_) => {
@@ -322,7 +328,7 @@ fn feature_panel(app: &mut App, ctx: &egui::Context) {
                                     (value, " mm")
                                 };
                                 let range = if is_angle { -360.0..=360.0 } else { 0.01..=10_000.0 };
-                                let r = ui.add(egui::DragValue::new(&mut shown).speed(0.2).range(range).suffix(suffix));
+                                let r = ui.add(number(&mut shown).speed(0.2).range(range).suffix(suffix));
                                 if r.changed() {
                                     sketch_dim = Some((i, if is_angle { shown.to_radians() } else { shown }));
                                 }
@@ -333,7 +339,7 @@ fn feature_panel(app: &mut App, ctx: &egui::Context) {
                             ui.horizontal(|ui| {
                                 ui.label(format!("Pattern {} instances", g + 1));
                                 let mut n = sketch.pattern_count(g);
-                                if ed.track(ui.add(egui::DragValue::new(&mut n).range(2..=200))).changed() {
+                                if ed.track(ui.add(number(&mut n).range(2..=200))).changed() {
                                     let _ = sketch.set_pattern_count(g, n);
                                 }
                             });
@@ -607,7 +613,7 @@ fn feature_panel(app: &mut App, ctx: &egui::Context) {
                             plane_editor(&mut ed, ui, &h, base, &p, "Offset from");
                             ui.horizontal(|ui| {
                                 ui.label("Distance");
-                                ed.track(ui.add(egui::DragValue::new(distance).speed(0.2).suffix(" mm")));
+                                ed.track(ui.add(number(distance).speed(0.2).suffix(" mm")));
                             });
                             ed.check(ui, flip, "Flip normal");
                         }
@@ -637,7 +643,7 @@ fn feature_panel(app: &mut App, ctx: &egui::Context) {
                             for (i, n) in ["X", "Y", "Z"].iter().enumerate() {
                                 ui.horizontal(|ui| {
                                     ui.label(*n);
-                                    ed.track(ui.add(egui::DragValue::new(&mut c[i]).speed(0.2).suffix(" mm")));
+                                    ed.track(ui.add(number(&mut c[i]).speed(0.2).suffix(" mm")));
                                 });
                             }
                         }
@@ -710,12 +716,14 @@ fn feature_panel(app: &mut App, ctx: &egui::Context) {
         });
     }
     if ed.changed {
-        let merge = ed.dragging.then(|| key(id, 0xFFFF));
-        app.doc.edit_merging(merge, |h| {
-            if let Some(f) = h.get_mut(id) {
-                f.kind = kind;
+        // Try on a copy first so a refused pick leaves no undo step behind.
+        match app.doc.history().clone().replace(id, kind.clone()) {
+            Ok(()) => {
+                let merge = ed.dragging.then(|| key(id, 0xFFFF));
+                let _ = app.doc.edit_merging(merge, |h| h.replace(id, kind));
             }
-        });
+            Err(e) => app.status = e.to_string(),
+        }
     }
 }
 

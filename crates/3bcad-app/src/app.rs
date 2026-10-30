@@ -105,6 +105,8 @@ pub struct App {
     /// g/cm³
     pub density: f64,
     pub mass: Option<(u64, MassProperties)>,
+    /// The Measure window's lines, and the model revision and selection they are for.
+    pub measured: Option<(u64, Vec<ModelRef>, Vec<String>)>,
     /// Feature being renamed in the tree and the text typed so far.
     pub renaming: Option<(FeatureId, String)>,
     known_problems: usize,
@@ -140,6 +142,7 @@ impl App {
             show_shortcuts: false,
             density: 1.24,
             mass: None,
+            measured: None,
             renaming: None,
             known_problems: 0,
             built_for: None,
@@ -435,13 +438,18 @@ impl App {
             }),
             None => {
                 let plane = session.plane;
-                let id = self.doc.edit(|h| match on {
-                    Some(on) => h.add_sketch_on(new_sketch.clone(), plane, on),
-                    None => Ok(h.add_sketch(new_sketch.clone(), plane)),
+                let (id, refused) = self.doc.edit(|h| match on {
+                    Some(on) => match h.add_sketch_on(new_sketch.clone(), plane, on) {
+                        Ok(id) => (id, None),
+                        // The face is gone or rolled back: keep the drawing, on the face's plane.
+                        Err(e) => (h.add_sketch(new_sketch, plane), Some(e)),
+                    },
+                    None => (h.add_sketch(new_sketch, plane), None),
                 });
-                match id {
-                    Ok(id) => self.selected = Some(id),
-                    Err(e) => self.status = e.to_string(),
+                self.selected = Some(id);
+                if let Some(e) = refused {
+                    self.status = format!("Sketch saved, but not linked to its face: {e}");
+                    return;
                 }
             }
         }
@@ -615,10 +623,9 @@ impl App {
     }
 
     fn shortcuts(&mut self, ctx: &egui::Context) {
-        let (undo, redo, escape, delete, rebuild, rename) = ctx.input_mut(|i| {
+        let (undo, redo) = undo_keys(ctx);
+        let (escape, delete, rebuild, rename) = ctx.input_mut(|i| {
             (
-                i.consume_shortcut(&KeyboardShortcut::new(Modifiers::COMMAND, Key::Z)),
-                i.consume_shortcut(&KeyboardShortcut::new(Modifiers::COMMAND, Key::Y)),
                 i.key_pressed(Key::Escape),
                 i.key_pressed(Key::Delete),
                 i.consume_shortcut(&KeyboardShortcut::new(Modifiers::COMMAND, Key::Q))
@@ -681,6 +688,19 @@ impl App {
     }
 }
 
+/// Ctrl+Z and Ctrl+Y, unless a text field is focused: then they are that field's own undo.
+fn undo_keys(ctx: &egui::Context) -> (bool, bool) {
+    if ctx.wants_keyboard_input() {
+        return (false, false);
+    }
+    ctx.input_mut(|i| {
+        (
+            i.consume_shortcut(&KeyboardShortcut::new(Modifiers::COMMAND, Key::Z)),
+            i.consume_shortcut(&KeyboardShortcut::new(Modifiers::COMMAND, Key::Y)),
+        )
+    })
+}
+
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.shortcuts(ctx);
@@ -734,5 +754,44 @@ impl eframe::App for App {
         if self.sync_states() {
             ctx.request_repaint();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn frame(ctx: &egui::Context, focused: bool, text: &mut String) -> (bool, bool) {
+        let ctrl_z = egui::Event::Key {
+            key: Key::Z,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: Modifiers::COMMAND,
+        };
+        let input = egui::RawInput {
+            events: vec![ctrl_z],
+            ..Default::default()
+        };
+        let mut keys = (false, false);
+        let _ = ctx.run(input, |ctx| {
+            keys = undo_keys(ctx);
+            egui::CentralPanel::default().show(ctx, |ui| {
+                let r = ui.text_edit_singleline(text);
+                if focused {
+                    r.request_focus();
+                }
+            });
+        });
+        keys
+    }
+
+    #[test]
+    fn ctrl_z_belongs_to_the_text_field_being_typed_in() {
+        let ctx = egui::Context::default();
+        let mut text = String::new();
+        assert_eq!(frame(&ctx, false, &mut text), (true, false));
+        frame(&ctx, true, &mut text);
+        assert_eq!(frame(&ctx, true, &mut text), (false, false));
     }
 }

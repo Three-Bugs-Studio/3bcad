@@ -259,7 +259,14 @@ fn measure(app: &mut App, ctx: &egui::Context) {
     if !app.show_measure {
         return;
     }
-    let lines = measurements(app);
+    // Distances between faces are slow, so they are measured once per model and selection.
+    let revision = app.doc.revision();
+    let fresh = |m: &(u64, Vec<ModelRef>, Vec<String>)| m.0 == revision && m.1 == app.selection;
+    let lines = match app.measured.as_ref().filter(|m| fresh(m)) {
+        Some(m) => m.2.clone(),
+        None => measurements(app),
+    };
+    app.measured = Some((revision, app.selection.clone(), lines.clone()));
     let mut open = true;
     egui::Window::new("Measure")
         .open(&mut open)
