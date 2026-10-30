@@ -133,17 +133,8 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                 }
                 let editing = app.sketch.as_ref().is_some_and(|s| s.feature == Some(id));
                 let selected = app.selected == Some(id) || editing || app.selection.contains(&ModelRef::Feature(id));
-                // Rows are drag sources; dropping one on another moves it there.
-                let drag_id = egui::Id::new(("feature_row", id));
                 let inactive = i >= rollback || row.suppressed;
-                let inner = ui.dnd_drag_source(drag_id, id, |ui| {
-                    ui.horizontal(|ui| {
-                        icons::inline(ui, row.icon, !inactive);
-                        ui.selectable_label(selected, label.clone())
-                    })
-                    .inner
-                });
-                let mut resp = inner.inner;
+                let mut resp = feature_row(ui, id, row.icon, !inactive, selected, label);
                 if let Some(e) = row.error.as_ref().or(row.warning.as_ref()) {
                     resp = resp.on_hover_text(e);
                 }
@@ -168,15 +159,15 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                 if resp.double_clicked() && row.is_plane {
                     action = Some(Action::SketchOn(id));
                 }
-                if let Some(dragged) = inner.response.dnd_release_payload::<FeatureId>() {
+                if let Some(dragged) = resp.dnd_release_payload::<FeatureId>() {
                     if *dragged != id {
                         action = Some(Action::Move(*dragged, i));
                     }
                 }
-                if inner.response.dnd_hover_payload::<FeatureId>().is_some() {
+                if resp.dnd_hover_payload::<FeatureId>().is_some() {
                     ui.painter().hline(
-                        inner.response.rect.x_range(),
-                        inner.response.rect.top(),
+                        resp.rect.x_range(),
+                        resp.rect.top(),
                         egui::Stroke::new(2.0_f32, Color32::from_rgb(60, 130, 230)),
                     );
                 }
@@ -279,6 +270,30 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
         });
 }
 
+/// A feature's row. Rows are drag sources; dropping one on another moves it there. The label senses
+/// clicks and drags itself: `dnd_drag_source` would cover it in a drag-only widget that eats clicks.
+fn feature_row(
+    ui: &mut egui::Ui,
+    id: FeatureId,
+    icon: &str,
+    enabled: bool,
+    selected: bool,
+    label: RichText,
+) -> egui::Response {
+    let resp = ui
+        .horizontal(|ui| {
+            icons::inline(ui, icon, enabled);
+            ui.selectable_label(selected, label)
+        })
+        .inner
+        .interact(Sense::click_and_drag());
+    resp.dnd_set_drag_payload(id);
+    if resp.dragged() {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
+    }
+    resp
+}
+
 /// The name box of a feature being renamed: its rect and, once it closes, whether to save.
 fn rename_box(ui: &mut egui::Ui, text: &mut String) -> (egui::Rect, Option<bool>) {
     let r = ui.add(egui::TextEdit::singleline(text).desired_width(f32::INFINITY));
@@ -340,5 +355,59 @@ mod tests {
             assert_eq!(text, "BossX");
             assert_eq!(frame(&ctx, vec![key(k)], &mut text), Some(saved));
         }
+    }
+
+    /// One frame of two rows: their responses, and what was dropped on the second.
+    fn rows(ctx: &egui::Context, events: Vec<egui::Event>) -> ([egui::Response; 2], Option<FeatureId>) {
+        let input = egui::RawInput {
+            events,
+            ..Default::default()
+        };
+        let mut out = None;
+        let _ = ctx.run(input, |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                let mut row = |n| feature_row(ui, FeatureId::new(n), "plane", true, false, "Sketch1".into());
+                let (a, b) = (row(0), row(1));
+                let dropped = b.dnd_release_payload::<FeatureId>().map(|d| *d);
+                out = Some(([a, b], dropped));
+            });
+        });
+        out.unwrap()
+    }
+
+    fn button(pos: egui::Pos2, button: egui::PointerButton, pressed: bool) -> egui::Event {
+        egui::Event::PointerButton {
+            pos,
+            button,
+            pressed,
+            modifiers: egui::Modifiers::NONE,
+        }
+    }
+
+    #[test]
+    fn a_row_takes_clicks_and_right_clicks() {
+        let ctx = egui::Context::default();
+        let p = rows(&ctx, vec![]).0[0].rect.center();
+        rows(&ctx, vec![egui::Event::PointerMoved(p)]);
+        rows(&ctx, vec![button(p, egui::PointerButton::Primary, true)]);
+        let (clicked, _) = rows(&ctx, vec![button(p, egui::PointerButton::Primary, false)]);
+        assert!(clicked[0].clicked());
+        rows(&ctx, vec![button(p, egui::PointerButton::Secondary, true)]);
+        let (clicked, _) = rows(&ctx, vec![button(p, egui::PointerButton::Secondary, false)]);
+        assert!(clicked[0].secondary_clicked());
+    }
+
+    #[test]
+    fn dropping_a_row_on_another_hands_over_its_feature() {
+        let ctx = egui::Context::default();
+        let [a, b] = rows(&ctx, vec![]).0;
+        let (from, to) = (a.rect.center(), b.rect.center() + egui::vec2(0.0, 2.0));
+        rows(&ctx, vec![egui::Event::PointerMoved(from)]);
+        rows(&ctx, vec![button(from, egui::PointerButton::Primary, true)]);
+        rows(&ctx, vec![egui::Event::PointerMoved(to)]);
+        rows(&ctx, vec![egui::Event::PointerMoved(to)]);
+        let (released, dropped) = rows(&ctx, vec![button(to, egui::PointerButton::Primary, false)]);
+        assert_eq!(dropped, Some(FeatureId::new(0)));
+        assert!(!released[0].clicked());
     }
 }

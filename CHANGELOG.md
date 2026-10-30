@@ -7,6 +7,11 @@ saved files and workflows; patch versions (0.x.y) only fix bugs.
 
 ## [Unreleased]
 
+### Fixed
+
+- Feature rows in the FeatureManager take clicks, double-clicks and right-clicks again: drag-to-reorder had
+  blocked selecting a feature, editing a sketch and the context menu.
+
 ## [0.3.0] - 2026-10-30
 
 ### Added
