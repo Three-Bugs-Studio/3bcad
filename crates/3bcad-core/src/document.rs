@@ -179,6 +179,7 @@ impl PartDocument {
 mod tests {
     use std::f64::consts::PI;
 
+    use threebcad_kernel::tool::ToolFace;
     use threebcad_kernel::topology::EdgeCurve;
 
     use super::*;
@@ -590,6 +591,45 @@ mod tests {
     }
 
     #[test]
+    fn a_shell_with_no_open_face_leaves_a_void() {
+        let mut doc = PartDocument::new("Part");
+        cube(&mut doc, 10.0);
+        doc.edit(|h| {
+            h.add(FeatureKind::Shell {
+                faces: Vec::new(),
+                thickness: 1.0,
+                outward: false,
+            })
+            .unwrap();
+        });
+        assert!(doc.errors().is_empty(), "{:?}", doc.errors());
+        assert!((vol(&doc) - (1000.0 - 512.0)).abs() < 1e-3, "{}", vol(&doc));
+    }
+
+    #[test]
+    fn a_revolved_cylinder_shells_around_its_axis() {
+        // The profile has an edge on the axis, which must not move with the walls.
+        let mut s = polygon_sketch(&[[0.0, 0.0], [5.0, 0.0], [5.0, 10.0], [0.0, 10.0]]);
+        let (c0, c1) = (s.add_point(0.0, -2.0), s.add_point(0.0, 12.0));
+        let axis = s.add_line(c0, c1);
+        s.set_construction(axis, true);
+        let mut doc = PartDocument::new("Part");
+        doc.edit(|h| {
+            let id = h.add_sketch(s, Plane::FRONT);
+            h.add(FeatureKind::Revolve(Revolve::new(id, false))).unwrap();
+            h.add(FeatureKind::Shell {
+                faces: Vec::new(),
+                thickness: 1.0,
+                outward: false,
+            })
+            .unwrap();
+        });
+        assert!(doc.errors().is_empty(), "{:?}", doc.errors());
+        let expected = PI * (25.0 * 10.0 - 16.0 * 8.0);
+        assert!((vol(&doc) - expected).abs() / expected < 0.01, "{}", vol(&doc));
+    }
+
+    #[test]
     fn hole_wizard_counterbore_and_tapped() {
         let mut doc = PartDocument::new("Part");
         cube(&mut doc, 20.0);
@@ -709,6 +749,106 @@ mod tests {
         );
         let (_, hi) = threebcad_kernel::boolean::bbox(&doc.bodies()[1].solid);
         assert!((hi[0] - 100.0).abs() < 1e-6);
+    }
+
+    /// A closed polygon as a sketch.
+    fn polygon_sketch(points: &[[f64; 2]]) -> Sketch {
+        let mut s = Sketch::default();
+        let p: Vec<_> = points.iter().map(|q| s.add_point(q[0], q[1])).collect();
+        for i in 0..p.len() {
+            s.add_line(p[i], p[(i + 1) % p.len()]);
+        }
+        s
+    }
+
+    #[test]
+    fn draft_finds_the_right_seed_of_a_mirror() {
+        // A plate with a square and a hexagonal boss, both mirrored and merged into the plate.
+        let mut doc = PartDocument::new("Part");
+        let plate = polygon_sketch(&[[-40.0, -20.0], [40.0, -20.0], [40.0, 20.0], [-40.0, 20.0]]);
+        let square = polygon_sketch(&[[10.0, -5.0], [20.0, -5.0], [20.0, 5.0], [10.0, 5.0]]);
+        let hexagon: Vec<[f64; 2]> = (0..6)
+            .map(|i| {
+                let a = PI / 3.0 * i as f64;
+                [30.0 + 5.0 * a.cos(), 5.0 * a.sin()]
+            })
+            .collect();
+        let hexagon = polygon_sketch(&hexagon);
+        let mirror = doc.edit(|h| {
+            let s = h.add_sketch(plate, Plane::TOP);
+            h.add_extrude(s, 5.0).unwrap();
+            let s = h.add_sketch(square, Plane::TOP);
+            let square = h.add_extrude(s, 10.0).unwrap();
+            let s = h.add_sketch(hexagon, Plane::TOP);
+            let hexagon = h.add_extrude(s, 10.0).unwrap();
+            h.add(FeatureKind::Mirror(Mirror {
+                seeds: Seeds::Features(vec![square, hexagon]),
+                plane: PlaneRef::Std(StdPlane::Right),
+                merge: true,
+            }))
+            .unwrap()
+        });
+        assert!(doc.errors().is_empty(), "{:?}", doc.errors());
+        let before = vol(&doc);
+        // Wall 5 exists only on the hexagon; the first seed has four walls.
+        let (body, face) = doc
+            .bodies()
+            .iter()
+            .enumerate()
+            .find_map(|(b, body)| {
+                let wall = |t: &crate::naming::FaceTag| t.feature == mirror && t.face == ToolFace::Side(5);
+                body.tags.iter().position(wall).map(|f| (b, f))
+            })
+            .expect("the mirrored hexagon's wall");
+        let wall = doc.face_ref(body, face).unwrap();
+        doc.edit(|h| {
+            h.add(FeatureKind::Draft {
+                neutral: PlaneRef::Std(StdPlane::Top),
+                faces: vec![wall],
+                angle: 0.1,
+            })
+            .unwrap();
+        });
+        assert!(doc.errors().is_empty(), "{:?}", doc.errors());
+        assert!((vol(&doc) - before).abs() > 1.0, "the wall did not move");
+    }
+
+    #[test]
+    fn a_failed_feature_leaves_every_body_as_it_was() {
+        // A hollow ring (its void refuses booleans) and a block to its right.
+        let mut ring = Sketch::circle([10.0, 0.0], 3.0);
+        let c = ring.add_point(10.0, 0.0);
+        ring.add_circle(c, 2.0);
+        let (a0, a1) = (ring.add_point(0.0, -5.0), ring.add_point(0.0, 5.0));
+        let axis = ring.add_line(a0, a1);
+        ring.set_construction(axis, true);
+        let block = polygon_sketch(&[[20.0, -5.0], [30.0, -5.0], [30.0, 5.0], [20.0, 5.0]]);
+        let mut doc = PartDocument::new("Part");
+        doc.edit(|h| {
+            let s = h.add_sketch(ring, Plane::FRONT);
+            h.add(FeatureKind::Revolve(Revolve::new(s, false))).unwrap();
+            let s = h.add_sketch(block, Plane::TOP);
+            h.add_extrude(s, 4.0).unwrap();
+        });
+        assert!(doc.errors().is_empty(), "{:?}", doc.errors());
+        assert_eq!(doc.bodies().len(), 2);
+        let before = vol(&doc);
+        // One slot through the block, one through the ring: the second tool fails.
+        let cutter = |x0: f64, x1: f64| [[x0, -1.0], [x1, -1.0], [x1, 1.0], [x0, 1.0]];
+        let mut cuts = polygon_sketch(&cutter(24.0, 26.0));
+        let extra = cutter(9.0, 11.0).map(|q| cuts.add_point(q[0], q[1]));
+        for i in 0..4 {
+            cuts.add_line(extra[i], extra[(i + 1) % 4]);
+        }
+        let cut = doc.edit(|h| {
+            let s = h.add_sketch(cuts, Plane::TOP);
+            let mut e = Extrude::cut(s, 20.0);
+            e.end = End::MidPlane(20.0);
+            h.add(FeatureKind::Extrude(e)).unwrap()
+        });
+        assert!(doc.errors()[&cut].contains("void"), "{:?}", doc.errors());
+        assert_eq!(doc.bodies().len(), 2);
+        assert!((vol(&doc) - before).abs() < 1e-6, "{} vs {before}", vol(&doc));
     }
 
     #[test]

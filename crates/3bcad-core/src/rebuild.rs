@@ -480,8 +480,17 @@ impl Eval {
         Body { solid, topo, tags, csg }
     }
 
-    /// Applies a tool to the bodies.
+    /// Applies a tool to the bodies, leaving them as they were if it fails.
     fn apply(&mut self, step: Step, merge: bool) -> Result<()> {
+        let before = self.s.bodies.clone();
+        let result = self.apply_pieces(step, merge);
+        if result.is_err() {
+            self.s.bodies = before;
+        }
+        result
+    }
+
+    fn apply_pieces(&mut self, step: Step, merge: bool) -> Result<()> {
         let pieces = self.tool_bodies(&step.tool, step.instance)?;
         for (tool, ttopo, ttags) in pieces {
             match step.op {
@@ -497,8 +506,8 @@ impl Eval {
                             Some(m) => (m.solid.clone(), m.topo.clone(), m.tags.clone()),
                             None => (tool.clone(), ttopo.clone(), ttags.clone()),
                         };
-                        match boolean::union(&b.solid, &cur_solid) {
-                            Ok(Some(u)) => {
+                        match boolean::union(&b.solid, &cur_solid)? {
+                            Some(u) => {
                                 let mut csg = b.csg.clone();
                                 if let Some(m) = &merged {
                                     csg.extend(m.csg.iter().cloned());
@@ -508,12 +517,7 @@ impl Eval {
                                 let src: [(&Topology, &[FaceTag]); 2] = [(&b.topo, &b.tags), (&cur_topo, &cur_tags)];
                                 merged = Some(self.make_body(u, &src, csg));
                             }
-                            Ok(None) => keep.push(b),
-                            Err(e) => {
-                                self.s.bodies = keep;
-                                self.s.bodies.push(b);
-                                return Err(e);
-                            }
+                            None => keep.push(b),
                         }
                     }
                     self.s.bodies = keep;
@@ -529,19 +533,10 @@ impl Eval {
                     ensure!(!self.s.bodies.is_empty(), "there is no body to cut");
                     let mut out = Vec::new();
                     for b in std::mem::take(&mut self.s.bodies) {
-                        let res = if step.op == OpKind::Sub {
-                            boolean::subtract(&b.solid, &tool)
+                        let parts = if step.op == OpKind::Sub {
+                            boolean::subtract(&b.solid, &tool)?
                         } else {
-                            boolean::intersect(&b.solid, &tool)
-                        };
-                        let parts = match res {
-                            Ok(p) => p,
-                            Err(e) => {
-                                out.push(b);
-                                out.extend(std::mem::take(&mut self.s.bodies));
-                                self.s.bodies = out;
-                                return Err(e);
-                            }
+                            boolean::intersect(&b.solid, &tool)?
                         };
                         let untouched = step.op == OpKind::Sub
                             && parts.len() == 1
@@ -982,13 +977,14 @@ impl Eval {
         let mut tools: Vec<(usize, edge_ops::EdgeTool, usize)> = Vec::new();
         for &(b, e) in &picked {
             let topo = &self.s.bodies[b].topo;
-            // The arcs of one circle make the same revolved tool: keep one.
+            // The arcs of a whole circle make the same revolved tool: keep one.
             if let EdgeCurve::Circle { center, radius, .. } = topo.edges[e].curve {
-                let dup = tools.iter().any(|(tb, _, te)| {
-                    *tb == b
-                        && matches!(self.s.bodies[b].topo.edges[*te].curve, EdgeCurve::Circle { center: c, radius: r, .. }
-                            if norm(sub(c, center)) < 1e-6 && (r - radius).abs() < 1e-6)
-                });
+                let dup = edge_ops::full_circle(topo, e)
+                    && tools.iter().any(|(tb, _, te)| {
+                        *tb == b
+                            && matches!(self.s.bodies[b].topo.edges[*te].curve, EdgeCurve::Circle { center: c, radius: r, .. }
+                                if norm(sub(c, center)) < 1e-6 && (r - radius).abs() < 1e-6)
+                    });
                 if dup {
                     continue;
                 }
@@ -1439,11 +1435,18 @@ impl Eval {
             let ToolFace::Side(seg) = tag.face else {
                 bail!("only side walls of an extrusion can be drafted");
             };
+            let sample = self.s.bodies[b].topo.faces[f].sample;
+            // The seeds of a mirror or pattern share a feature and instance: take this wall's own.
             let step = csg
                 .iter_mut()
-                .find(|s| {
+                .filter(|s| {
                     s.feature == tag.feature && s.instance == tag.instance && matches!(s.tool, Tool::Prism { .. })
                 })
+                .min_by(|x, y| {
+                    let d = |s: &Step| s.tool.side_distance(sample, seg);
+                    d(x).total_cmp(&d(y))
+                })
+                .filter(|s| s.tool.side_distance(sample, seg).is_finite())
                 .ok_or_else(|| anyhow!("only side walls of an extrusion can be drafted"))?;
             let total: usize = step
                 .tool
@@ -1599,9 +1602,12 @@ pub fn rebuild(h: &mut History, cache: &mut Vec<CacheEntry>) -> Rebuild {
                 s: std::mem::take(&mut state),
                 id,
             };
+            let bodies = ev.s.bodies.clone();
             let result = ev.run(h);
             state = ev.s;
             if let Err(e) = result {
+                // A failed feature changes nothing, even if some of its tools went through.
+                state.bodies = bodies;
                 state.errors.insert(id, e.to_string());
             }
             state.evaluated += 1;
