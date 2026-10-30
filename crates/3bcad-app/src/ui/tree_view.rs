@@ -112,15 +112,14 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                 let id = row.id;
                 if let Some((rid, text)) = &mut app.renaming {
                     if *rid == id {
-                        let r = ui.add(egui::TextEdit::singleline(text).desired_width(f32::INFINITY));
-                        r.request_focus();
-                        if r.lost_focus() {
-                            if ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                        let (rect, closed) = rename_box(ui, text);
+                        rects.push(rect);
+                        if let Some(save) = closed {
+                            if save {
                                 action = Some(Action::Rename(id, text.clone()));
                             }
                             app.renaming = None;
                         }
-                        rects.push(r.rect);
                         continue;
                     }
                 }
@@ -280,6 +279,17 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
         });
 }
 
+/// The name box of a feature being renamed: its rect and, once it closes, whether to save.
+fn rename_box(ui: &mut egui::Ui, text: &mut String) -> (egui::Rect, Option<bool>) {
+    let r = ui.add(egui::TextEdit::singleline(text).desired_width(f32::INFINITY));
+    let closed = r.lost_focus().then(|| ui.input(|i| i.key_pressed(egui::Key::Enter)));
+    // Asked for after the check: asked for first, the box would never lose focus.
+    if closed.is_none() {
+        r.request_focus();
+    }
+    (r.rect, closed)
+}
+
 fn rollback_bar(ui: &mut egui::Ui) -> egui::Response {
     let (rect, resp) = ui.allocate_exact_size(egui::vec2(ui.available_width(), 8.0), Sense::drag());
     let color = if resp.hovered() || resp.dragged() {
@@ -290,4 +300,45 @@ fn rollback_bar(ui: &mut egui::Ui) -> egui::Response {
     ui.painter().rect_filled(rect.shrink2(egui::vec2(0.0, 2.0)), 2.0, color);
     resp.on_hover_cursor(egui::CursorIcon::ResizeVertical)
         .on_hover_text("Rollback bar: drag to build the part only up to here")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn frame(ctx: &egui::Context, events: Vec<egui::Event>, text: &mut String) -> Option<bool> {
+        let input = egui::RawInput {
+            events,
+            ..Default::default()
+        };
+        let mut closed = None;
+        let _ = ctx.run(input, |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| closed = rename_box(ui, text).1);
+        });
+        closed
+    }
+
+    fn key(key: egui::Key) -> egui::Event {
+        egui::Event::Key {
+            key,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: egui::Modifiers::NONE,
+        }
+    }
+
+    #[test]
+    fn enter_saves_the_new_name_and_escape_does_not() {
+        for (k, saved) in [(egui::Key::Enter, true), (egui::Key::Escape, false)] {
+            let ctx = egui::Context::default();
+            let mut text = "Boss".to_owned();
+            assert_eq!(frame(&ctx, vec![], &mut text), None);
+            assert_eq!(frame(&ctx, vec![], &mut text), None);
+            let typed = vec![egui::Event::Text("X".into())];
+            assert_eq!(frame(&ctx, typed, &mut text), None);
+            assert_eq!(text, "BossX");
+            assert_eq!(frame(&ctx, vec![key(k)], &mut text), Some(saved));
+        }
+    }
 }

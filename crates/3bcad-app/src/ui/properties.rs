@@ -235,6 +235,20 @@ fn parse_list(s: &str) -> Vec<Vec<usize>> {
         .collect()
 }
 
+/// A text box for a value rebuilt from the feature every frame: what is typed is kept aside until
+/// focus leaves. Returns the text if it was changed.
+fn list_field(ui: &mut egui::Ui, current: String) -> Option<String> {
+    let id = ui.next_auto_id().with("draft");
+    let mut text = ui.data(|d| d.get_temp::<String>(id)).unwrap_or_else(|| current.clone());
+    let r = ui.add(egui::TextEdit::singleline(&mut text).id(id));
+    if r.has_focus() {
+        ui.data_mut(|d| d.insert_temp(id, text));
+        return None;
+    }
+    ui.data_mut(|d| d.remove::<String>(id));
+    (r.lost_focus() && text != current).then_some(text)
+}
+
 fn feature_panel(app: &mut App, ctx: &egui::Context) {
     let Some(id) = app.selected else { return };
     let Some(feature) = app.doc.history().get(id) else {
@@ -537,14 +551,14 @@ fn feature_panel(app: &mut App, ctx: &egui::Context) {
                             ed.count(ui, "Instances", &mut d.count);
                             ed.check(ui, &mut d.reverse, "Reverse");
                         }
-                        let mut text = lp
+                        let text = lp
                             .skip
                             .iter()
                             .map(|(i, j)| format!("{},{}", i + 1, j + 1))
                             .collect::<Vec<_>>()
                             .join("; ");
                         ui.label("Instances to skip (row,column; …)");
-                        if ui.text_edit_singleline(&mut text).lost_focus() {
+                        if let Some(text) = list_field(ui, text) {
                             lp.skip = parse_list(&text)
                                 .into_iter()
                                 .filter(|v| v[0] >= 1)
@@ -565,14 +579,14 @@ fn feature_panel(app: &mut App, ctx: &egui::Context) {
                             0.1..=360.0,
                         );
                         ed.check(ui, &mut cp.reverse, "Reverse");
-                        let mut text = cp
+                        let text = cp
                             .skip
                             .iter()
                             .map(|k| (k + 1).to_string())
                             .collect::<Vec<_>>()
                             .join(", ");
                         ui.label("Instances to skip (1 is the seed)");
-                        if ui.text_edit_singleline(&mut text).lost_focus() {
+                        if let Some(text) = list_field(ui, text) {
                             cp.skip = parse_list(&text.replace(',', ";"))
                                 .into_iter()
                                 .filter(|v| v[0] >= 2)
@@ -977,5 +991,61 @@ fn tool_options(s: &mut SketchSession, ui: &mut egui::Ui) {
         if ui.add_enabled(ready, egui::Button::new("Apply")).clicked() {
             s.apply_selection_tool();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn frame(ctx: &egui::Context, events: Vec<egui::Event>, current: &str) -> Option<String> {
+        let input = egui::RawInput {
+            events,
+            ..Default::default()
+        };
+        let mut out = None;
+        let _ = ctx.run(input, |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| out = list_field(ui, current.to_owned()));
+        });
+        out
+    }
+
+    /// Clicks into the field, which is the first thing in the panel.
+    fn focus(ctx: &egui::Context, current: &str) {
+        let pos = egui::pos2(20.0, 15.0);
+        let button = |pressed| egui::Event::PointerButton {
+            pos,
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: egui::Modifiers::NONE,
+        };
+        frame(ctx, vec![], current);
+        frame(ctx, vec![egui::Event::PointerMoved(pos), button(true)], current);
+        frame(ctx, vec![button(false)], current);
+    }
+
+    const ENTER: egui::Event = egui::Event::Key {
+        key: egui::Key::Enter,
+        physical_key: None,
+        pressed: true,
+        repeat: false,
+        modifiers: egui::Modifiers::NONE,
+    };
+
+    #[test]
+    fn typing_in_a_list_field_survives_until_focus_leaves() {
+        let ctx = egui::Context::default();
+        focus(&ctx, "");
+        // The value behind the field is rebuilt as "" on every frame.
+        assert_eq!(frame(&ctx, vec![egui::Event::Text("2".into())], ""), None);
+        assert_eq!(frame(&ctx, vec![egui::Event::Text(",3".into())], ""), None);
+        assert_eq!(frame(&ctx, vec![ENTER], ""), Some("2,3".to_owned()));
+    }
+
+    #[test]
+    fn leaving_a_list_field_unchanged_reports_nothing() {
+        let ctx = egui::Context::default();
+        focus(&ctx, "2,3");
+        assert_eq!(frame(&ctx, vec![ENTER], "2,3"), None);
     }
 }
