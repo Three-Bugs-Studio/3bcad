@@ -3677,7 +3677,7 @@ dependencies = [
 
 [[package]]
 name = "threebcad-app"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "eframe",
@@ -3694,7 +3694,7 @@ dependencies = [
 
 [[package]]
 name = "threebcad-core"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "criterion",
@@ -3705,7 +3705,7 @@ dependencies = [
 
 [[package]]
 name = "threebcad-io"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "threebcad-kernel",
  "truck-stepio",
@@ -3714,7 +3714,7 @@ dependencies = [
 
 [[package]]
 name = "threebcad-kernel"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "nalgebra",
@@ -3725,7 +3725,7 @@ dependencies = [
 
 [[package]]
 name = "threebcad-render"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "bytemuck",
  "egui",
@@ -3735,7 +3735,7 @@ dependencies = [
 
 [[package]]
 name = "threebcad-sketch"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "nalgebra",

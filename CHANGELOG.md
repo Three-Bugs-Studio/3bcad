@@ -7,6 +7,8 @@ saved files and workflows; patch versions (0.x.y) only fix bugs.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-30
+
 ### Added
 
 - Core part features (v0.3.0 milestone): Extruded Cut (with Flip side to cut), Revolved Boss/Base and Revolved
@@ -85,6 +87,7 @@ First public preview of 3BCAD.
 - Send to Slicer for OrcaSlicer, Bambu Studio and PrusaSlicer.
 - App version shown in the title bar and ribbon, linking to these release notes.
 
-[Unreleased]: https://github.com/Three-Bugs-Studio/3bcad/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/Three-Bugs-Studio/3bcad/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/Three-Bugs-Studio/3bcad/releases/tag/v0.3.0
 [0.2.0]: https://github.com/Three-Bugs-Studio/3bcad/releases/tag/v0.2.0
 [0.1.0]: https://github.com/Three-Bugs-Studio/3bcad/releases/tag/v0.1.0
