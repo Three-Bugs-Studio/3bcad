@@ -4,7 +4,7 @@
 
 use std::panic::{catch_unwind, AssertUnwindSafe};
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, ensure, Result};
 use truck_meshalgo::prelude::*;
 use truck_modeling::*;
 
@@ -50,11 +50,16 @@ fn rough_volume(s: &Solid) -> Option<f64> {
     volume_at(s, 5e-3, 5e-3, 0.25)
 }
 
-/// Volume meshed at `rel` x the bounding-box diagonal, clamped to `min..=max` mm.
-fn volume_at(s: &Solid, rel: f64, min: f64, max: f64) -> Option<f64> {
+/// `rel` x the bounding-box diagonal, clamped to `min..=max` mm.
+fn mesh_tol(s: &Solid, rel: f64, min: f64, max: f64) -> f64 {
     let (lo, hi) = bbox(s);
     let diag = (0..3).map(|i| (hi[i] - lo[i]).powi(2)).sum::<f64>().sqrt();
-    let tol = (diag * rel).clamp(min, max);
+    (diag * rel).clamp(min, max)
+}
+
+/// Volume meshed at `mesh_tol`.
+fn volume_at(s: &Solid, rel: f64, min: f64, max: f64) -> Option<f64> {
+    let tol = mesh_tol(s, rel, min, max);
     catch_unwind(AssertUnwindSafe(|| {
         let mut poly = s.triangulation(tol).to_polygon();
         poly.put_together_same_attrs(TOLERANCE);
@@ -101,6 +106,74 @@ fn raw(op: Op, a: &Solid, b: &Solid) -> Option<Solid> {
     .filter(|s| !s.boundaries().is_empty())
 }
 
+/// A mesh at the tolerance of `rough_volume`.
+fn rough_mesh(s: &Solid) -> Option<PolygonMesh> {
+    let tol = mesh_tol(s, 5e-3, 5e-3, 0.25);
+    catch_unwind(AssertUnwindSafe(|| s.triangulation(tol).to_polygon())).ok()
+}
+
+/// How many times the closed mesh `m` wraps around `p`: 1 inside, 0 outside, 1/2 on its surface.
+fn winding(p: Point3, m: &PolygonMesh) -> f64 {
+    let v = m.positions();
+    let angle: f64 = m
+        .faces()
+        .triangle_iter()
+        .map(|t| {
+            let [a, b, c] = t.map(|i| v[i.pos] - p);
+            let (la, lb, lc) = (a.magnitude(), b.magnitude(), c.magnitude());
+            // The solid angle of the triangle (Van Oosterom and Strackee).
+            2.0 * a
+                .dot(b.cross(c))
+                .atan2(la * lb * lc + a.dot(b) * lc + b.dot(c) * la + c.dot(a) * lb)
+        })
+        .sum();
+    (angle / (4.0 * std::f64::consts::PI)).abs()
+}
+
+/// Lowest and highest winding of `s`'s vertices in `m`.
+fn winding_range(s: &Solid, m: &PolygonMesh) -> (f64, f64) {
+    s.vertex_iter()
+        .map(|v| winding(v.point(), m))
+        .fold((f64::INFINITY, 0.0), |(lo, hi), w| (lo.min(w), hi.max(w)))
+}
+
+/// Where two solids sit when their surfaces do not cross.
+enum Apart {
+    Disjoint,
+    AInsideB,
+    BInsideA,
+}
+
+/// truck's own inside test cannot be trusted here: its `and` panics when one solid holds the other.
+/// `None` when the surfaces cross or the solids touch in a way that fits none of the cases.
+fn apart(a: &Solid, b: &Solid) -> Option<Apart> {
+    let (ma, mb) = (rough_mesh(a)?, rough_mesh(b)?);
+    if ma.collide_with(&mb).is_some() {
+        return None;
+    }
+    let ((a_lo, a_hi), (b_lo, b_hi)) = (winding_range(a, &mb), winding_range(b, &ma));
+    if b_lo > 0.75 {
+        Some(Apart::BInsideA)
+    } else if a_lo > 0.75 {
+        Some(Apart::AInsideB)
+    } else if a_hi < 0.6 && b_hi < 0.6 {
+        // Vertices on the other's surface (1/2) are fine: the solids touch but share no volume.
+        Some(Apart::Disjoint)
+    } else {
+        None
+    }
+}
+
+/// shortcut: truck intersects a solid's shells one after another, which is wrong for an inner void,
+/// so a body with a void cannot be changed. Boolean each shell separately if that is ever needed.
+fn no_voids(a: &Solid, b: &Solid) -> Result<()> {
+    ensure!(
+        a.boundaries().len() == 1 && b.boundaries().len() == 1,
+        "bodies with an internal void cannot be cut or merged yet"
+    );
+    Ok(())
+}
+
 /// Runs `op`, checks the volume is plausible, and retries with the tool grown when it is not.
 fn checked(op: Op, a: &Solid, b: &Solid) -> Result<Solid> {
     let (va, vb) = (
@@ -136,6 +209,7 @@ pub fn union(a: &Solid, b: &Solid) -> Result<Option<Solid>> {
     if !overlaps(&bbox(a), &bbox(b), 2.0 * GROW) {
         return Ok(None);
     }
+    no_voids(a, b)?;
     let s = checked(Op::Union, a, b)?;
     Ok((s.boundaries().len() < a.boundaries().len() + b.boundaries().len()).then_some(s))
 }
@@ -145,20 +219,33 @@ pub fn subtract(a: &Solid, b: &Solid) -> Result<Vec<Solid>> {
     if !overlaps(&bbox(a), &bbox(b), 0.0) {
         return Ok(vec![a.clone()]);
     }
+    no_voids(a, b)?;
     match checked(Op::Subtract, a, b) {
         Ok(s) => Ok(split(s)),
-        Err(e) => {
-            // The tool swallowed the body whole: nothing is left.
-            let swallowed = raw(Op::Intersect, a, b)
-                .and_then(|s| rough_volume(&s))
-                .zip(rough_volume(a))
-                .is_some_and(|(v, va)| (v - va).abs() < 1e-3 * va.abs() + 1e-6);
-            if swallowed {
-                Ok(Vec::new())
-            } else {
-                Err(e)
+        // truck cannot subtract solids whose faces never cross.
+        Err(e) => match apart(a, b) {
+            Some(Apart::Disjoint) => Ok(vec![a.clone()]),
+            Some(Apart::AInsideB) => Ok(Vec::new()),
+            Some(Apart::BInsideA) => {
+                let mut void = b.clone();
+                void.not();
+                let mut shells = a.boundaries().clone();
+                shells.extend(void.into_boundaries());
+                Ok(vec![Solid::new(shells)])
             }
-        }
+            None => {
+                // The tool swallowed the body whole, sharing some of its faces: nothing is left.
+                let swallowed = raw(Op::Intersect, a, b)
+                    .and_then(|s| rough_volume(&s))
+                    .zip(rough_volume(a))
+                    .is_some_and(|(v, va)| (v - va).abs() < 1e-3 * va.abs() + 1e-6);
+                if swallowed {
+                    Ok(Vec::new())
+                } else {
+                    Err(e)
+                }
+            }
+        },
     }
 }
 
@@ -167,7 +254,16 @@ pub fn intersect(a: &Solid, b: &Solid) -> Result<Vec<Solid>> {
     if !overlaps(&bbox(a), &bbox(b), 0.0) {
         return Ok(Vec::new());
     }
-    Ok(split(checked(Op::Intersect, a, b)?))
+    no_voids(a, b)?;
+    match checked(Op::Intersect, a, b) {
+        Ok(s) => Ok(split(s)),
+        Err(e) => match apart(a, b) {
+            Some(Apart::Disjoint) => Ok(Vec::new()),
+            Some(Apart::AInsideB) => Ok(vec![a.clone()]),
+            Some(Apart::BInsideA) => Ok(vec![b.clone()]),
+            None => Err(e),
+        },
+    }
 }
 
 /// Applies a 4x4 (column-major) transform, turning mirrored solids right side out.
@@ -236,6 +332,56 @@ mod tests {
         assert_eq!(parts.len(), 2);
         let i = intersect(&cube(0.0, 0.0, 10.0), &cube(5.0, 5.0, 10.0)).unwrap();
         assert!((volume(&i[0]).unwrap() - 250.0).abs() < 0.5);
+    }
+
+    #[test]
+    fn a_tool_in_a_notch_misses_the_body() {
+        // The bounding boxes overlap, but the tool sits in the notch of an L.
+        let l = extrude_polygon(
+            &[
+                [0.0, 0.0],
+                [10.0, 0.0],
+                [10.0, 2.0],
+                [2.0, 2.0],
+                [2.0, 10.0],
+                [0.0, 10.0],
+            ],
+            5.0,
+        )
+        .unwrap();
+        let notch = builder::translated(&cube(5.0, 0.0, 3.0), Vector3::new(0.0, 4.0, 0.0));
+        let r = subtract(&l, &notch).unwrap();
+        assert_eq!(r.len(), 1);
+        assert!((volume(&r[0]).unwrap() - volume(&l).unwrap()).abs() < 1e-6);
+        assert!(intersect(&l, &notch).unwrap().is_empty());
+    }
+
+    #[test]
+    fn a_tool_inside_the_body_leaves_a_void() {
+        let inner = builder::translated(&cube(2.0, 2.0, 2.0), Vector3::new(0.0, 2.0, 0.0));
+        let r = subtract(&cube(0.0, 0.0, 10.0), &inner).unwrap();
+        assert_eq!(r.len(), 1);
+        assert_eq!(r[0].boundaries().len(), 2);
+        assert!((volume(&r[0]).unwrap() - 992.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn nested_solids_intersect_and_subtract_without_truck() {
+        let inner = builder::translated(&cube(2.0, 2.0, 2.0), Vector3::new(0.0, 2.0, 0.0));
+        let outer = cube(0.0, 0.0, 10.0);
+        let i = intersect(&outer, &inner).unwrap();
+        assert!((volume(&i[0]).unwrap() - 8.0).abs() < 0.01);
+        assert!(subtract(&inner, &outer).unwrap().is_empty());
+    }
+
+    #[test]
+    fn a_body_with_a_void_refuses_further_booleans() {
+        let inner = builder::translated(&cube(2.0, 2.0, 2.0), Vector3::new(0.0, 2.0, 0.0));
+        let hollow = subtract(&cube(0.0, 0.0, 10.0), &inner).unwrap().remove(0);
+        let e = subtract(&hollow, &cyl(1.0, -1.0, 11.0)).unwrap_err();
+        assert!(e.to_string().contains("void"), "{e}");
+        // Far away it is simply left alone.
+        assert_eq!(subtract(&hollow, &cube(30.0, 0.0, 5.0)).unwrap().len(), 1);
     }
 
     #[test]

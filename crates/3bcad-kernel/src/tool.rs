@@ -320,8 +320,16 @@ impl Tool {
                     (a1 - a0).abs() >= TAU - 1e-9,
                     "only full revolutions can be offset (used by Shell)"
                 );
+                let ulen = axis.1[0].hypot(axis.1[1]);
+                let off_axis = |p: [f64; 2]| ((p[0] - axis.0[0]) * axis.1[1] - (p[1] - axis.0[1]) * axis.1[0]) / ulen;
+                // The tool stays closed on its axis, so a segment lying there cannot move.
+                let on_axis = |s: &ProfileSegment| {
+                    matches!(s, ProfileSegment::Line { .. })
+                        && off_axis(seg_start(s)).abs() < 1e-9
+                        && off_axis(seg_end(s)).abs() < 1e-9
+                };
                 Tool::Revolution {
-                    regions: offset::offset_regions(&regions, -t)?,
+                    regions: offset::offset_regions_keeping(&regions, -t, on_axis)?,
                     plane,
                     axis,
                     a0,
@@ -329,6 +337,15 @@ impl Tool {
                 }
             }
         })
+    }
+
+    /// How far a world point is from the wall of segment `seg`, across the sketch plane; infinite
+    /// when the tool has no such segment.
+    pub fn side_distance(&self, p: [f64; 3], seg: usize) -> f64 {
+        let local = self.plane().to_local(p);
+        segments(self.regions())
+            .nth(seg)
+            .map_or(f64::INFINITY, |s| dist_to_segment(local, s))
     }
 
     /// Which tool face a world point lies on (the point must be on the tool's surface).
@@ -517,7 +534,9 @@ fn revolve_region(r: &ProfileRegion, o: Point3, axis: Vector3, a0: f64, sweep: f
             (d - axis * d.dot(axis)).magnitude()
         };
         let on_axis: Vec<bool> = lp.iter().map(|s| dist(seg_start(s)) < 1e-9).collect();
-        let lies_on_axis = |s: usize| on_axis[s] && on_axis[(s + 1) % n];
+        // An arc can start and end on the axis and still sweep a surface (a sphere).
+        let lies_on_axis =
+            |s: usize| matches!(lp[s], ProfileSegment::Line { .. }) && on_axis[s] && on_axis[(s + 1) % n];
         // Vertex k (start of segment k) at each section angle; a full turn reuses the first ring and
         // a vertex on the axis is a single vertex (a cone tip or the center of a disc).
         let verts: Vec<Vec<Vertex>> = lp
@@ -643,7 +662,8 @@ fn revolve_region(r: &ProfileRegion, o: Point3, axis: Vector3, a0: f64, sweep: f
         shell.shell_condition() == ShellCondition::Closed,
         "the revolved shape does not close"
     );
-    Ok(Solid::new(vec![shell]))
+    // A profile with a hole turned a full circle has an inner shell: the void.
+    Solid::try_new(shell.connected_components()).map_err(|e| anyhow::anyhow!("the revolved shape is invalid: {e:?}"))
 }
 
 /// A polygon region from points (any winding).
@@ -739,6 +759,83 @@ mod tests {
             a1: TAU,
         };
         assert!(crossing.solids().is_err());
+    }
+
+    fn revolve_full(regions: Vec<ProfileRegion>) -> Tool {
+        Tool::Revolution {
+            regions,
+            plane: Plane::FRONT,
+            axis: ([0.0, 0.0], [0.0, 1.0]),
+            a0: 0.0,
+            a1: TAU,
+        }
+    }
+
+    #[test]
+    fn a_half_disc_revolves_into_a_sphere() {
+        let half_disc = ProfileRegion {
+            outer: vec![
+                ProfileSegment::Arc {
+                    center: [0.0, 0.0],
+                    from: [0.0, -5.0],
+                    to: [0.0, 5.0],
+                    ccw: true,
+                },
+                ProfileSegment::Line {
+                    from: [0.0, 5.0],
+                    to: [0.0, -5.0],
+                },
+            ],
+            holes: Vec::new(),
+        };
+        let expected = 4.0 / 3.0 * PI * 125.0;
+        let s = &revolve_full(vec![half_disc.clone()]).solids().unwrap()[0];
+        assert!((vol(s) - expected).abs() / expected < 0.01, "{}", vol(s));
+        let half_turn = Tool::Revolution {
+            regions: vec![half_disc],
+            plane: Plane::FRONT,
+            axis: ([0.0, 0.0], [0.0, 1.0]),
+            a0: 0.0,
+            a1: PI,
+        };
+        let s = &half_turn.solids().unwrap()[0];
+        assert!((vol(s) - expected / 2.0).abs() / expected < 0.01, "{}", vol(s));
+    }
+
+    #[test]
+    fn a_profile_with_a_hole_revolves_into_a_hollow_ring() {
+        let circle = |radius: f64, ccw: bool| ProfileSegment::Circle {
+            center: [10.0, 0.0],
+            radius,
+            ccw,
+        };
+        let framed = ProfileRegion {
+            outer: vec![circle(3.0, true)],
+            holes: vec![vec![circle(2.0, false)]],
+        };
+        let s = &revolve_full(vec![framed]).solids().unwrap()[0];
+        assert_eq!(s.boundaries().len(), 2);
+        let expected = TAU * 10.0 * PI * (9.0 - 4.0);
+        assert!((vol(s) - expected).abs() / expected < 0.01, "{}", vol(s));
+    }
+
+    #[test]
+    fn a_shape_that_only_touches_itself_is_an_error() {
+        // Two tips on the axis pinch the shell there; this used to panic.
+        let chevron = polygon(&[[0.0, 0.0], [5.0, 2.0], [0.0, 4.0], [3.0, 2.0]]).unwrap();
+        assert!(revolve_full(vec![chevron]).solids().is_err());
+    }
+
+    #[test]
+    fn offsetting_a_revolution_leaves_its_axis_alone() {
+        // A cylinder of radius 5: it must stay solid, not become a tube.
+        let t = revolve_full(vec![rect(0.0, 0.0, 5.0, 10.0)]);
+        let shrunk = &t.offset(-1.0).unwrap().solids().unwrap()[0];
+        let expected = PI * 16.0 * 8.0;
+        assert!((vol(shrunk) - expected).abs() / expected < 0.01, "{}", vol(shrunk));
+        let grown = &t.offset(1.0).unwrap().solids().unwrap()[0];
+        let expected = PI * 36.0 * 12.0;
+        assert!((vol(grown) - expected).abs() / expected < 0.01, "{}", vol(grown));
     }
 
     #[test]

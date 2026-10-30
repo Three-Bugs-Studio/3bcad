@@ -9,7 +9,7 @@ use anyhow::{bail, ensure, Result};
 use crate::operations::{ProfileRegion, ProfileSegment};
 use crate::solid::Plane;
 use crate::tool::Tool;
-use crate::topology::{cross, dot, norm, sub, unit, EdgeCurve, Topology, P3};
+use crate::topology::{cross, dot, norm, sub, unit, EdgeCurve, TopoEdge, Topology, P3};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Treatment {
@@ -133,6 +133,45 @@ fn corner_profile(
     Ok((if polygon_area(&lp) < 0.0 { reversed(lp) } else { lp }, reach))
 }
 
+/// A partial revolved tool runs this far (radians) past the arc, so its ends never lie on the arc's
+/// end vertices.
+const ARC_MARGIN: f64 = 0.01;
+
+/// Angles of an arc's ends around `center`, from its midpoint, in the direction a tool revolves.
+fn arc_ends(topo: &Topology, e: &TopoEdge, center: P3, axis: P3) -> (f64, f64) {
+    let x = unit(sub(e.mid, center));
+    let t = cross(axis, x);
+    let angle = |v: usize| {
+        let d = sub(topo.vertices[v], center);
+        dot(d, t).atan2(dot(d, x))
+    };
+    let (a, b) = (angle(e.vertices[0]), angle(e.vertices[1]));
+    (a.min(b), a.max(b))
+}
+
+/// Whether the arcs on `edge`'s circle close the whole circle (a cylinder's rim is several arcs).
+pub fn full_circle(topo: &Topology, edge: usize) -> bool {
+    let EdgeCurve::Circle { center, axis, radius } = topo.edges[edge].curve else {
+        return false;
+    };
+    let swept: f64 = topo
+        .edges
+        .iter()
+        .filter(|e| {
+            matches!(e.curve, EdgeCurve::Circle { center: c, radius: r, .. }
+                if norm(sub(c, center)) < 1e-6 && (r - radius).abs() < 1e-6)
+        })
+        .map(|e| {
+            if e.vertices[0] == e.vertices[1] {
+                return TAU;
+            }
+            let (a, b) = arc_ends(topo, e, center, axis);
+            b - a
+        })
+        .sum();
+    swept > TAU - 1e-3
+}
+
 /// Tool that rounds or bevels `edge`; `flip` swaps which face gets `d1` for a chamfer.
 pub fn edge_tool(topo: &Topology, edge: usize, t: Treatment, flip: bool) -> Result<EdgeTool> {
     edge_tool_crossing(topo, edge, t, flip, CROSS)
@@ -202,6 +241,12 @@ pub fn edge_tool_crossing(topo: &Topology, edge: usize, t: Treatment, flip: bool
                     _ => {}
                 }
             }
+            let (a0, a1) = if full_circle(topo, edge) {
+                (0.0, TAU)
+            } else {
+                let (a, b) = arc_ends(topo, e, center, y);
+                (a - ARC_MARGIN, b + ARC_MARGIN)
+            };
             Tool::Revolution {
                 regions: vec![ProfileRegion {
                     outer: lp,
@@ -209,8 +254,8 @@ pub fn edge_tool_crossing(topo: &Topology, edge: usize, t: Treatment, flip: bool
                 }],
                 plane: Plane { origin: center, x, y },
                 axis: ([0.0, 0.0], [0.0, 1.0]),
-                a0: 0.0,
-                a1: TAU,
+                a0,
+                a1,
             }
         }
         EdgeCurve::Other => bail!("only straight and circular edges can be filleted or chamfered"),
@@ -282,6 +327,60 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("too large"));
+    }
+
+    #[test]
+    fn chamfering_a_corner_arc_stays_on_the_corner() {
+        // A 20 x 20 plate, 2 thick, with one rounded corner of radius 2 at (20, 20).
+        let plate = ProfileRegion {
+            outer: vec![
+                ProfileSegment::Line {
+                    from: [0.0, 0.0],
+                    to: [20.0, 0.0],
+                },
+                ProfileSegment::Line {
+                    from: [20.0, 0.0],
+                    to: [20.0, 18.0],
+                },
+                ProfileSegment::Arc {
+                    center: [18.0, 18.0],
+                    from: [20.0, 18.0],
+                    to: [18.0, 20.0],
+                    ccw: true,
+                },
+                ProfileSegment::Line {
+                    from: [18.0, 20.0],
+                    to: [0.0, 20.0],
+                },
+                ProfileSegment::Line {
+                    from: [0.0, 20.0],
+                    to: [0.0, 0.0],
+                },
+            ],
+            holes: Vec::new(),
+        };
+        let solid = Tool::Prism {
+            regions: vec![plate],
+            plane: Plane::TOP,
+            z0: 0.0,
+            z1: 2.0,
+            draft: None,
+        }
+        .solids()
+        .unwrap()
+        .remove(0);
+        let topo = analyze(&solid, 0.01);
+        let e = topo
+            .edges
+            .iter()
+            .position(|e| matches!(e.curve, EdgeCurve::Circle { center, .. } if (center[2] - 2.0).abs() < 1e-9))
+            .expect("the top edge of the corner");
+        assert!(!full_circle(&topo, e));
+        let c = edge_tool(&topo, e, Treatment::Chamfer { d1: 0.5, d2: 0.5 }, false).unwrap();
+        let removed = volume(&solid).unwrap() - volume(&apply(&solid, &c)).unwrap();
+        // The triangle's area times the arc length through its centroid.
+        let expected = 0.125 * (2.0 - 0.5 / 3.0) * PI / 2.0;
+        assert!((removed - expected).abs() < 0.05, "{removed} vs {expected}");
     }
 
     #[test]

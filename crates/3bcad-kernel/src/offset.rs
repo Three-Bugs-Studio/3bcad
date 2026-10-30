@@ -221,16 +221,25 @@ pub fn offset_loop(lp: &[ProfileSegment], dist: &[f64]) -> Result<Vec<ProfileSeg
 
 /// Same distance for every segment of every loop of every region.
 pub fn offset_regions(regions: &[ProfileRegion], d: f64) -> Result<Vec<ProfileRegion>> {
+    offset_regions_keeping(regions, d, |_| false)
+}
+
+/// `offset_regions`, except that the segments `fixed` picks stay where they are.
+pub fn offset_regions_keeping(
+    regions: &[ProfileRegion],
+    d: f64,
+    fixed: impl Fn(&ProfileSegment) -> bool,
+) -> Result<Vec<ProfileRegion>> {
+    let offset = |lp: &Vec<ProfileSegment>| {
+        let dist: Vec<f64> = lp.iter().map(|s| if fixed(s) { 0.0 } else { d }).collect();
+        offset_loop(lp, &dist)
+    };
     regions
         .iter()
         .map(|r| {
             Ok(ProfileRegion {
-                outer: offset_loop(&r.outer, &vec![d; r.outer.len()])?,
-                holes: r
-                    .holes
-                    .iter()
-                    .map(|h| offset_loop(h, &vec![d; h.len()]))
-                    .collect::<Result<_>>()?,
+                outer: offset(&r.outer)?,
+                holes: r.holes.iter().map(offset).collect::<Result<_>>()?,
             })
         })
         .collect()
