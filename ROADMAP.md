@@ -50,7 +50,7 @@ The everyday SolidWorks part toolbox: cut, revolve, fillet, chamfer, shell, hole
 - [x] #29 Extrude end conditions: Through All, Up To Next/Vertex/Surface, Mid Plane, Offset From Surface
 - [x] #30 Extrude draft angle and thin feature
 - [x] #31 Revolved Boss/Base and Revolved Cut
-- [x] #32 Fillet: constant-radius edge fillet (straight edges; round edges wait on truck's torus booleans)
+- [ ] #32 Fillet: constant-radius edge fillet
 - [x] #33 Chamfer
 - [x] #34 Shell
 - [x] #35 Hole Wizard: simple, counterbore, countersink and tapped holes
@@ -65,7 +65,7 @@ The everyday SolidWorks part toolbox: cut, revolve, fillet, chamfer, shell, hole
 - [x] #44 Incremental rebuild: only re-evaluate dirty features
 - [x] #45 What's Wrong: rebuild error and warning panel
 - [x] #46 Draft feature
-- [x] #47 Rib feature
+- [ ] #47 Rib feature
 - [x] #48 Measure tool
 - [x] #49 Mass properties
 - [x] #50 Geometry regression corpus and benchmarks
