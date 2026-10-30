@@ -772,6 +772,48 @@ mod tests {
     }
 
     #[test]
+    fn a_cut_reaches_a_bulge_between_the_edges() {
+        // A barrel: radius 4 at the ends and 6 at the waist, where no edge runs on that side.
+        let barrel = ProfileRegion {
+            outer: vec![
+                ProfileSegment::Line {
+                    from: [0.0, 0.0],
+                    to: [4.0, 0.0],
+                },
+                ProfileSegment::Arc {
+                    center: [-1.0, 5.0],
+                    from: [4.0, 0.0],
+                    to: [4.0, 10.0],
+                    ccw: true,
+                },
+                ProfileSegment::Line {
+                    from: [4.0, 10.0],
+                    to: [0.0, 10.0],
+                },
+                ProfileSegment::Line {
+                    from: [0.0, 10.0],
+                    to: [0.0, 0.0],
+                },
+            ],
+            holes: Vec::new(),
+        };
+        let s = revolve_full(vec![barrel]).solids().unwrap().remove(0);
+        // A block at the far side, beyond the radius 4 circles and the seams.
+        let block = Tool::Prism {
+            regions: vec![rect(-6.5, -1.0, -4.8, 1.0)],
+            plane: Plane::TOP,
+            z0: 4.0,
+            z1: 6.0,
+            draft: None,
+        }
+        .solids()
+        .unwrap()
+        .remove(0);
+        let cut = boolean::subtract(&s, &block).unwrap();
+        assert!(vol(&cut[0]) < vol(&s) - 0.1, "{} vs {}", vol(&cut[0]), vol(&s));
+    }
+
+    #[test]
     fn a_half_disc_revolves_into_a_sphere() {
         let half_disc = ProfileRegion {
             outer: vec![

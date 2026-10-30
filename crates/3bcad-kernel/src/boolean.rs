@@ -34,6 +34,29 @@ pub fn bbox(s: &Solid) -> ([f64; 3], [f64; 3]) {
     (lo, hi)
 }
 
+/// `bbox`, widened to take in curved faces that bulge past their edges (a barrel). Trimmed faces can
+/// make it too large, so it only says whether two solids could touch.
+fn reach(s: &Solid) -> ([f64; 3], [f64; 3]) {
+    let (mut lo, mut hi) = bbox(s);
+    for f in s.face_iter() {
+        if let Surface::NurbsSurface(n) = f.surface() {
+            let ((u0, u1), (v0, v1)) = n.range_tuple();
+            for i in 0..=8 {
+                for j in 0..=8 {
+                    let p = n.subs(u0 + (u1 - u0) * i as f64 / 8.0, v0 + (v1 - v0) * j as f64 / 8.0);
+                    for k in 0..3 {
+                        lo[k] = lo[k].min(p[k]);
+                        hi[k] = hi[k].max(p[k]);
+                    }
+                }
+            }
+        }
+    }
+    // The samples can fall a little short of the true bulge.
+    let pad = (0..3).map(|i| hi[i] - lo[i]).fold(0.0, f64::max) * 0.01;
+    (lo.map(|v| v - pad), hi.map(|v| v + pad))
+}
+
 fn overlaps(a: &([f64; 3], [f64; 3]), b: &([f64; 3], [f64; 3]), margin: f64) -> bool {
     (0..3).all(|i| a.0[i] <= b.1[i] + margin && b.0[i] <= a.1[i] + margin)
 }
@@ -206,7 +229,7 @@ pub fn split(s: Solid) -> Vec<Solid> {
 
 /// `a ∪ b`; `None` when they do not touch (the caller keeps two bodies).
 pub fn union(a: &Solid, b: &Solid) -> Result<Option<Solid>> {
-    if !overlaps(&bbox(a), &bbox(b), 2.0 * GROW) {
+    if !overlaps(&reach(a), &reach(b), 2.0 * GROW) {
         return Ok(None);
     }
     no_voids(a, b)?;
@@ -216,7 +239,7 @@ pub fn union(a: &Solid, b: &Solid) -> Result<Option<Solid>> {
 
 /// `a − b`, split into its pieces (empty when nothing is left).
 pub fn subtract(a: &Solid, b: &Solid) -> Result<Vec<Solid>> {
-    if !overlaps(&bbox(a), &bbox(b), 0.0) {
+    if !overlaps(&reach(a), &reach(b), 0.0) {
         return Ok(vec![a.clone()]);
     }
     no_voids(a, b)?;
@@ -251,7 +274,7 @@ pub fn subtract(a: &Solid, b: &Solid) -> Result<Vec<Solid>> {
 
 /// `a ∩ b`, split into pieces.
 pub fn intersect(a: &Solid, b: &Solid) -> Result<Vec<Solid>> {
-    if !overlaps(&bbox(a), &bbox(b), 0.0) {
+    if !overlaps(&reach(a), &reach(b), 0.0) {
         return Ok(Vec::new());
     }
     no_voids(a, b)?;

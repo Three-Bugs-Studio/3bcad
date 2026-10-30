@@ -6,6 +6,7 @@ use std::f64::consts::TAU;
 
 use anyhow::{bail, ensure, Result};
 
+use crate::offset::{seg_end, seg_start};
 use crate::operations::{ProfileRegion, ProfileSegment};
 use crate::solid::Plane;
 use crate::tool::Tool;
@@ -133,6 +134,41 @@ fn corner_profile(
     Ok((if polygon_area(&lp) < 0.0 { reversed(lp) } else { lp }, reach))
 }
 
+/// Cuts a closed profile off at `x = min`, keeping the part to the right of it.
+fn clip_left(lp: Vec<ProfileSegment>, min: f64) -> Result<Vec<ProfileSegment>> {
+    let cross = |a: P2, b: P2| [min, a[1] + (min - a[0]) / (b[0] - a[0]) * (b[1] - a[1])];
+    let mut out = Vec::new();
+    let (mut entry, mut exit) = (None, None);
+    for s in lp {
+        let (a, b) = (seg_start(&s), seg_end(&s));
+        let (a_in, b_in) = (a[0] >= min, b[0] >= min);
+        if !matches!(s, ProfileSegment::Line { .. }) {
+            ensure!(a_in && b_in, "the size is too large: it reaches the axis of the edge");
+            out.push(s);
+            continue;
+        }
+        if !a_in && !b_in {
+            continue;
+        }
+        let from = if a_in { a } else { cross(a, b) };
+        let to = if b_in { b } else { cross(a, b) };
+        if !a_in {
+            match exit.take() {
+                Some(e) => out.push(ProfileSegment::Line { from: e, to: from }),
+                None => entry = Some(from),
+            }
+        }
+        out.push(ProfileSegment::Line { from, to });
+        if !b_in {
+            exit = Some(to);
+        }
+    }
+    if let (Some(from), Some(to)) = (exit, entry) {
+        out.push(ProfileSegment::Line { from, to });
+    }
+    Ok(out)
+}
+
 /// A partial revolved tool runs this far (radians) past the arc, so its ends never lie on the arc's
 /// end vertices.
 const ARC_MARGIN: f64 = 0.01;
@@ -225,9 +261,9 @@ pub fn edge_tool_crossing(topo: &Topology, edge: usize, t: Treatment, flip: bool
             let to2 = |v: P3| [dot(v, x), dot(v, y)];
             let (mut lp, reach) = corner_profile(to2(a.inward), to2(b.inward), t, convex, behind, cross_by)?;
             check_reach(topo, e.mid, a, b, reach)?;
-            // Move the corner from the origin out to the edge's radius; stay off the axis.
+            // Move the corner from the origin out to the edge's radius.
             for s in &mut lp {
-                let shift = |p: &mut P2| p[0] = (p[0] + radius).max(radius * 0.05);
+                let shift = |p: &mut P2| p[0] += radius;
                 match s {
                     ProfileSegment::Line { from, to } => {
                         shift(from);
@@ -241,6 +277,8 @@ pub fn edge_tool_crossing(topo: &Topology, edge: usize, t: Treatment, flip: bool
                     _ => {}
                 }
             }
+            // The tool's reach behind the corner must stop short of the axis.
+            let lp = clip_left(lp, radius * 0.05)?;
             let (a0, a1) = if full_circle(topo, edge) {
                 (0.0, TAU)
             } else {
@@ -327,6 +365,27 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("too large"));
+    }
+
+    #[test]
+    fn a_wide_chamfer_keeps_its_size_near_the_axis() {
+        // A chamfer of R5 by d removes a triangle of area d^2/2 at radius 5 - d/3.
+        let cyl = extrude_circle([0.0, 0.0], 5.0, 10.0).unwrap();
+        let topo = analyze(&cyl, 0.01);
+        let e = topo
+            .edges
+            .iter()
+            .position(|e| matches!(e.curve, EdgeCurve::Circle { center, .. } if (center[2] - 10.0).abs() < 1e-9))
+            .expect("top circular edge");
+        for d in [2.5, 3.0] {
+            let c = edge_tool(&topo, e, Treatment::Chamfer { d1: d, d2: d }, false).unwrap();
+            let removed = volume(&cyl).unwrap() - volume(&apply(&cyl, &c)).unwrap();
+            let expected = d * d / 2.0 * TAU * (5.0 - d / 3.0);
+            assert!(
+                (removed - expected).abs() / expected < 0.01,
+                "{d}: {removed} vs {expected}"
+            );
+        }
     }
 
     #[test]

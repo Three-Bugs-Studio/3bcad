@@ -202,6 +202,16 @@ pub fn offset_loop(lp: &[ProfileSegment], dist: &[f64]) -> Result<Vec<ProfileSeg
     let out: Vec<ProfileSegment> = (0..n)
         .map(|i| rebuild(&lp[i], corners[i], corners[(i + 1) % n], dist[i]))
         .collect();
+    // Two tangent segments moved by different distances no longer meet: the averaged corner lies
+    // on neither, and an arc through it would have two radii.
+    for (s, c) in out.iter().zip(&carriers) {
+        if let (ProfileSegment::Arc { center, from, to, .. }, Carrier::Circle { r, .. }) = (s, c) {
+            ensure!(
+                (len(sub(*from, *center)) - r).abs() < 1e-6 && (len(sub(*to, *center)) - r).abs() < 1e-6,
+                "walls that join tangentially need the same thickness"
+            );
+        }
+    }
     let (before, after) = (signed_area(lp), signed_area(&out));
     ensure!(
         before * after > 0.0 && after.abs() > 1e-9,
@@ -401,6 +411,38 @@ mod tests {
                 to: p[(i + 1) % 4],
             })
             .collect()
+    }
+
+    #[test]
+    fn tangent_walls_of_different_thickness_are_refused() {
+        // Square with a rounded corner: the arc joins both its neighbours tangentially.
+        let lp = vec![
+            ProfileSegment::Line {
+                from: [0.0, 0.0],
+                to: [10.0, 0.0],
+            },
+            ProfileSegment::Line {
+                from: [10.0, 0.0],
+                to: [10.0, 8.0],
+            },
+            ProfileSegment::Arc {
+                center: [8.0, 8.0],
+                from: [10.0, 8.0],
+                to: [8.0, 10.0],
+                ccw: true,
+            },
+            ProfileSegment::Line {
+                from: [8.0, 10.0],
+                to: [0.0, 10.0],
+            },
+            ProfileSegment::Line {
+                from: [0.0, 10.0],
+                to: [0.0, 0.0],
+            },
+        ];
+        assert!(offset_loop(&lp, &[1.0; 5]).is_ok());
+        let e = offset_loop(&lp, &[1.0, 0.0, 1.0, 1.0, 1.0]).unwrap_err();
+        assert!(e.to_string().contains("tangentially"), "{e}");
     }
 
     #[test]
