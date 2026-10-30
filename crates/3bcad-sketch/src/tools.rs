@@ -847,6 +847,19 @@ impl Sketch {
             .filter(|c| c.pattern_group() == Some(group))
             .cloned()
             .collect();
+        let full_step = match members[0] {
+            CircularCopy { angle, .. } if (angle * current as f64 - TAU).abs() < 1e-9 => Some(TAU / count as f64),
+            _ => None,
+        };
+        if let Some(step) = full_step {
+            for c in &mut self.constraints {
+                if let CircularCopy { angle: a, group: g, .. } = c {
+                    if *g == group {
+                        *a = step;
+                    }
+                }
+            }
+        }
         if count < current {
             let doomed: Vec<PointId> = members
                 .iter()
@@ -860,7 +873,8 @@ impl Sketch {
             self.remove(&doomed, &[], &[]);
             return Ok(());
         }
-        // The seed: entities made only of the step-1 sources (and the circular center).
+        // The seed: entities made only of the step-1 sources (and the circular center, though not
+        // of the center alone: a circle around it stays put).
         let mut sources: Vec<PointId> = members
             .iter()
             .filter_map(|c| match *c {
@@ -868,12 +882,16 @@ impl Sketch {
                 _ => None,
             })
             .collect();
+        let moving = sources.clone();
         if let Some(CircularCopy { center, .. }) = members.first() {
             sources.push(*center);
         }
         let seeds: Vec<EntityId> = self
             .entity_ids()
-            .filter(|&e| self.entity(e).points().iter().all(|p| sources.contains(p)))
+            .filter(|&e| {
+                let points = self.entity(e).points();
+                points.iter().all(|p| sources.contains(p)) && points.iter().any(|p| moving.contains(p))
+            })
             .collect();
         if seeds.is_empty() {
             return Err("The pattern's original entities are gone".into());
@@ -900,17 +918,7 @@ impl Sketch {
                 }
             }
             CircularCopy { center, angle, .. } => {
-                let full = (angle * current as f64 - TAU).abs() < 1e-9;
-                let step = if full { TAU / count as f64 } else { angle };
-                if full {
-                    for c in &mut self.constraints {
-                        if let CircularCopy { angle: a, group: g, .. } = c {
-                            if *g == group {
-                                *a = step;
-                            }
-                        }
-                    }
-                }
+                let step = full_step.unwrap_or(angle);
                 let c = self.point(center);
                 for k in current..count {
                     let turn = step * k as f64;
@@ -1399,7 +1407,20 @@ mod tests {
             "{angles:?}"
         );
         s.set_pattern_count(g, 3).unwrap();
+        assert!(s.solve().converged);
         assert_eq!((s.pattern_count(g), s.entities().len()), (3, 3));
+        // Fewer instances spread out too: 120° apart.
+        let o2 = s.point(o);
+        let mut angles: Vec<f64> = s
+            .entity_ids()
+            .filter_map(|e| s.entity(e).center())
+            .map(|p| geom::angle_of(geom::sub(s.point(p), o2)))
+            .collect();
+        angles.sort_by(f64::total_cmp);
+        assert!(
+            angles.windows(2).all(|w| (w[1] - w[0] - TAU / 3.0).abs() < 1e-6),
+            "{angles:?}"
+        );
         assert!(s.set_pattern_count(g, 1).is_err());
 
         let mut s = Sketch::default();
@@ -1415,6 +1436,22 @@ mod tests {
             .map(|(p, _)| s.point(p))
             .collect();
         assert!(ends.iter().any(|p| close(*p, [15.0, 0.0])), "{ends:?}");
+    }
+
+    #[test]
+    fn raising_a_pattern_count_leaves_a_circle_around_its_center_alone() {
+        // A bolt circle: a big circle on the pattern center, and a hole repeated around it.
+        let mut s = Sketch::default();
+        let o = s.add_point(0.0, 0.0);
+        s.add_circle(o, 20.0);
+        let c = s.add_point(10.0, 0.0);
+        let hole = s.add_circle(c, 1.0);
+        s.circular_pattern(&[hole], o, 4, TAU).unwrap();
+        let g = s.pattern_groups()[0];
+        assert_eq!(s.entities().len(), 5);
+        s.set_pattern_count(g, 6).unwrap();
+        assert!(s.solve().converged);
+        assert_eq!(s.entities().len(), 7);
     }
 
     #[test]
