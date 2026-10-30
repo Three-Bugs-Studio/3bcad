@@ -52,6 +52,17 @@ impl History {
         Ok(id)
     }
 
+    /// Changes what a feature is, with the checks `add` makes, at the feature's place in the tree.
+    pub fn replace(&mut self, id: FeatureId, kind: FeatureKind) -> Result<()> {
+        let Some(pos) = self.position(id) else {
+            bail!("no such feature")
+        };
+        self.check_refs(&kind, pos)?;
+        self.graph[id].kind = kind;
+        self.relink();
+        Ok(())
+    }
+
     fn check_refs(&self, kind: &FeatureKind, pos: usize) -> Result<()> {
         for r in kind.references() {
             ensure!(self.get(r).is_some(), "a feature this one uses was deleted");
@@ -220,10 +231,13 @@ impl History {
         for c in self.children(id) {
             ensure!(pos(c) > to, "{} must stay above {}, its child", name(id), name(c));
         }
+        // The bar stays between the same features: only the moved one can cross it.
         let was_active = from < self.rollback;
         self.order = order;
         if was_active && to >= self.rollback {
-            self.rollback = to + 1;
+            self.rollback -= 1;
+        } else if !was_active && to < self.rollback {
+            self.rollback += 1;
         }
         Ok(())
     }
@@ -267,6 +281,41 @@ mod tests {
         let s2 = h.add_sketch(Sketch::circle([0.0, 0.0], 2.0), Plane::TOP);
         let e2 = h.add_extrude(s2, 5.0).unwrap();
         (h, [s1, e1, s2, e2])
+    }
+
+    #[test]
+    fn moving_a_feature_leaves_the_others_on_their_side_of_the_bar() {
+        // A rolled-back sketch moved up joins the model; the extrude stays in it.
+        let (mut h, [s1, e1, s2, e2]) = demo();
+        h.set_rollback(2);
+        h.move_to(s2, 1).unwrap();
+        assert_eq!(h.order, [s1, s2, e1, e2]);
+        assert_eq!(h.rollback(), 3);
+        // An active extrude moved past the bar leaves it; what is rolled back stays so.
+        let (mut h, [s1, e1, s2, e2]) = demo();
+        h.set_rollback(2);
+        h.move_to(e1, 3).unwrap();
+        assert_eq!(h.order, [s1, s2, e2, e1]);
+        assert_eq!(h.rollback(), 1);
+    }
+
+    #[test]
+    fn replacing_a_feature_keeps_its_references_above_it() {
+        let (mut h, [s1, e1, s2, e2]) = demo();
+        let with_sketch = |h: &History, id: FeatureId, sketch: FeatureId| {
+            let mut kind = h.get(id).unwrap().kind.clone();
+            if let FeatureKind::Extrude(e) = &mut kind {
+                e.sketch = sketch;
+            }
+            kind
+        };
+        let later = with_sketch(&h, e1, s2);
+        assert!(h.replace(e1, later).is_err());
+        let itself = with_sketch(&h, e2, e2);
+        assert!(h.replace(e2, itself).is_err());
+        let earlier = with_sketch(&h, e2, s1);
+        h.replace(e2, earlier).unwrap();
+        assert_eq!(h.parents(e2), vec![s1]);
     }
 
     #[test]

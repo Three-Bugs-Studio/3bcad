@@ -27,6 +27,11 @@ pub enum OpKind {
     Keep,
 }
 
+/// How far (mm) a Through All tool runs past the part.
+const THROUGH_MARGIN: f64 = 1.0;
+/// Each instance is a boolean on the UI thread, so a huge pattern would freeze the app.
+const MAX_INSTANCES: usize = 1000;
+
 /// One tool applied to a body.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Step {
@@ -405,7 +410,7 @@ impl Eval {
                     .fold(f64::NEG_INFINITY, f64::max);
                 ensure!(reach > 0.0, "there is no material in that direction");
                 // Past every body, with margin for the profile's own offset across the plane.
-                reach + 1.0
+                reach + THROUGH_MARGIN
             }
             End::UpToNext => {
                 let tris = || {
@@ -974,13 +979,13 @@ impl Eval {
             }
         }
         // Tools come from the topology before any of them is applied.
-        let mut tools: Vec<(usize, edge_ops::EdgeTool, usize)> = Vec::new();
+        let mut tools: Vec<(usize, Arc<Topology>, edge_ops::EdgeTool, usize)> = Vec::new();
         for &(b, e) in &picked {
             let topo = &self.s.bodies[b].topo;
             // The arcs of a whole circle make the same revolved tool: keep one.
             if let EdgeCurve::Circle { center, radius, .. } = topo.edges[e].curve {
                 let dup = edge_ops::full_circle(topo, e)
-                    && tools.iter().any(|(tb, _, te)| {
+                    && tools.iter().any(|(tb, _, _, te)| {
                         *tb == b
                             && matches!(self.s.bodies[b].topo.edges[*te].curve, EdgeCurve::Circle { center: c, radius: r, .. }
                                 if norm(sub(c, center)) < 1e-6 && (r - radius).abs() < 1e-6)
@@ -989,9 +994,9 @@ impl Eval {
                     continue;
                 }
             }
-            tools.push((b, edge_ops::edge_tool(topo, e, t, flip)?, e));
+            tools.push((b, topo.clone(), edge_ops::edge_tool(topo, e, t, flip)?, e));
         }
-        for (b, et, e) in tools {
+        for (_, topo, et, e) in tools {
             let op = if et.add { OpKind::Add } else { OpKind::Sub };
             let step = Step {
                 feature: self.id,
@@ -1002,20 +1007,18 @@ impl Eval {
             match self.apply(step, true) {
                 Ok(()) => {}
                 Err(first) if matches!(t, Treatment::Fillet { .. }) => {
-                    // Curved faces: cross them more steeply and try again.
-                    let topo = self.s.bodies.get(b).map(|bb| bb.topo.clone());
-                    let retry = topo
-                        .and_then(|tp| edge_ops::edge_tool_crossing(&tp, e, t, flip, 1e-2).ok())
-                        .map(|et2| Step {
-                            feature: self.id,
-                            instance: 0,
-                            op,
-                            tool: et2.tool,
-                        });
-                    match retry {
-                        Some(s2) => self.apply(s2, true).map_err(|_| first)?,
-                        None => return Err(first),
-                    }
+                    // Curved faces: cross them more steeply and try again. `e` counts the edges of
+                    // `topo`, from before any tool: the earlier tools have changed the body since.
+                    let Ok(et2) = edge_ops::edge_tool_crossing(&topo, e, t, flip, 1e-2) else {
+                        return Err(first);
+                    };
+                    let step = Step {
+                        feature: self.id,
+                        instance: 0,
+                        op,
+                        tool: et2.tool,
+                    };
+                    self.apply(step, true).map_err(|_| first)?;
                 }
                 Err(e) => return Err(e),
             }
@@ -1204,6 +1207,12 @@ impl Eval {
             }
             other => self.depth(other, &down, &regions_at(1.0), n)?,
         };
+        // Through All runs past the part, and a screw cannot seat in that margin.
+        let material = if hole.end == End::ThroughAll {
+            depth - THROUGH_MARGIN
+        } else {
+            depth
+        };
         let r = size.drill(hole.kind) / 2.0;
         // Start above the face so the tool never lies in it.
         let top = -0.01;
@@ -1211,7 +1220,10 @@ impl Eval {
         // truck handles that far better than stacked cylinders.
         let profile: Option<Vec<[f64; 2]>> = match hole.kind {
             HoleKind::Counterbore => {
-                ensure!(size.cbore_depth < depth, "the hole is shallower than its counterbore");
+                ensure!(
+                    size.cbore_depth < material,
+                    "the hole is shallower than its counterbore"
+                );
                 let rc = size.cbore_diameter / 2.0;
                 Some(vec![
                     [0.0, top],
@@ -1226,7 +1238,7 @@ impl Eval {
                 let half = (size.csk_angle / 2.0).to_radians();
                 let rc = size.csk_diameter / 2.0;
                 let cone = (rc - r) / half.tan();
-                ensure!(cone < depth, "the hole is shallower than its countersink");
+                ensure!(cone < material, "the hole is shallower than its countersink");
                 Some(vec![
                     [0.0, top],
                     [rc - top * half.tan(), top],
@@ -1280,6 +1292,11 @@ impl Eval {
     }
 
     fn pattern(&mut self, seeds: &Seeds, mats: &[[[f64; 4]; 4]], merge: bool) -> Result<()> {
+        ensure!(
+            mats.len() < MAX_INSTANCES,
+            "a pattern can have at most {MAX_INSTANCES} instances, this one has {}",
+            mats.len() + 1
+        );
         match seeds {
             Seeds::Features(fs) => {
                 ensure!(!fs.is_empty(), "Select features to repeat");

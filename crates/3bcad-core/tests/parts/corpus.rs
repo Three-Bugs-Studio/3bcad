@@ -28,7 +28,7 @@ fn block(doc: &mut PartDocument, w: f64, d: f64, h: f64) -> FeatureId {
     })
 }
 
-/// 60 x 40 x 5 plate, a Ø6 cut patterned 3 x 2, an M5 counterbore in the middle.
+/// 60 x 40 x 5 plate, a Ø6 cut patterned 3 x 2, an M4 counterbore in the middle.
 pub fn plate_holes() -> PartDocument {
     let mut doc = PartDocument::new("plate_holes");
     block(&mut doc, 60.0, 40.0, 5.0);
@@ -68,7 +68,7 @@ pub fn plate_holes() -> PartDocument {
             sketch: ps,
             kind: HoleKind::Counterbore,
             standard: HoleStandard::Iso,
-            size: "M5".into(),
+            size: "M4".into(),
             end: End::ThroughAll,
         }))
         .unwrap();

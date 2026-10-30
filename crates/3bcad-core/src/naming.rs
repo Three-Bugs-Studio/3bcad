@@ -117,7 +117,8 @@ fn vertex_key<B: Named>(b: &B, v: usize) -> Vec<FaceTag> {
     k
 }
 
-/// Every (body, element) with `matches`, in a stable order: body, then position.
+/// Every (body, element) with `matches`, in a stable order: by position, because the order of the
+/// bodies changes when an edit merges one of them.
 fn candidates<B: Named>(
     bodies: &[B],
     count: impl Fn(&B) -> usize,
@@ -130,7 +131,7 @@ fn candidates<B: Named>(
             out.push((bi, i, order_key(at(b, i))));
         }
     }
-    out.sort_by_key(|&(b, _, k)| (b, k));
+    out.sort_by_key(|&(_, _, k)| k);
     out.into_iter().map(|(b, i, _)| (b, i)).collect()
 }
 

@@ -630,6 +630,85 @@ mod tests {
     }
 
     #[test]
+    fn a_through_hole_needs_material_for_its_counterbore() {
+        // A 5 mm plate: the M5 counterbore is 5.4 deep and would leave no seat.
+        for (size, fits) in [("M5", false), ("M4", true)] {
+            let mut doc = PartDocument::new("Part");
+            doc.edit(|h| {
+                let s = h.add_sketch(Sketch::rectangle(40.0, 40.0), Plane::TOP);
+                h.add_extrude(s, 5.0).unwrap();
+            });
+            let top = top_face(&doc, 5.0);
+            let mut pts = Sketch::default();
+            pts.add_point(20.0, 20.0);
+            doc.edit(|h| {
+                let s = h.add_sketch_on(pts, Plane::TOP, PlaneRef::Face(top)).unwrap();
+                h.add(FeatureKind::Hole(Hole {
+                    sketch: s,
+                    kind: HoleKind::Counterbore,
+                    standard: HoleStandard::Iso,
+                    size: size.into(),
+                    end: End::ThroughAll,
+                }))
+                .unwrap();
+            });
+            assert_eq!(doc.errors().is_empty(), fits, "{size}: {:?}", doc.errors());
+        }
+    }
+
+    #[test]
+    fn twin_faces_keep_their_identity_when_the_bodies_swap_places() {
+        // A cut through the middle makes two bodies, whose top faces are twins.
+        let mut doc = PartDocument::new("Part");
+        cube(&mut doc, 30.0);
+        let slot = polygon_sketch(&[[12.0, -1.0], [18.0, -1.0], [18.0, 31.0], [12.0, 31.0]]);
+        doc.edit(|h| {
+            let s = h.add_sketch(slot, Plane::TOP);
+            let mut e = Extrude::cut(s, 0.0);
+            e.end = End::MidPlane(100.0);
+            h.add(FeatureKind::Extrude(e)).unwrap();
+        });
+        assert!(doc.errors().is_empty(), "{:?}", doc.errors());
+        assert_eq!(doc.bodies().len(), 2);
+        let tops: Vec<FaceRef> = (0..2)
+            .map(|b| {
+                let f = doc.bodies()[b].topo.faces.iter().position(|f| {
+                    f.plane
+                        .is_some_and(|p| p.normal()[2] > 0.5 && (p.origin[2] - 30.0).abs() < 1e-6)
+                });
+                doc.face_ref(b, f.expect("top face")).unwrap()
+            })
+            .collect();
+        let swapped: Vec<_> = doc.bodies().iter().rev().cloned().collect();
+        for (b, r) in tops.iter().enumerate() {
+            let (now, _) = crate::naming::resolve_face(&swapped, r).unwrap();
+            assert_eq!(1 - now, b);
+        }
+    }
+
+    #[test]
+    fn a_huge_pattern_is_refused_instead_of_freezing_the_app() {
+        let mut doc = PartDocument::new("Part");
+        let e = cube(&mut doc, 10.0);
+        let dir = |axis, count| PatternDir {
+            axis: AxisRef::Std(axis),
+            spacing: 20.0,
+            count,
+            reverse: false,
+        };
+        let p = doc.edit(|h| {
+            h.add(FeatureKind::LinearPattern(LinearPattern {
+                seeds: Seeds::Features(vec![e]),
+                dir1: dir(0, 500),
+                dir2: Some(dir(1, 500)),
+                skip: vec![],
+            }))
+            .unwrap()
+        });
+        assert!(doc.errors()[&p].contains("at most"), "{:?}", doc.errors());
+    }
+
+    #[test]
     fn hole_wizard_counterbore_and_tapped() {
         let mut doc = PartDocument::new("Part");
         cube(&mut doc, 20.0);
