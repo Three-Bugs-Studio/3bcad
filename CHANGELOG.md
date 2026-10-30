@@ -7,6 +7,37 @@ saved files and workflows; patch versions (0.x.y) only fix bugs.
 
 ## [Unreleased]
 
+### Added
+
+- Core part features (v0.3.0 milestone): Extruded Cut (with Flip side to cut), Revolved Boss/Base and Revolved
+  Cut, Fillet (straight edges, tangent propagation), Chamfer (equal, distance-distance, angle-distance), Shell
+  (inward/outward, removed faces), Hole Wizard (ISO M2-M20 and ANSI #2-1/2" simple, counterbore, countersink
+  and tapped holes with cosmetic thread data), Linear and Circular Pattern (of features or bodies, with skipped
+  instances), Mirror, Draft, Rib, and reference planes, axes, points and coordinate systems.
+- Extrude end conditions: Blind, Through All, Up To Next, Up To Vertex, Up To Surface, Offset From Surface and
+  Mid Plane, Direction 2, Reverse, draft angle and thin features from open or closed profiles.
+- Merge result: bosses that touch existing bodies become one body (turn it off to keep a separate body).
+- Sketches on a face follow the face when the model changes; Convert Entities copies the face's edges.
+- FeatureManager editing: edit any feature in the PropertyManager, rename with F2, suppress/unsuppress, and
+  drag to reorder (moves that would put a feature above its parents are refused).
+- What's Wrong lists rebuild errors and warnings with a suggested fix and opens when a rebuild fails.
+- Evaluate tab: Measure (distances, angles, radii, lengths, areas) and Mass Properties with material presets.
+- Sketch pattern instance counts can be changed after the pattern is made.
+- Sketch tab "Sketch on" buttons start a sketch on the Front, Top or Right plane, a reference plane or the
+  selected face in one click; double-click a plane in the FeatureManager to sketch on it.
+- Keyboard Shortcuts window (F1 or the Shortcuts button in the ribbon).
+- Geometry regression corpus (`crates/3bcad-core/tests/parts`) and `cargo bench -p threebcad-core`.
+
+### Changed
+
+- Light, SolidWorks-style look: light panels, a CommandManager with large icons above each command and
+  the tabs underneath, icons in the FeatureManager, and a white-to-grey gradient behind the model.
+- Command, sketch-tool and FeatureManager icons are shaded 3D icons in the SolidWorks style: lit gold
+  solids, blue sketches and translucent planes, green "add" and red "remove" arrows.
+- Faces and edges keep stable names across rebuilds, so fillets and sketches on faces survive dimension
+  changes; a reference that is really gone is reported on its feature.
+- Rebuilds reuse cached results: editing the last feature only re-evaluates that feature (Ctrl+Q rebuilds all).
+
 ## [0.2.0] - 2026-10-26
 
 ### Added

@@ -11,3 +11,10 @@ threebcad-sketch.workspace = true
 threebcad-kernel.workspace = true
 petgraph.workspace = true
 anyhow.workspace = true
+
+[dev-dependencies]
+criterion = { version = "0.5", default-features = false }
+
+[[bench]]
+name = "rebuild"
+harness = false

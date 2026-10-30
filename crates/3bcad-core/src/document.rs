@@ -1,9 +1,12 @@
 use std::collections::HashMap;
 
-use threebcad_kernel::{Plane, Solid};
+use threebcad_kernel::topology::P3;
+use threebcad_kernel::Plane;
 use threebcad_sketch::{Sketch, Status};
 
-use crate::{FeatureId, History, Rebuild};
+use crate::naming::{self, EdgeRef, FaceRef, VertexRef};
+use crate::rebuild::{self, CacheEntry};
+use crate::{Body, FeatureId, History, Rebuild};
 
 const UNDO_LIMIT: usize = 100;
 
@@ -16,6 +19,7 @@ pub struct PartDocument {
     redo: Vec<History>,
     merge_key: Option<u64>,
     built: Rebuild,
+    cache: Vec<CacheEntry>,
     revision: u64,
 }
 
@@ -28,6 +32,7 @@ impl PartDocument {
             redo: Vec::new(),
             merge_key: None,
             built: Rebuild::default(),
+            cache: Vec::new(),
             revision: 0,
         };
         doc.rebuild();
@@ -53,12 +58,20 @@ impl PartDocument {
         &self.history
     }
 
-    pub fn bodies(&self) -> &[(FeatureId, Solid)] {
+    pub fn bodies(&self) -> &[Body] {
         &self.built.bodies
+    }
+
+    pub fn built(&self) -> &Rebuild {
+        &self.built
     }
 
     pub fn errors(&self) -> &HashMap<FeatureId, String> {
         &self.built.errors
+    }
+
+    pub fn warnings(&self) -> &HashMap<FeatureId, String> {
+        &self.built.warnings
     }
 
     /// Definition status and degrees of freedom of a sketch above the rollback bar.
@@ -87,8 +100,14 @@ impl PartDocument {
         }
         self.merge_key = key;
         let r = f(&mut self.history);
+        self.history.relink();
         self.rebuild();
         r
+    }
+
+    /// Ends a run of merged edits: the next one is a new undo step, even with the same key.
+    pub fn end_merge(&mut self) {
+        self.merge_key = None;
     }
 
     pub fn can_undo(&self) -> bool {
@@ -115,16 +134,104 @@ impl PartDocument {
         }
     }
 
+    /// Rebuilds every feature from scratch (Ctrl+Q), ignoring cached results.
+    pub fn force_rebuild(&mut self) {
+        self.cache.clear();
+        self.rebuild();
+    }
+
     fn rebuild(&mut self) {
-        self.built = self.history.rebuild();
+        self.built = rebuild::rebuild(&mut self.history, &mut self.cache);
         self.revision += 1;
+    }
+
+    /// Persistent reference to a face of the current bodies.
+    pub fn face_ref(&self, body: usize, face: usize) -> Option<FaceRef> {
+        naming::face_ref(self.bodies(), body, face)
+    }
+
+    pub fn edge_ref(&self, body: usize, edge: usize) -> Option<EdgeRef> {
+        naming::edge_ref(self.bodies(), body, edge)
+    }
+
+    pub fn vertex_ref(&self, body: usize, vertex: usize) -> Option<VertexRef> {
+        naming::vertex_ref(self.bodies(), body, vertex)
+    }
+
+    pub fn resolve_face(&self, r: &FaceRef) -> Option<(usize, usize)> {
+        naming::resolve_face(self.bodies(), r)
+    }
+
+    pub fn resolve_edge(&self, r: &EdgeRef) -> Option<(usize, usize)> {
+        naming::resolve_edge(self.bodies(), r)
+    }
+
+    /// Reference planes and coordinate systems built by features.
+    pub fn plane_of(&self, id: FeatureId) -> Option<Plane> {
+        self.built.planes.get(&id).copied()
+    }
+
+    pub fn axis_of(&self, id: FeatureId) -> Option<(P3, P3)> {
+        self.built.axes.get(&id).copied()
+    }
+
+    pub fn point_of(&self, id: FeatureId) -> Option<P3> {
+        self.built.points.get(&id).copied()
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::f64::consts::PI;
+
+    use threebcad_kernel::tool::ToolFace;
+    use threebcad_kernel::topology::EdgeCurve;
+
     use super::*;
-    use crate::FeatureKind;
+    use crate::feature::*;
+
+    /// Volume from a fine mesh (holes are small next to the part, so a coarse one is too rough).
+    fn vol(doc: &PartDocument) -> f64 {
+        let meshes: Vec<_> = doc
+            .bodies()
+            .iter()
+            .map(|b| threebcad_kernel::mesher::print_mesh(&b.solid, 0.005))
+            .collect();
+        threebcad_kernel::mass::mass_properties(&meshes).volume
+    }
+
+    fn cube(doc: &mut PartDocument, size: f64) -> FeatureId {
+        doc.edit(|h| {
+            let s = h.add_sketch(Sketch::rectangle(size, size), Plane::TOP);
+            h.add_extrude(s, size).unwrap()
+        })
+    }
+
+    /// The top face (z = `z`) of the first body.
+    fn top_face(doc: &PartDocument, z: f64) -> FaceRef {
+        let b = &doc.bodies()[0];
+        let f = b
+            .topo
+            .faces
+            .iter()
+            .position(|f| {
+                f.plane
+                    .is_some_and(|p| p.normal()[2] > 0.5 && (p.origin[2] - z).abs() < 1e-6)
+            })
+            .expect("top face");
+        doc.face_ref(0, f).unwrap()
+    }
+
+    fn edge_at(doc: &PartDocument, pred: impl Fn(P3, P3) -> bool) -> EdgeRef {
+        let b = &doc.bodies()[0];
+        let e = b
+            .topo
+            .edges
+            .iter()
+            .position(|e| matches!(e.curve, EdgeCurve::Line { a, b } if pred(a, b)))
+            .expect("edge");
+        doc.edge_ref(0, e).unwrap()
+    }
 
     #[test]
     fn demo_builds_two_bodies() {
@@ -154,7 +261,7 @@ mod tests {
             doc.sketch_status(id.unwrap()),
             Some((Status::UnderDefined, 3))
         ));
-        let m = threebcad_kernel::mesher::render_mesh(&doc.bodies()[0].1, 0.1);
+        let m = threebcad_kernel::mesher::render_mesh(&doc.bodies()[0].solid, 0.1);
         assert!(
             m.positions.iter().all(|p| p[1] <= 1e-4 && p[1] >= -4.0 - 1e-4),
             "grows towards -Y"
@@ -183,7 +290,8 @@ mod tests {
         let s = doc.edit(|h| h.add_sketch(Sketch::circle([0.0, 0.0], 3.0), Plane::TOP));
         assert_eq!(doc.history().iter().position(|(id, _)| id == s), Some(2));
         assert!(doc.edit(|h| h.add_extrude(s, 5.0)).is_ok());
-        assert_eq!(doc.bodies().len(), 2);
+        // The new cylinder overlaps the cube, so it merges into it.
+        assert_eq!(doc.bodies().len(), 1);
         // A sketch below the bar cannot be extruded.
         let below = doc.history().iter().nth(4).unwrap().0;
         assert!(doc.edit(|h| h.add_extrude(below, 5.0)).is_err());
@@ -210,15 +318,73 @@ mod tests {
         let extrude = doc.history().iter().nth(1).unwrap().0;
         for depth in [31.0, 32.0, 33.0] {
             doc.edit_merging(Some(1), |h| {
-                if let Some(FeatureKind::ExtrudeBoss { depth: d, .. }) = h.get_mut(extrude).map(|f| &mut f.kind) {
-                    *d = depth;
+                if let Some(FeatureKind::Extrude(e)) = h.get_mut(extrude).map(|f| &mut f.kind) {
+                    e.end = End::Blind(depth);
                 }
             });
         }
+        // A second drag of the same dimension is its own step.
+        doc.end_merge();
+        doc.edit_merging(Some(1), |h| {
+            if let Some(FeatureKind::Extrude(e)) = h.get_mut(extrude).map(|f| &mut f.kind) {
+                e.end = End::Blind(34.0);
+            }
+        });
+        doc.undo();
+        assert!(
+            matches!(&doc.history().get(extrude).unwrap().kind, FeatureKind::Extrude(e) if e.end == End::Blind(33.0))
+        );
         doc.undo();
         assert!(!doc.can_undo());
         assert!(
-            matches!(doc.history().get(extrude).unwrap().kind, FeatureKind::ExtrudeBoss { depth, .. } if depth == 30.0)
+            matches!(&doc.history().get(extrude).unwrap().kind, FeatureKind::Extrude(e) if e.end == End::Blind(30.0))
+        );
+    }
+
+    #[test]
+    fn a_reference_warns_when_its_twins_change() {
+        // Two slots cut a block in three, so its top face is three twins. A sketch sits on the middle.
+        let mut doc = PartDocument::new("Part");
+        cube(&mut doc, 30.0);
+        let slot = |x: f64| polygon_sketch(&[[x, -1.0], [x + 2.0, -1.0], [x + 2.0, 31.0], [x, 31.0]]);
+        let (first, second) = (slot(8.0), slot(18.0));
+        let cut = |h: &mut History, sketch: Sketch| {
+            let s = h.add_sketch(sketch, Plane::TOP);
+            let mut e = Extrude::cut(s, 0.0);
+            e.end = End::MidPlane(100.0);
+            h.add(FeatureKind::Extrude(e)).unwrap()
+        };
+        let first = doc.edit(|h| {
+            let c = cut(h, first);
+            cut(h, second);
+            c
+        });
+        assert_eq!(doc.bodies().len(), 3);
+        let (b, f) = doc
+            .bodies()
+            .iter()
+            .enumerate()
+            .find_map(|(b, body)| {
+                let middle = |f: &threebcad_kernel::topology::TopoFace| {
+                    f.plane
+                        .is_some_and(|p| p.normal()[2] > 0.5 && (p.origin[2] - 30.0).abs() < 1e-6)
+                        && (10.0..18.0).contains(&f.sample[0])
+                };
+                body.topo.faces.iter().position(middle).map(|f| (b, f))
+            })
+            .expect("the middle of the top face");
+        let top = doc.face_ref(b, f).unwrap();
+        let sketch = doc.edit(|h| {
+            h.add_sketch_on(Sketch::circle([14.0, 15.0], 1.0), Plane::TOP, PlaneRef::Face(top))
+                .unwrap()
+        });
+        assert!(doc.warnings().is_empty(), "{:?}", doc.warnings());
+        // With the first slot gone the left and middle merge: index 1 is now the right-hand piece.
+        doc.edit(|h| h.remove(first));
+        assert!(
+            doc.warnings()[&sketch].contains("split differently"),
+            "{:?}",
+            doc.warnings()
         );
     }
 
@@ -227,11 +393,680 @@ mod tests {
         let mut doc = PartDocument::demo();
         let extrude = doc.history().iter().nth(1).unwrap().0;
         doc.edit(|h| {
-            if let Some(FeatureKind::ExtrudeBoss { depth, .. }) = h.get_mut(extrude).map(|f| &mut f.kind) {
-                *depth = 0.0;
+            if let Some(FeatureKind::Extrude(e)) = h.get_mut(extrude).map(|f| &mut f.kind) {
+                e.end = End::Blind(0.0);
             }
         });
         assert!(doc.errors().contains_key(&extrude));
         assert_eq!(doc.bodies().len(), 1);
+    }
+
+    #[test]
+    fn cut_blind_and_through_all_from_a_face() {
+        let mut doc = PartDocument::new("Part");
+        cube(&mut doc, 10.0);
+        let top = top_face(&doc, 10.0);
+        // A Ø6 circle centred on the top face, cut 4 deep, then a second one through all.
+        let (cut, sketch2) = doc.edit(|h| {
+            let s = h
+                .add_sketch_on(Sketch::circle([5.0, 5.0], 3.0), Plane::TOP, PlaneRef::Face(top.clone()))
+                .unwrap();
+            let c = h.add(FeatureKind::Extrude(Extrude::cut(s, 4.0))).unwrap();
+            (c, s)
+        });
+        assert!(doc.errors().is_empty(), "{:?}", doc.errors());
+        assert!((vol(&doc) - (1000.0 - PI * 9.0 * 4.0)).abs() < 2.0, "{}", vol(&doc));
+        doc.edit(|h| {
+            if let Some(FeatureKind::Extrude(e)) = h.get_mut(cut).map(|f| &mut f.kind) {
+                e.end = End::ThroughAll;
+            }
+        });
+        assert!(doc.errors().is_empty(), "{:?}", doc.errors());
+        assert!((vol(&doc) - (1000.0 - PI * 9.0 * 10.0)).abs() < 2.0, "{}", vol(&doc));
+        // Flip side to cut keeps only the cylinder.
+        doc.edit(|h| {
+            if let Some(FeatureKind::Extrude(e)) = h.get_mut(cut).map(|f| &mut f.kind) {
+                e.flip_side = true;
+            }
+        });
+        assert!((vol(&doc) - PI * 90.0).abs() < 2.0, "{}", vol(&doc));
+        // The sketch on the face follows it when the cube grows.
+        let base = doc.history().iter().nth(1).unwrap().0;
+        doc.edit(|h| {
+            if let Some(FeatureKind::Extrude(e)) = h.get_mut(base).map(|f| &mut f.kind) {
+                e.end = End::Blind(15.0);
+            }
+        });
+        let Some(FeatureKind::Sketch { plane, .. }) = doc.history().get(sketch2).map(|f| &f.kind) else {
+            panic!()
+        };
+        assert!((plane.origin[2] - 15.0).abs() < 1e-6, "{plane:?}");
+    }
+
+    #[test]
+    fn touching_boss_merges_unless_told_not_to() {
+        let mut doc = PartDocument::new("Part");
+        cube(&mut doc, 10.0);
+        let top = top_face(&doc, 10.0);
+        let boss = doc.edit(|h| {
+            let s = h
+                .add_sketch_on(Sketch::circle([5.0, 5.0], 2.0), Plane::TOP, PlaneRef::Face(top))
+                .unwrap();
+            h.add_extrude(s, 5.0).unwrap()
+        });
+        assert!(doc.errors().is_empty(), "{:?}", doc.errors());
+        assert_eq!(doc.bodies().len(), 1);
+        assert!((vol(&doc) - (1000.0 + PI * 4.0 * 5.0)).abs() < 1.0, "{}", vol(&doc));
+        doc.edit(|h| {
+            if let Some(FeatureKind::Extrude(e)) = h.get_mut(boss).map(|f| &mut f.kind) {
+                e.merge = false;
+            }
+        });
+        assert_eq!(doc.bodies().len(), 2);
+    }
+
+    #[test]
+    fn mid_plane_direction_two_and_draft() {
+        let mut doc = PartDocument::new("Part");
+        let e = cube(&mut doc, 10.0);
+        let set = |doc: &mut PartDocument, f: &dyn Fn(&mut Extrude)| {
+            doc.edit(|h| {
+                if let Some(FeatureKind::Extrude(x)) = h.get_mut(e).map(|f| &mut f.kind) {
+                    f(x);
+                }
+            })
+        };
+        set(&mut doc, &|x| x.end = End::MidPlane(10.0));
+        let (lo, hi) = threebcad_kernel::boolean::bbox(&doc.bodies()[0].solid);
+        assert!((lo[2] + 5.0).abs() < 1e-6 && (hi[2] - 5.0).abs() < 1e-6);
+        set(&mut doc, &|x| {
+            x.end = End::Blind(4.0);
+            x.end2 = Some(End::Blind(6.0));
+        });
+        let (lo, hi) = threebcad_kernel::boolean::bbox(&doc.bodies()[0].solid);
+        assert!((lo[2] + 6.0).abs() < 1e-6 && (hi[2] - 4.0).abs() < 1e-6);
+        set(&mut doc, &|x| {
+            x.end2 = None;
+            x.end = End::Blind(5.0);
+            x.draft = (0.2f64).atan();
+        });
+        assert!(
+            (vol(&doc) - 5.0 / 3.0 * (100.0 + 64.0 + 80.0)).abs() < 0.01,
+            "{}",
+            vol(&doc)
+        );
+        set(&mut doc, &|x| {
+            x.draft = 0.0;
+            x.reverse = true;
+        });
+        let (lo, _) = threebcad_kernel::boolean::bbox(&doc.bodies()[0].solid);
+        assert!((lo[2] + 5.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn thin_features_from_closed_and_open_profiles() {
+        let mut doc = PartDocument::new("Part");
+        let e = cube(&mut doc, 10.0);
+        doc.edit(|h| {
+            if let Some(FeatureKind::Extrude(x)) = h.get_mut(e).map(|f| &mut f.kind) {
+                x.thin = Some(Thin {
+                    kind: ThinKind::OneDirection,
+                    t1: 1.0,
+                    t2: 0.0,
+                    reverse: true,
+                });
+            }
+        });
+        assert!(doc.errors().is_empty(), "{:?}", doc.errors());
+        assert!((vol(&doc) - (100.0 - 64.0) * 10.0).abs() < 1e-3, "{}", vol(&doc));
+        let mut open = Sketch::default();
+        let (a, b, c) = (
+            open.add_point(0.0, 0.0),
+            open.add_point(10.0, 0.0),
+            open.add_point(10.0, 10.0),
+        );
+        open.add_line(a, b);
+        open.add_line(b, c);
+        let mut doc = PartDocument::new("Part");
+        doc.edit(|h| {
+            let s = h.add_sketch(open, Plane::TOP);
+            let mut x = Extrude::boss(s, 5.0);
+            x.thin = Some(Thin {
+                kind: ThinKind::MidPlane,
+                t1: 2.0,
+                t2: 0.0,
+                reverse: false,
+            });
+            h.add(FeatureKind::Extrude(x)).unwrap();
+        });
+        assert!(doc.errors().is_empty(), "{:?}", doc.errors());
+        assert!((vol(&doc) - 40.0 * 5.0).abs() < 1e-3, "{}", vol(&doc));
+    }
+
+    #[test]
+    fn revolve_a_rectangle_about_a_centerline() {
+        // On the Front plane: rectangle from x = 3..5, z = 0..10 and a vertical centerline at x = 0.
+        let mut s = Sketch::default();
+        let p = [[3.0, 0.0], [5.0, 0.0], [5.0, 10.0], [3.0, 10.0]].map(|q| s.add_point(q[0], q[1]));
+        for i in 0..4 {
+            s.add_line(p[i], p[(i + 1) % 4]);
+        }
+        let (c0, c1) = (s.add_point(0.0, 0.0), s.add_point(0.0, 10.0));
+        let axis = s.add_line(c0, c1);
+        s.set_construction(axis, true);
+        let mut doc = PartDocument::new("Part");
+        let rev = doc.edit(|h| {
+            let id = h.add_sketch(s, Plane::FRONT);
+            h.add(FeatureKind::Revolve(Revolve::new(id, false))).unwrap()
+        });
+        assert!(doc.errors().is_empty(), "{:?}", doc.errors());
+        assert!(
+            (vol(&doc) - PI * 16.0 * 10.0).abs() / (PI * 160.0) < 0.01,
+            "{}",
+            vol(&doc)
+        );
+        doc.edit(|h| {
+            if let Some(FeatureKind::Revolve(r)) = h.get_mut(rev).map(|f| &mut f.kind) {
+                r.angle = PI / 2.0;
+            }
+        });
+        assert!((vol(&doc) - PI * 160.0 / 4.0).abs() < 1.0, "{}", vol(&doc));
+    }
+
+    #[test]
+    fn fillet_chamfer_survive_a_dimension_change() {
+        let mut doc = PartDocument::new("Part");
+        let base = cube(&mut doc, 10.0);
+        let edge = edge_at(&doc, |a, b| {
+            (a[0] - 10.0).abs() < 1e-9 && (b[0] - 10.0).abs() < 1e-9 && a[2] > 9.0 && b[2] > 9.0
+        });
+        let fillet = doc.edit(|h| {
+            h.add(FeatureKind::Fillet {
+                edges: vec![edge],
+                radius: 2.0,
+                propagate: false,
+            })
+            .unwrap()
+        });
+        assert!(doc.errors().is_empty(), "{:?}", doc.errors());
+        assert!((vol(&doc) - (1000.0 - (4.0 - PI) * 10.0)).abs() < 0.3, "{}", vol(&doc));
+        // Taller cube: the fillet still finds its (moved) edge by name.
+        doc.edit(|h| {
+            if let Some(FeatureKind::Extrude(e)) = h.get_mut(base).map(|f| &mut f.kind) {
+                e.end = End::Blind(15.0);
+            }
+        });
+        assert!(doc.errors().is_empty(), "{:?}", doc.errors());
+        assert!((vol(&doc) - (1500.0 - (4.0 - PI) * 10.0)).abs() < 0.3, "{}", vol(&doc));
+        // Too big a radius is a clear error on the fillet, not a crash.
+        doc.edit(|h| {
+            if let Some(FeatureKind::Fillet { radius, .. }) = h.get_mut(fillet).map(|f| &mut f.kind) {
+                *radius = 30.0;
+            }
+        });
+        assert!(doc.errors()[&fillet].contains("too large"), "{:?}", doc.errors());
+        // Swap it for a chamfer.
+        doc.edit(|h| h.remove(fillet));
+        let e2 = edge_at(&doc, |a, b| {
+            (a[0] - 10.0).abs() < 1e-9 && (b[0] - 10.0).abs() < 1e-9 && a[2] > 14.0 && b[2] > 14.0
+        });
+        doc.edit(|h| {
+            h.add(FeatureKind::Chamfer {
+                edges: vec![e2],
+                kind: ChamferKind::EqualDistance,
+                d1: 1.0,
+                d2: 1.0,
+                angle: 0.0,
+                flip: false,
+            })
+            .unwrap()
+        });
+        assert!(doc.errors().is_empty(), "{:?}", doc.errors());
+        assert!((vol(&doc) - (1500.0 - 0.5 * 10.0)).abs() < 0.01, "{}", vol(&doc));
+    }
+
+    #[test]
+    fn shell_a_box_inward_and_outward() {
+        let mut doc = PartDocument::new("Part");
+        cube(&mut doc, 10.0);
+        let top = top_face(&doc, 10.0);
+        let shell = doc.edit(|h| {
+            h.add(FeatureKind::Shell {
+                faces: vec![top],
+                thickness: 1.0,
+                outward: false,
+            })
+            .unwrap()
+        });
+        assert!(doc.errors().is_empty(), "{:?}", doc.errors());
+        assert!((vol(&doc) - (1000.0 - 8.0 * 8.0 * 9.0)).abs() < 1e-3, "{}", vol(&doc));
+        doc.edit(|h| {
+            if let Some(FeatureKind::Shell { outward, .. }) = h.get_mut(shell).map(|f| &mut f.kind) {
+                *outward = true;
+            }
+        });
+        assert!(doc.errors().is_empty(), "{:?}", doc.errors());
+        assert!(
+            (vol(&doc) - (12.0 * 12.0 * 11.0 - 1000.0)).abs() < 1e-3,
+            "{}",
+            vol(&doc)
+        );
+    }
+
+    #[test]
+    fn a_shell_with_no_open_face_leaves_a_void() {
+        let mut doc = PartDocument::new("Part");
+        cube(&mut doc, 10.0);
+        doc.edit(|h| {
+            h.add(FeatureKind::Shell {
+                faces: Vec::new(),
+                thickness: 1.0,
+                outward: false,
+            })
+            .unwrap();
+        });
+        assert!(doc.errors().is_empty(), "{:?}", doc.errors());
+        assert!((vol(&doc) - (1000.0 - 512.0)).abs() < 1e-3, "{}", vol(&doc));
+    }
+
+    #[test]
+    fn a_revolved_cylinder_shells_around_its_axis() {
+        // The profile has an edge on the axis, which must not move with the walls.
+        let mut s = polygon_sketch(&[[0.0, 0.0], [5.0, 0.0], [5.0, 10.0], [0.0, 10.0]]);
+        let (c0, c1) = (s.add_point(0.0, -2.0), s.add_point(0.0, 12.0));
+        let axis = s.add_line(c0, c1);
+        s.set_construction(axis, true);
+        let mut doc = PartDocument::new("Part");
+        doc.edit(|h| {
+            let id = h.add_sketch(s, Plane::FRONT);
+            h.add(FeatureKind::Revolve(Revolve::new(id, false))).unwrap();
+            h.add(FeatureKind::Shell {
+                faces: Vec::new(),
+                thickness: 1.0,
+                outward: false,
+            })
+            .unwrap();
+        });
+        assert!(doc.errors().is_empty(), "{:?}", doc.errors());
+        let expected = PI * (25.0 * 10.0 - 16.0 * 8.0);
+        assert!((vol(&doc) - expected).abs() / expected < 0.01, "{}", vol(&doc));
+    }
+
+    #[test]
+    fn a_through_hole_needs_material_for_its_counterbore() {
+        // A 5 mm plate: the M5 counterbore is 5.4 deep and would leave no seat.
+        for (size, fits) in [("M5", false), ("M4", true)] {
+            let mut doc = PartDocument::new("Part");
+            doc.edit(|h| {
+                let s = h.add_sketch(Sketch::rectangle(40.0, 40.0), Plane::TOP);
+                h.add_extrude(s, 5.0).unwrap();
+            });
+            let top = top_face(&doc, 5.0);
+            let mut pts = Sketch::default();
+            pts.add_point(20.0, 20.0);
+            doc.edit(|h| {
+                let s = h.add_sketch_on(pts, Plane::TOP, PlaneRef::Face(top)).unwrap();
+                h.add(FeatureKind::Hole(Hole {
+                    sketch: s,
+                    kind: HoleKind::Counterbore,
+                    standard: HoleStandard::Iso,
+                    size: size.into(),
+                    end: End::ThroughAll,
+                }))
+                .unwrap();
+            });
+            assert_eq!(doc.errors().is_empty(), fits, "{size}: {:?}", doc.errors());
+        }
+    }
+
+    #[test]
+    fn twin_faces_keep_their_identity_when_the_bodies_swap_places() {
+        // A cut through the middle makes two bodies, whose top faces are twins.
+        let mut doc = PartDocument::new("Part");
+        cube(&mut doc, 30.0);
+        let slot = polygon_sketch(&[[12.0, -1.0], [18.0, -1.0], [18.0, 31.0], [12.0, 31.0]]);
+        doc.edit(|h| {
+            let s = h.add_sketch(slot, Plane::TOP);
+            let mut e = Extrude::cut(s, 0.0);
+            e.end = End::MidPlane(100.0);
+            h.add(FeatureKind::Extrude(e)).unwrap();
+        });
+        assert!(doc.errors().is_empty(), "{:?}", doc.errors());
+        assert_eq!(doc.bodies().len(), 2);
+        let tops: Vec<FaceRef> = (0..2)
+            .map(|b| {
+                let f = doc.bodies()[b].topo.faces.iter().position(|f| {
+                    f.plane
+                        .is_some_and(|p| p.normal()[2] > 0.5 && (p.origin[2] - 30.0).abs() < 1e-6)
+                });
+                doc.face_ref(b, f.expect("top face")).unwrap()
+            })
+            .collect();
+        let swapped: Vec<_> = doc.bodies().iter().rev().cloned().collect();
+        for (b, r) in tops.iter().enumerate() {
+            let (now, _) = crate::naming::resolve_face(&swapped, r).unwrap();
+            assert_eq!(1 - now, b);
+        }
+    }
+
+    #[test]
+    fn a_huge_pattern_is_refused_instead_of_freezing_the_app() {
+        let mut doc = PartDocument::new("Part");
+        let e = cube(&mut doc, 10.0);
+        let dir = |axis, count| PatternDir {
+            axis: AxisRef::Std(axis),
+            spacing: 20.0,
+            count,
+            reverse: false,
+        };
+        let p = doc.edit(|h| {
+            h.add(FeatureKind::LinearPattern(LinearPattern {
+                seeds: Seeds::Features(vec![e]),
+                dir1: dir(0, 500),
+                dir2: Some(dir(1, 500)),
+                skip: vec![],
+            }))
+            .unwrap()
+        });
+        assert!(doc.errors()[&p].contains("at most"), "{:?}", doc.errors());
+    }
+
+    #[test]
+    fn hole_wizard_counterbore_and_tapped() {
+        let mut doc = PartDocument::new("Part");
+        cube(&mut doc, 20.0);
+        let top = top_face(&doc, 20.0);
+        let mut pts = Sketch::default();
+        pts.add_point(10.0, 10.0);
+        let hole = doc.edit(|h| {
+            let s = h.add_sketch_on(pts, Plane::TOP, PlaneRef::Face(top)).unwrap();
+            h.add(FeatureKind::Hole(Hole {
+                sketch: s,
+                kind: HoleKind::Counterbore,
+                standard: HoleStandard::Iso,
+                size: "M6".into(),
+                end: End::ThroughAll,
+            }))
+            .unwrap()
+        });
+        assert!(doc.errors().is_empty(), "{:?}", doc.errors());
+        let m6 = crate::holes::find(HoleStandard::Iso, "M6").unwrap();
+        let expected = 8000.0
+            - PI * (m6.clearance / 2.0).powi(2) * (20.0 - m6.cbore_depth)
+            - PI * (m6.cbore_diameter / 2.0).powi(2) * m6.cbore_depth;
+        assert!((vol(&doc) - expected).abs() < 3.0, "{} vs {expected}", vol(&doc));
+        doc.edit(|h| {
+            if let Some(FeatureKind::Hole(x)) = h.get_mut(hole).map(|f| &mut f.kind) {
+                x.kind = HoleKind::Tapped;
+                x.end = End::Blind(10.0);
+            }
+        });
+        assert!(doc.errors().is_empty(), "{:?}", doc.errors());
+        assert_eq!(doc.built().threads[&hole].designation, "M6x1");
+        assert!((vol(&doc) - (8000.0 - PI * 6.25 * 10.0)).abs() < 2.0, "{}", vol(&doc));
+    }
+
+    #[test]
+    fn linear_circular_pattern_and_mirror() {
+        let mut doc = PartDocument::new("Part");
+        cube(&mut doc, 40.0);
+        let top = top_face(&doc, 40.0);
+        let cut = doc.edit(|h| {
+            let s = h
+                .add_sketch_on(Sketch::circle([5.0, 5.0], 2.0), Plane::TOP, PlaneRef::Face(top))
+                .unwrap();
+            h.add(FeatureKind::Extrude(Extrude::cut(s, 5.0))).unwrap()
+        });
+        let hole_v = PI * 4.0 * 5.0;
+        let lp = doc.edit(|h| {
+            h.add(FeatureKind::LinearPattern(LinearPattern {
+                seeds: Seeds::Features(vec![cut]),
+                dir1: PatternDir {
+                    axis: AxisRef::Std(0),
+                    spacing: 10.0,
+                    count: 3,
+                    reverse: false,
+                },
+                dir2: Some(PatternDir {
+                    axis: AxisRef::Std(1),
+                    spacing: 10.0,
+                    count: 2,
+                    reverse: false,
+                }),
+                skip: vec![(2, 1)],
+            }))
+            .unwrap()
+        });
+        assert!(doc.errors().is_empty(), "{:?} {:?}", doc.errors(), doc.warnings());
+        assert!((vol(&doc) - (64000.0 - 5.0 * hole_v)).abs() < 3.0, "{}", vol(&doc));
+        // Swap for a circular pattern about a vertical axis through the cube's center.
+        doc.edit(|h| {
+            h.remove(lp);
+            let pt = h
+                .add(FeatureKind::RefPoint(RefPointDef::Coords([20.0, 20.0, 0.0])))
+                .unwrap();
+            let pt2 = h
+                .add(FeatureKind::RefPoint(RefPointDef::Coords([20.0, 20.0, 40.0])))
+                .unwrap();
+            let ax2 = h
+                .add(FeatureKind::RefAxis(RefAxisDef::TwoPoints(
+                    PointRef::Feature(pt),
+                    PointRef::Feature(pt2),
+                )))
+                .unwrap();
+            h.add(FeatureKind::CircularPattern(CircularPattern {
+                seeds: Seeds::Features(vec![cut]),
+                axis: AxisRef::Feature(ax2),
+                count: 4,
+                angle: std::f64::consts::TAU,
+                equal: true,
+                reverse: false,
+                skip: vec![2],
+            }))
+            .unwrap();
+        });
+        assert!(doc.errors().is_empty(), "{:?}", doc.errors());
+        assert!((vol(&doc) - (64000.0 - 3.0 * hole_v)).abs() < 3.0, "{}", vol(&doc));
+        // Mirror the whole body about a plane at x = 50: two cubes.
+        doc.edit(|h| {
+            let p = h
+                .add(FeatureKind::RefPlane(RefPlaneDef::Offset {
+                    base: PlaneRef::Std(StdPlane::Right),
+                    distance: 50.0,
+                    flip: false,
+                }))
+                .unwrap();
+            h.add(FeatureKind::Mirror(Mirror {
+                seeds: Seeds::Bodies,
+                plane: PlaneRef::Feature(p),
+                merge: false,
+            }))
+            .unwrap();
+        });
+        assert_eq!(doc.bodies().len(), 2);
+        assert!(
+            (vol(&doc) - 2.0 * (64000.0 - 3.0 * hole_v)).abs() < 6.0,
+            "{}",
+            vol(&doc)
+        );
+        let (_, hi) = threebcad_kernel::boolean::bbox(&doc.bodies()[1].solid);
+        assert!((hi[0] - 100.0).abs() < 1e-6);
+    }
+
+    /// A closed polygon as a sketch.
+    fn polygon_sketch(points: &[[f64; 2]]) -> Sketch {
+        let mut s = Sketch::default();
+        let p: Vec<_> = points.iter().map(|q| s.add_point(q[0], q[1])).collect();
+        for i in 0..p.len() {
+            s.add_line(p[i], p[(i + 1) % p.len()]);
+        }
+        s
+    }
+
+    #[test]
+    fn draft_finds_the_right_seed_of_a_mirror() {
+        // A plate with a square and a hexagonal boss, both mirrored and merged into the plate.
+        let mut doc = PartDocument::new("Part");
+        let plate = polygon_sketch(&[[-40.0, -20.0], [40.0, -20.0], [40.0, 20.0], [-40.0, 20.0]]);
+        let square = polygon_sketch(&[[10.0, -5.0], [20.0, -5.0], [20.0, 5.0], [10.0, 5.0]]);
+        let hexagon: Vec<[f64; 2]> = (0..6)
+            .map(|i| {
+                let a = PI / 3.0 * i as f64;
+                [30.0 + 5.0 * a.cos(), 5.0 * a.sin()]
+            })
+            .collect();
+        let hexagon = polygon_sketch(&hexagon);
+        let mirror = doc.edit(|h| {
+            let s = h.add_sketch(plate, Plane::TOP);
+            h.add_extrude(s, 5.0).unwrap();
+            let s = h.add_sketch(square, Plane::TOP);
+            let square = h.add_extrude(s, 10.0).unwrap();
+            let s = h.add_sketch(hexagon, Plane::TOP);
+            let hexagon = h.add_extrude(s, 10.0).unwrap();
+            h.add(FeatureKind::Mirror(Mirror {
+                seeds: Seeds::Features(vec![square, hexagon]),
+                plane: PlaneRef::Std(StdPlane::Right),
+                merge: true,
+            }))
+            .unwrap()
+        });
+        assert!(doc.errors().is_empty(), "{:?}", doc.errors());
+        let before = vol(&doc);
+        // Wall 5 exists only on the hexagon; the first seed has four walls.
+        let (body, face) = doc
+            .bodies()
+            .iter()
+            .enumerate()
+            .find_map(|(b, body)| {
+                let wall = |t: &crate::naming::FaceTag| t.feature == mirror && t.face == ToolFace::Side(5);
+                body.tags.iter().position(wall).map(|f| (b, f))
+            })
+            .expect("the mirrored hexagon's wall");
+        let wall = doc.face_ref(body, face).unwrap();
+        doc.edit(|h| {
+            h.add(FeatureKind::Draft {
+                neutral: PlaneRef::Std(StdPlane::Top),
+                faces: vec![wall],
+                angle: 0.1,
+            })
+            .unwrap();
+        });
+        assert!(doc.errors().is_empty(), "{:?}", doc.errors());
+        assert!((vol(&doc) - before).abs() > 1.0, "the wall did not move");
+    }
+
+    #[test]
+    fn a_failed_feature_leaves_every_body_as_it_was() {
+        // A hollow ring (its void refuses booleans) and a block to its right.
+        let mut ring = Sketch::circle([10.0, 0.0], 3.0);
+        let c = ring.add_point(10.0, 0.0);
+        ring.add_circle(c, 2.0);
+        let (a0, a1) = (ring.add_point(0.0, -5.0), ring.add_point(0.0, 5.0));
+        let axis = ring.add_line(a0, a1);
+        ring.set_construction(axis, true);
+        let block = polygon_sketch(&[[20.0, -5.0], [30.0, -5.0], [30.0, 5.0], [20.0, 5.0]]);
+        let mut doc = PartDocument::new("Part");
+        doc.edit(|h| {
+            let s = h.add_sketch(ring, Plane::FRONT);
+            h.add(FeatureKind::Revolve(Revolve::new(s, false))).unwrap();
+            let s = h.add_sketch(block, Plane::TOP);
+            h.add_extrude(s, 4.0).unwrap();
+        });
+        assert!(doc.errors().is_empty(), "{:?}", doc.errors());
+        assert_eq!(doc.bodies().len(), 2);
+        let before = vol(&doc);
+        // One slot through the block, one through the ring: the second tool fails.
+        let cutter = |x0: f64, x1: f64| [[x0, -1.0], [x1, -1.0], [x1, 1.0], [x0, 1.0]];
+        let mut cuts = polygon_sketch(&cutter(24.0, 26.0));
+        let extra = cutter(9.0, 11.0).map(|q| cuts.add_point(q[0], q[1]));
+        for i in 0..4 {
+            cuts.add_line(extra[i], extra[(i + 1) % 4]);
+        }
+        let cut = doc.edit(|h| {
+            let s = h.add_sketch(cuts, Plane::TOP);
+            let mut e = Extrude::cut(s, 20.0);
+            e.end = End::MidPlane(20.0);
+            h.add(FeatureKind::Extrude(e)).unwrap()
+        });
+        assert!(doc.errors()[&cut].contains("void"), "{:?}", doc.errors());
+        assert_eq!(doc.bodies().len(), 2);
+        assert!((vol(&doc) - before).abs() < 1e-6, "{} vs {before}", vol(&doc));
+    }
+
+    #[test]
+    fn suppress_and_incremental_rebuild() {
+        let mut doc = PartDocument::demo();
+        let first = doc.history().iter().next().unwrap().0;
+        doc.edit(|h| h.set_suppressed(first, true));
+        assert_eq!(doc.bodies().len(), 1, "the sketch and its extrude are out");
+        assert!(doc.errors().is_empty());
+        doc.undo();
+        assert_eq!(doc.bodies().len(), 2);
+        // Editing the last feature only re-evaluates that one.
+        let last = doc.history().iter().last().unwrap().0;
+        doc.edit(|h| {
+            if let Some(FeatureKind::Extrude(e)) = h.get_mut(last).map(|f| &mut f.kind) {
+                e.end = End::Blind(41.0);
+            }
+        });
+        assert_eq!(doc.built().evaluated, 1);
+        doc.force_rebuild();
+        assert_eq!(doc.built().evaluated, 4);
+    }
+
+    #[test]
+    fn reference_planes_and_rib() {
+        // L-bracket on the Front plane, 20 deep; a diagonal rib in the inner corner, mid-plane.
+        let mut l = Sketch::default();
+        let p = [
+            [0.0, 0.0],
+            [20.0, 0.0],
+            [20.0, 2.0],
+            [2.0, 2.0],
+            [2.0, 20.0],
+            [0.0, 20.0],
+        ]
+        .map(|q| l.add_point(q[0], q[1]));
+        for i in 0..6 {
+            l.add_line(p[i], p[(i + 1) % 6]);
+        }
+        let mut doc = PartDocument::new("Part");
+        doc.edit(|h| {
+            let s = h.add_sketch(l, Plane::FRONT);
+            let mut e = Extrude::boss(s, 20.0);
+            e.reverse = true; // grow towards +Y
+            h.add(FeatureKind::Extrude(e)).unwrap();
+        });
+        let before = vol(&doc);
+        let mid = doc.edit(|h| {
+            h.add(FeatureKind::RefPlane(RefPlaneDef::Offset {
+                base: PlaneRef::Std(StdPlane::Front),
+                distance: -10.0,
+                flip: false,
+            }))
+            .unwrap()
+        });
+        let plane = doc.plane_of(mid).unwrap();
+        assert!(
+            (plane.origin[1] - 10.0).abs() < 1e-9,
+            "Front normal is -Y, so -10 moves to +Y"
+        );
+        let mut rib = Sketch::default();
+        let (a, b) = (rib.add_point(2.0, 12.0), rib.add_point(12.0, 2.0));
+        rib.add_line(a, b);
+        doc.edit(|h| {
+            let s = h.add_sketch_on(rib, plane, PlaneRef::Feature(mid)).unwrap();
+            h.add(FeatureKind::Rib {
+                sketch: s,
+                thickness: 2.0,
+                both_sides: true,
+                flip: false,
+            })
+            .unwrap()
+        });
+        assert!(doc.errors().is_empty(), "{:?}", doc.errors());
+        // The triangle between the line and the corner (legs 10), 2 thick.
+        let added = vol(&doc) - before;
+        assert!((added - 0.5 * 10.0 * 10.0 * 2.0).abs() < 0.5, "{added}");
     }
 }

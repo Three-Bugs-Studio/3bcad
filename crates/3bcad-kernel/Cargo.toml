@@ -9,4 +9,6 @@ rust-version.workspace = true
 [dependencies]
 truck-modeling.workspace = true
 truck-meshalgo.workspace = true
+truck-shapeops.workspace = true
+nalgebra.workspace = true
 anyhow.workspace = true

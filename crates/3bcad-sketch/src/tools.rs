@@ -811,6 +811,139 @@ impl Sketch {
         Ok(out)
     }
 
+    /// Groups of the linear and circular sketch patterns in this sketch.
+    pub fn pattern_groups(&self) -> Vec<u32> {
+        let mut g: Vec<u32> = self.constraints.iter().filter_map(Constraint::pattern_group).collect();
+        g.sort_unstable();
+        g.dedup();
+        g
+    }
+
+    /// Instances in a pattern, the original included.
+    pub fn pattern_count(&self, group: u32) -> usize {
+        self.constraints
+            .iter()
+            .filter_map(|c| match *c {
+                LinearCopy { step, group: g, .. } | CircularCopy { step, group: g, .. } if g == group => Some(step),
+                _ => None,
+            })
+            .max()
+            .map_or(1, |s| s as usize + 1)
+    }
+
+    /// Changes how many instances a pattern has: copies are removed from the end or added after it.
+    /// A full-turn circular pattern stays a full turn, so its spacing changes.
+    pub fn set_pattern_count(&mut self, group: u32, count: usize) -> Result<()> {
+        if count < 2 {
+            return Err("A pattern needs at least 2 instances".into());
+        }
+        let current = self.pattern_count(group);
+        if count == current || current < 2 {
+            return Ok(());
+        }
+        let members: Vec<Constraint> = self
+            .constraints
+            .iter()
+            .filter(|c| c.pattern_group() == Some(group))
+            .cloned()
+            .collect();
+        let full_step = match members[0] {
+            CircularCopy { angle, .. } if (angle * current as f64 - TAU).abs() < 1e-9 => Some(TAU / count as f64),
+            _ => None,
+        };
+        if let Some(step) = full_step {
+            for c in &mut self.constraints {
+                if let CircularCopy { angle: a, group: g, .. } = c {
+                    if *g == group {
+                        *a = step;
+                    }
+                }
+            }
+        }
+        if count < current {
+            let doomed: Vec<PointId> = members
+                .iter()
+                .filter_map(|c| match *c {
+                    LinearCopy { dst, step, .. } | CircularCopy { dst, step, .. } if step as usize >= count => {
+                        Some(dst)
+                    }
+                    _ => None,
+                })
+                .collect();
+            self.remove(&doomed, &[], &[]);
+            return Ok(());
+        }
+        // The seed: entities made only of the step-1 sources (and the circular center, though not
+        // of the center alone: a circle around it stays put).
+        let mut sources: Vec<PointId> = members
+            .iter()
+            .filter_map(|c| match *c {
+                LinearCopy { src, step: 1, .. } | CircularCopy { src, step: 1, .. } => Some(src),
+                _ => None,
+            })
+            .collect();
+        let moving = sources.clone();
+        if let Some(CircularCopy { center, .. }) = members.first() {
+            sources.push(*center);
+        }
+        let seeds: Vec<EntityId> = self
+            .entity_ids()
+            .filter(|&e| {
+                let points = self.entity(e).points();
+                points.iter().all(|p| sources.contains(p)) && points.iter().any(|p| moving.contains(p))
+            })
+            .collect();
+        if seeds.is_empty() {
+            return Err("The pattern's original entities are gone".into());
+        }
+        match members[0] {
+            LinearCopy { spacing, angle, .. } => {
+                let dir = [angle.cos(), angle.sin()];
+                for k in current..count {
+                    let shift = geom::scale(dir, spacing * k as f64);
+                    let (_, pairs, circles) = self.copy_group(&seeds, &|p| geom::add(p, shift), false, &|_| false);
+                    for (src, dst) in pairs {
+                        self.constrain(LinearCopy {
+                            src,
+                            dst,
+                            step: k as u32,
+                            spacing,
+                            angle,
+                            group,
+                        });
+                    }
+                    for (s, d) in circles {
+                        self.constrain(Equal(s, d));
+                    }
+                }
+            }
+            CircularCopy { center, angle, .. } => {
+                let step = full_step.unwrap_or(angle);
+                let c = self.point(center);
+                for k in current..count {
+                    let turn = step * k as f64;
+                    let rot = |p: P2| geom::add(c, geom::rotate(geom::sub(p, c), turn));
+                    let (_, pairs, circles) = self.copy_group(&seeds, &rot, false, &|p| p == center);
+                    for (src, dst) in pairs {
+                        self.constrain(CircularCopy {
+                            src,
+                            dst,
+                            center,
+                            step: k as u32,
+                            angle: step,
+                            group,
+                        });
+                    }
+                    for (s, d) in circles {
+                        self.constrain(Equal(s, d));
+                    }
+                }
+            }
+            _ => unreachable!("pattern groups only hold copy relations"),
+        }
+        Ok(())
+    }
+
     /// The dimension Smart Dimension creates for the picked items, at its current value.
     /// `place` (where the label is dropped) picks horizontal/vertical/aligned for point pairs.
     pub fn smart_dimension(&self, items: &[Item], place: P2) -> Option<Constraint> {
@@ -1254,6 +1387,71 @@ mod tests {
         assert!(close(s.point(s.entity(copies[0]).center().unwrap()), [0.0, 5.0]));
         assert!(s.solve().converged);
         assert_ne!(s.analyze().status, Status::OverDefined);
+
+        // The instance count stays editable (#15): a full turn of 4 becomes 6 at 60°, then 3.
+        let g = s.pattern_groups()[0];
+        assert_eq!(s.pattern_count(g), 4);
+        s.set_pattern_count(g, 6).unwrap();
+        assert!(s.solve().converged);
+        assert_eq!((s.pattern_count(g), s.entities().len()), (6, 6));
+        // Evenly spaced around the (free) pattern center: 60° apart.
+        let o2 = s.point(o);
+        let mut angles: Vec<f64> = s
+            .entity_ids()
+            .filter_map(|e| s.entity(e).center())
+            .map(|p| geom::angle_of(geom::sub(s.point(p), o2)))
+            .collect();
+        angles.sort_by(f64::total_cmp);
+        assert!(
+            angles.windows(2).all(|w| (w[1] - w[0] - PI / 3.0).abs() < 1e-6),
+            "{angles:?}"
+        );
+        s.set_pattern_count(g, 3).unwrap();
+        assert!(s.solve().converged);
+        assert_eq!((s.pattern_count(g), s.entities().len()), (3, 3));
+        // Fewer instances spread out too: 120° apart.
+        let o2 = s.point(o);
+        let mut angles: Vec<f64> = s
+            .entity_ids()
+            .filter_map(|e| s.entity(e).center())
+            .map(|p| geom::angle_of(geom::sub(s.point(p), o2)))
+            .collect();
+        angles.sort_by(f64::total_cmp);
+        assert!(
+            angles.windows(2).all(|w| (w[1] - w[0] - TAU / 3.0).abs() < 1e-6),
+            "{angles:?}"
+        );
+        assert!(s.set_pattern_count(g, 1).is_err());
+
+        let mut s = Sketch::default();
+        let (a, b) = (s.add_point(0.0, 0.0), s.add_point(1.0, 0.0));
+        let l = s.add_line(a, b);
+        s.linear_pattern(&[l], 2, 5.0, 0.0).unwrap();
+        let g = s.pattern_groups()[0];
+        s.set_pattern_count(g, 4).unwrap();
+        assert!(s.solve().converged);
+        let ends: Vec<P2> = s
+            .entity_ids()
+            .filter_map(|e| s.entity(e).endpoints())
+            .map(|(p, _)| s.point(p))
+            .collect();
+        assert!(ends.iter().any(|p| close(*p, [15.0, 0.0])), "{ends:?}");
+    }
+
+    #[test]
+    fn raising_a_pattern_count_leaves_a_circle_around_its_center_alone() {
+        // A bolt circle: a big circle on the pattern center, and a hole repeated around it.
+        let mut s = Sketch::default();
+        let o = s.add_point(0.0, 0.0);
+        s.add_circle(o, 20.0);
+        let c = s.add_point(10.0, 0.0);
+        let hole = s.add_circle(c, 1.0);
+        s.circular_pattern(&[hole], o, 4, TAU).unwrap();
+        let g = s.pattern_groups()[0];
+        assert_eq!(s.entities().len(), 5);
+        s.set_pattern_count(g, 6).unwrap();
+        assert!(s.solve().converged);
+        assert_eq!(s.entities().len(), 7);
     }
 
     #[test]

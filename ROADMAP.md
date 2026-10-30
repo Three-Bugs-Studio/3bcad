@@ -28,7 +28,7 @@ Draw, constrain and dimension sketches directly in the viewport.
 - [ ] #12 Sketch fillet and sketch chamfer
 - [ ] #13 Trim and extend entities
 - [ ] #14 Offset entities
-- [ ] #15 Mirror entities and linear / circular sketch patterns
+- [x] #15 Mirror entities and linear / circular sketch patterns
 - [ ] #16 Construction geometry toggle and centerlines
 - [ ] #17 Sketch inferencing and automatic relations
 - [ ] #18 Smart Dimension tool in the viewport
@@ -44,31 +44,31 @@ Draw, constrain and dimension sketches directly in the viewport.
 
 The everyday SolidWorks part toolbox: cut, revolve, fillet, chamfer, shell, holes, patterns.
 
-- [ ] #26 Integrate boolean operations (truck-shapeops)
-- [ ] #27 Extruded Cut
-- [ ] #28 Merge result: combine touching bodies into one
-- [ ] #29 Extrude end conditions: Through All, Up To Next/Vertex/Surface, Mid Plane, Offset From Surface
-- [ ] #30 Extrude draft angle and thin feature
-- [ ] #31 Revolved Boss/Base and Revolved Cut
-- [ ] #32 Fillet: constant-radius edge fillet
-- [ ] #33 Chamfer
-- [ ] #34 Shell
-- [ ] #35 Hole Wizard: simple, counterbore, countersink and tapped holes
-- [ ] #36 Linear Pattern
-- [ ] #37 Circular Pattern
-- [ ] #38 Mirror features and bodies
-- [ ] #39 Reference geometry: planes, axes, points and coordinate systems
-- [ ] #40 Sketch on a planar face
-- [ ] #41 Edit Feature / Edit Sketch, rename and reorder in the FeatureManager
-- [ ] #42 Suppress / unsuppress features
-- [ ] #43 Persistent face/edge naming across rebuilds (topological naming)
-- [ ] #44 Incremental rebuild: only re-evaluate dirty features
-- [ ] #45 What's Wrong: rebuild error and warning panel
-- [ ] #46 Draft feature
-- [ ] #47 Rib feature
-- [ ] #48 Measure tool
-- [ ] #49 Mass properties
-- [ ] #50 Geometry regression corpus and benchmarks
+- [x] #26 Integrate boolean operations (truck-shapeops)
+- [x] #27 Extruded Cut
+- [x] #28 Merge result: combine touching bodies into one
+- [x] #29 Extrude end conditions: Through All, Up To Next/Vertex/Surface, Mid Plane, Offset From Surface
+- [x] #30 Extrude draft angle and thin feature
+- [x] #31 Revolved Boss/Base and Revolved Cut
+- [x] #32 Fillet: constant-radius edge fillet (straight edges; round edges wait on truck's torus booleans)
+- [x] #33 Chamfer
+- [x] #34 Shell
+- [x] #35 Hole Wizard: simple, counterbore, countersink and tapped holes
+- [x] #36 Linear Pattern
+- [x] #37 Circular Pattern
+- [x] #38 Mirror features and bodies
+- [x] #39 Reference geometry: planes, axes, points and coordinate systems
+- [x] #40 Sketch on a planar face
+- [x] #41 Edit Feature / Edit Sketch, rename and reorder in the FeatureManager
+- [x] #42 Suppress / unsuppress features
+- [x] #43 Persistent face/edge naming across rebuilds (topological naming)
+- [x] #44 Incremental rebuild: only re-evaluate dirty features
+- [x] #45 What's Wrong: rebuild error and warning panel
+- [x] #46 Draft feature
+- [x] #47 Rib feature
+- [x] #48 Measure tool
+- [x] #49 Mass properties
+- [x] #50 Geometry regression corpus and benchmarks
 
 ## [v0.4.0 – Advanced Part Modeling](https://github.com/Three-Bugs-Studio/3bcad/milestone/3)
 

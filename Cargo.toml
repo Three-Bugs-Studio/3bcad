@@ -40,6 +40,7 @@ petgraph = "0.7"
 truck-modeling = "0.6"
 truck-meshalgo = "0.4"
 truck-stepio = "0.3"
+truck-shapeops = { version = "0.4", default-features = false }
 
 # Export
 zip = { version = "2", default-features = false, features = ["deflate"] }
@@ -51,4 +52,8 @@ anyhow = "1.0"
 
 # truck tessellation and the LM solver are painfully slow unoptimised.
 [profile.dev.package."*"]
+opt-level = 2
+
+# Our kernel bridge runs the same hot loops (naming, topology) on every rebuild.
+[profile.dev.package.threebcad-kernel]
 opt-level = 2
