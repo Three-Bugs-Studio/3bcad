@@ -75,12 +75,13 @@ sequenceDiagram
 
 1. **Kernel**: if no existing `Tool` shape fits, add one (or a helper like `offset::thicken_chain`) with
    a test that checks a physical property (volume) and watertightness (see `mesher.rs` tests).
-2. **Core**: add a variant to `FeatureKind` in `feature.rs` (with its `prefix`, `icon` and every
-   reference in `references()`), and a match arm in `Eval::run` (`rebuild.rs`) that builds tools and
+2. **Core**: add a variant to `FeatureKind` in `feature.rs` (with its `prefix` and every reference
+   in `references()`), and a match arm in `Eval::run` (`rebuild.rs`) that builds tools and
    applies them with `Eval::apply`. Add a `document.rs` test that builds it, changes a dimension and
    checks the volume; add a part to `tests/parts/corpus.rs` if it is a new kind of geometry.
 3. **App**: a ribbon button in `ui/ribbon.rs` (Features tab) that fills the feature from the selection,
-   and its parameters in `ui/properties.rs` (the `Ed` helper turns drags into one undo step).
+   an icon in `ui/icons.rs` (`of_feature`), and its parameters in `ui/properties.rs` (the `Ed` helper
+   turns drags into one undo step).
 4. **Docs**: add a line to `CHANGELOG.md` under `[Unreleased]`.
 
 ## Adding a sketch relation

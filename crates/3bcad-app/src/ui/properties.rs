@@ -86,6 +86,7 @@ fn number<Num: egui::emath::Numeric>(v: &mut Num) -> egui::DragValue<'_> {
 struct Ed {
     changed: bool,
     dragging: bool,
+    drag_ended: bool,
 }
 
 impl Ed {
@@ -93,10 +94,13 @@ impl Ed {
         if r.changed() {
             self.changed = true;
         }
-        if r.dragged() {
-            self.dragging = true;
-        }
+        self.watch_drag(&r);
         r
+    }
+
+    fn watch_drag(&mut self, r: &egui::Response) {
+        self.dragging |= r.dragged();
+        self.drag_ended |= r.drag_stopped();
     }
 
     fn length(&mut self, ui: &mut egui::Ui, label: &str, v: &mut f64, min: f64) {
@@ -268,7 +272,7 @@ fn feature_panel(app: &mut App, ctx: &egui::Context) {
     let thread = app.doc.built().threads.get(&id).cloned();
     let mut p = picks(app);
     p.feature = app.selected;
-    let h = app.doc.history().clone();
+    let h = app.doc.history();
 
     let mut close = false;
     let mut edit_sketch = false;
@@ -276,6 +280,7 @@ fn feature_panel(app: &mut App, ctx: &egui::Context) {
     let mut ed = Ed {
         changed: false,
         dragging: false,
+        drag_ended: false,
     };
     egui::SidePanel::right("property_manager")
         .resizable(true)
@@ -307,7 +312,7 @@ fn feature_panel(app: &mut App, ctx: &egui::Context) {
                             });
                         }
                         if let Some(o) = on {
-                            ui.label(format!("Follows {}", describe_plane(&h, o)));
+                            ui.label(format!("Follows {}", describe_plane(h, o)));
                         }
                         edit_sketch = ui.button("✏ Edit Sketch").clicked();
                         let dims: Vec<_> = sketch
@@ -329,6 +334,7 @@ fn feature_panel(app: &mut App, ctx: &egui::Context) {
                                 };
                                 let range = if is_angle { -360.0..=360.0 } else { 0.01..=10_000.0 };
                                 let r = ui.add(number(&mut shown).speed(0.2).range(range).suffix(suffix));
+                                ed.watch_drag(&r);
                                 if r.changed() {
                                     sketch_dim = Some((i, if is_angle { shown.to_radians() } else { shown }));
                                 }
@@ -415,7 +421,7 @@ fn feature_panel(app: &mut App, ctx: &egui::Context) {
                         let axis_name = match &r.axis {
                             None => "first centerline of the sketch".to_string(),
                             Some(RevolveAxis::SketchLine(e)) => format!("sketch line {}", e.0 + 1),
-                            Some(RevolveAxis::Axis(a)) => describe_axis(&h, a),
+                            Some(RevolveAxis::Axis(a)) => describe_axis(h, a),
                         };
                         ui.horizontal_wrapped(|ui| {
                             ui.label(format!("Axis: {axis_name}"));
@@ -535,9 +541,9 @@ fn feature_panel(app: &mut App, ctx: &egui::Context) {
                         ui.weak("Holes go at the sketch's points; edit the sketch to move or add them.");
                     }
                     FeatureKind::LinearPattern(lp) => {
-                        seeds_editor(&mut ed, ui, &h, id, &mut lp.seeds);
+                        seeds_editor(&mut ed, ui, h, id, &mut lp.seeds);
                         ui.label(RichText::new("Direction 1").strong());
-                        axis_editor(&mut ed, ui, &h, &mut lp.dir1.axis, &p, "Along");
+                        axis_editor(&mut ed, ui, h, &mut lp.dir1.axis, &p, "Along");
                         ed.length(ui, "Spacing", &mut lp.dir1.spacing, 0.001);
                         ed.count(ui, "Instances", &mut lp.dir1.count);
                         ed.check(ui, &mut lp.dir1.reverse, "Reverse");
@@ -552,7 +558,7 @@ fn feature_panel(app: &mut App, ctx: &egui::Context) {
                             });
                         }
                         if let Some(d) = &mut lp.dir2 {
-                            axis_editor(&mut ed, ui, &h, &mut d.axis, &p, "Along");
+                            axis_editor(&mut ed, ui, h, &mut d.axis, &p, "Along");
                             ed.length(ui, "Spacing", &mut d.spacing, 0.001);
                             ed.count(ui, "Instances", &mut d.count);
                             ed.check(ui, &mut d.reverse, "Reverse");
@@ -574,8 +580,8 @@ fn feature_panel(app: &mut App, ctx: &egui::Context) {
                         }
                     }
                     FeatureKind::CircularPattern(cp) => {
-                        seeds_editor(&mut ed, ui, &h, id, &mut cp.seeds);
-                        axis_editor(&mut ed, ui, &h, &mut cp.axis, &p, "Axis");
+                        seeds_editor(&mut ed, ui, h, id, &mut cp.seeds);
+                        axis_editor(&mut ed, ui, h, &mut cp.axis, &p, "Axis");
                         ed.count(ui, "Instances", &mut cp.count);
                         ed.check(ui, &mut cp.equal, "Equal spacing");
                         ed.angle(
@@ -602,15 +608,15 @@ fn feature_panel(app: &mut App, ctx: &egui::Context) {
                         }
                     }
                     FeatureKind::Mirror(m) => {
-                        seeds_editor(&mut ed, ui, &h, id, &mut m.seeds);
-                        plane_editor(&mut ed, ui, &h, &mut m.plane, &p, "Mirror face/plane");
+                        seeds_editor(&mut ed, ui, h, id, &mut m.seeds);
+                        plane_editor(&mut ed, ui, h, &mut m.plane, &p, "Mirror face/plane");
                         if m.seeds == Seeds::Bodies {
                             ed.check(ui, &mut m.merge, "Merge solids");
                         }
                     }
                     FeatureKind::RefPlane(def) => match def {
                         RefPlaneDef::Offset { base, distance, flip } => {
-                            plane_editor(&mut ed, ui, &h, base, &p, "Offset from");
+                            plane_editor(&mut ed, ui, h, base, &p, "Offset from");
                             ui.horizontal(|ui| {
                                 ui.label("Distance");
                                 ed.track(ui.add(number(distance).speed(0.2).suffix(" mm")));
@@ -618,16 +624,16 @@ fn feature_panel(app: &mut App, ctx: &egui::Context) {
                             ed.check(ui, flip, "Flip normal");
                         }
                         RefPlaneDef::Angle { base, axis, angle } => {
-                            plane_editor(&mut ed, ui, &h, base, &p, "Base");
-                            axis_editor(&mut ed, ui, &h, axis, &p, "Through");
+                            plane_editor(&mut ed, ui, h, base, &p, "Base");
+                            axis_editor(&mut ed, ui, h, axis, &p, "Through");
                             ed.angle(ui, "Angle", angle, -360.0..=360.0);
                         }
                         RefPlaneDef::ThreePoint(_) => {
                             ui.label("Through three points");
                         }
                         RefPlaneDef::Mid(a, b) => {
-                            plane_editor(&mut ed, ui, &h, a, &p, "First");
-                            plane_editor(&mut ed, ui, &h, b, &p, "Second");
+                            plane_editor(&mut ed, ui, h, a, &p, "First");
+                            plane_editor(&mut ed, ui, h, b, &p, "Second");
                         }
                     },
                     FeatureKind::RefAxis(def) => {
@@ -672,14 +678,14 @@ fn feature_panel(app: &mut App, ctx: &egui::Context) {
                         });
                         let mut x = c.x.clone().unwrap_or(AxisRef::Std(0));
                         let mut z = c.z.clone().unwrap_or(AxisRef::Std(2));
-                        axis_editor(&mut ed, ui, &h, &mut x, &p, "X");
-                        axis_editor(&mut ed, ui, &h, &mut z, &p, "Z");
+                        axis_editor(&mut ed, ui, h, &mut x, &p, "X");
+                        axis_editor(&mut ed, ui, h, &mut z, &p, "Z");
                         c.x = Some(x);
                         c.z = Some(z);
                     }
                     FeatureKind::Draft { neutral, faces, angle } => {
                         ed.angle(ui, "Draft angle", angle, -60.0..=60.0);
-                        plane_editor(&mut ed, ui, &h, neutral, &p, "Neutral plane");
+                        plane_editor(&mut ed, ui, h, neutral, &p, "Neutral plane");
                         if refs_line(&mut ed, ui, "faces to draft", faces.len(), !p.faces.is_empty()) {
                             *faces = p.faces.clone();
                         }
@@ -709,7 +715,7 @@ fn feature_panel(app: &mut App, ctx: &egui::Context) {
         app.edit_sketch(id);
     }
     if let Some((param, value)) = sketch_dim {
-        app.doc.edit_merging(Some(key(id, param)), |h| {
+        app.doc.edit_merging(ed.dragging.then(|| key(id, param)), |h| {
             if let Some(FeatureKind::Sketch { sketch, .. }) = h.get_mut(id).map(|f| &mut f.kind) {
                 sketch.set_dimension(param, value);
             }
@@ -724,6 +730,9 @@ fn feature_panel(app: &mut App, ctx: &egui::Context) {
             }
             Err(e) => app.status = e.to_string(),
         }
+    }
+    if ed.drag_ended {
+        app.doc.end_merge();
     }
 }
 

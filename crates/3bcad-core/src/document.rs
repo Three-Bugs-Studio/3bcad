@@ -105,6 +105,11 @@ impl PartDocument {
         r
     }
 
+    /// Ends a run of merged edits: the next one is a new undo step, even with the same key.
+    pub fn end_merge(&mut self) {
+        self.merge_key = None;
+    }
+
     pub fn can_undo(&self) -> bool {
         !self.undo.is_empty()
     }
@@ -318,10 +323,68 @@ mod tests {
                 }
             });
         }
+        // A second drag of the same dimension is its own step.
+        doc.end_merge();
+        doc.edit_merging(Some(1), |h| {
+            if let Some(FeatureKind::Extrude(e)) = h.get_mut(extrude).map(|f| &mut f.kind) {
+                e.end = End::Blind(34.0);
+            }
+        });
+        doc.undo();
+        assert!(
+            matches!(&doc.history().get(extrude).unwrap().kind, FeatureKind::Extrude(e) if e.end == End::Blind(33.0))
+        );
         doc.undo();
         assert!(!doc.can_undo());
         assert!(
             matches!(&doc.history().get(extrude).unwrap().kind, FeatureKind::Extrude(e) if e.end == End::Blind(30.0))
+        );
+    }
+
+    #[test]
+    fn a_reference_warns_when_its_twins_change() {
+        // Two slots cut a block in three, so its top face is three twins. A sketch sits on the middle.
+        let mut doc = PartDocument::new("Part");
+        cube(&mut doc, 30.0);
+        let slot = |x: f64| polygon_sketch(&[[x, -1.0], [x + 2.0, -1.0], [x + 2.0, 31.0], [x, 31.0]]);
+        let (first, second) = (slot(8.0), slot(18.0));
+        let cut = |h: &mut History, sketch: Sketch| {
+            let s = h.add_sketch(sketch, Plane::TOP);
+            let mut e = Extrude::cut(s, 0.0);
+            e.end = End::MidPlane(100.0);
+            h.add(FeatureKind::Extrude(e)).unwrap()
+        };
+        let first = doc.edit(|h| {
+            let c = cut(h, first);
+            cut(h, second);
+            c
+        });
+        assert_eq!(doc.bodies().len(), 3);
+        let (b, f) = doc
+            .bodies()
+            .iter()
+            .enumerate()
+            .find_map(|(b, body)| {
+                let middle = |f: &threebcad_kernel::topology::TopoFace| {
+                    f.plane
+                        .is_some_and(|p| p.normal()[2] > 0.5 && (p.origin[2] - 30.0).abs() < 1e-6)
+                        && (10.0..18.0).contains(&f.sample[0])
+                };
+                body.topo.faces.iter().position(middle).map(|f| (b, f))
+            })
+            .expect("the middle of the top face");
+        let top = doc.face_ref(b, f).unwrap();
+        let sketch = doc.edit(|h| {
+            h.add_sketch_on(Sketch::circle([14.0, 15.0], 1.0), Plane::TOP, PlaneRef::Face(top))
+                .unwrap()
+        });
+        assert!(doc.warnings().is_empty(), "{:?}", doc.warnings());
+        // With the first slot gone the left and middle merge: index 1 is now the right-hand piece.
+        doc.edit(|h| h.remove(first));
+        assert!(
+            doc.warnings()[&sketch].contains("split differently"),
+            "{:?}",
+            doc.warnings()
         );
     }
 

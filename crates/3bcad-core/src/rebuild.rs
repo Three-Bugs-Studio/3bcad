@@ -2,6 +2,7 @@
 //! a revolution) that add to, cut from or intersect the bodies; the steps are recorded per body so
 //! patterns, mirrors, Shell and Draft can replay or move them.
 
+use std::cell::Cell;
 use std::collections::HashMap;
 use std::f64::consts::TAU;
 use std::sync::Arc;
@@ -274,6 +275,8 @@ type Tagged = (Solid, Arc<Topology>, Vec<FaceTag>);
 struct Eval {
     s: Rebuild,
     id: FeatureId,
+    /// A reference this feature used may have moved to another twin.
+    shifted: Cell<bool>,
 }
 
 impl Eval {
@@ -296,18 +299,25 @@ impl Eval {
         }))
     }
 
+    /// Keeps the element of a resolved reference, noting if it may have moved.
+    fn found(&self, found: Option<((usize, usize), bool)>) -> Option<(usize, usize)> {
+        let (at, shifted) = found?;
+        self.shifted.set(self.shifted.get() || shifted);
+        Some(at)
+    }
+
     fn resolve_face(&self, r: &crate::naming::FaceRef) -> Result<(usize, usize)> {
-        naming::resolve_face(&self.s.bodies, r)
+        self.found(naming::find_face(&self.s.bodies, r))
             .ok_or_else(|| anyhow!("Missing reference: a face this feature uses no longer exists"))
     }
 
     fn resolve_edge(&self, r: &crate::naming::EdgeRef) -> Result<(usize, usize)> {
-        naming::resolve_edge(&self.s.bodies, r)
+        self.found(naming::find_edge(&self.s.bodies, r))
             .ok_or_else(|| anyhow!("Missing reference: an edge this feature uses no longer exists"))
     }
 
     fn resolve_vertex(&self, r: &crate::naming::VertexRef) -> Result<(usize, usize)> {
-        naming::resolve_vertex(&self.s.bodies, r)
+        self.found(naming::find_vertex(&self.s.bodies, r))
             .ok_or_else(|| anyhow!("Missing reference: a vertex this feature uses no longer exists"))
     }
 
@@ -1398,6 +1408,7 @@ impl Eval {
             let sub_eval = Eval {
                 s: Rebuild::default(),
                 id: s.feature,
+                shifted: Cell::new(false),
             };
             let pieces = sub_eval.tool_bodies(&s.tool, s.instance)?;
             if i == 0 {
@@ -1618,9 +1629,13 @@ pub fn rebuild(h: &mut History, cache: &mut Vec<CacheEntry>) -> Rebuild {
             let mut ev = Eval {
                 s: std::mem::take(&mut state),
                 id,
+                shifted: Cell::new(false),
             };
             let bodies = ev.s.bodies.clone();
             let result = ev.run(h);
+            if ev.shifted.get() {
+                ev.warn("a face or edge this feature uses was split differently since it was picked: check it is still the right one");
+            }
             state = ev.s;
             if let Err(e) = result {
                 // A failed feature changes nothing, even if some of its tools went through.

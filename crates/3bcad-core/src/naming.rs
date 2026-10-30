@@ -39,6 +39,8 @@ pub struct FaceRef {
     pub tag: FaceTag,
     /// Which one, when a face was split into several with the same tag.
     pub index: usize,
+    /// How many there were when it was picked.
+    pub twins: usize,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -46,6 +48,7 @@ pub struct EdgeRef {
     /// Tags of the two faces, sorted.
     pub faces: [FaceTag; 2],
     pub index: usize,
+    pub twins: usize,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -53,6 +56,7 @@ pub struct VertexRef {
     /// Tags of the faces meeting at the vertex, sorted.
     pub faces: Vec<FaceTag>,
     pub index: usize,
+    pub twins: usize,
 }
 
 /// What naming needs to know about a body.
@@ -164,40 +168,65 @@ fn vertex_candidates<B: Named>(bodies: &[B], key: &[FaceTag]) -> Vec<(usize, usi
 
 pub fn face_ref<B: Named>(bodies: &[B], body: usize, face: usize) -> Option<FaceRef> {
     let tag = *bodies.get(body)?.tags().get(face)?;
-    let index = face_candidates(bodies, tag).iter().position(|&c| c == (body, face))?;
-    Some(FaceRef { tag, index })
+    let twins = face_candidates(bodies, tag);
+    let index = twins.iter().position(|&c| c == (body, face))?;
+    Some(FaceRef {
+        tag,
+        index,
+        twins: twins.len(),
+    })
 }
 
 pub fn edge_ref<B: Named>(bodies: &[B], body: usize, edge: usize) -> Option<EdgeRef> {
     let b = bodies.get(body)?;
     (edge < b.topo().edges.len()).then_some(())?;
     let faces = edge_key(b, edge);
-    let index = edge_candidates(bodies, faces).iter().position(|&c| c == (body, edge))?;
-    Some(EdgeRef { faces, index })
+    let twins = edge_candidates(bodies, faces);
+    let index = twins.iter().position(|&c| c == (body, edge))?;
+    Some(EdgeRef {
+        faces,
+        index,
+        twins: twins.len(),
+    })
 }
 
 pub fn vertex_ref<B: Named>(bodies: &[B], body: usize, vertex: usize) -> Option<VertexRef> {
     let b = bodies.get(body)?;
     (vertex < b.topo().vertices.len()).then_some(())?;
     let faces = vertex_key(b, vertex);
-    let index = vertex_candidates(bodies, &faces)
-        .iter()
-        .position(|&c| c == (body, vertex))?;
-    Some(VertexRef { faces, index })
+    let twins = vertex_candidates(bodies, &faces);
+    let index = twins.iter().position(|&c| c == (body, vertex))?;
+    let twins = twins.len();
+    Some(VertexRef { faces, index, twins })
 }
 
-/// (body, face) a reference names now; an out-of-range index falls back to the last twin.
+/// A reference resolved: (body, element), and whether the twins are no longer the ones it was picked
+/// among, so it may have moved to a different one.
+type Found = ((usize, usize), bool);
+
+/// An out-of-range index falls back to the last twin.
+fn pick(now: Vec<(usize, usize)>, index: usize, twins: usize) -> Option<Found> {
+    let at = *now.get(index).or(now.last())?;
+    Some((at, now.len() != twins))
+}
+
+pub fn find_face<B: Named>(bodies: &[B], r: &FaceRef) -> Option<Found> {
+    pick(face_candidates(bodies, r.tag), r.index, r.twins)
+}
+
+pub fn find_edge<B: Named>(bodies: &[B], r: &EdgeRef) -> Option<Found> {
+    pick(edge_candidates(bodies, r.faces), r.index, r.twins)
+}
+
+pub fn find_vertex<B: Named>(bodies: &[B], r: &VertexRef) -> Option<Found> {
+    pick(vertex_candidates(bodies, &r.faces), r.index, r.twins)
+}
+
+/// (body, face) a reference names now.
 pub fn resolve_face<B: Named>(bodies: &[B], r: &FaceRef) -> Option<(usize, usize)> {
-    let c = face_candidates(bodies, r.tag);
-    c.get(r.index).or(c.last()).copied()
+    find_face(bodies, r).map(|(at, _)| at)
 }
 
 pub fn resolve_edge<B: Named>(bodies: &[B], r: &EdgeRef) -> Option<(usize, usize)> {
-    let c = edge_candidates(bodies, r.faces);
-    c.get(r.index).or(c.last()).copied()
-}
-
-pub fn resolve_vertex<B: Named>(bodies: &[B], r: &VertexRef) -> Option<(usize, usize)> {
-    let c = vertex_candidates(bodies, &r.faces);
-    c.get(r.index).or(c.last()).copied()
+    find_edge(bodies, r).map(|(at, _)| at)
 }
