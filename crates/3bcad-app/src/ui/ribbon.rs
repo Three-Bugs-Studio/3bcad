@@ -9,7 +9,7 @@ use threebcad_sketch::Sketch;
 
 use crate::app::{App, ExportFormat, ModelRef, RELEASE_NOTES_URL, VERSION};
 use crate::ui::sketch_mode::Tool;
-use crate::ui::{icons, theme};
+use crate::ui::{advanced, icons, theme};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum RibbonTab {
@@ -51,7 +51,10 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                     {
                         match &mut app.sketch {
                             Some(s) => s.redo(),
-                            None => app.doc.redo(),
+                            None => {
+                                app.doc.redo();
+                                app.status = "Redone".into();
+                            }
                         }
                     }
                     if ui
@@ -61,7 +64,10 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                     {
                         match &mut app.sketch {
                             Some(s) => s.undo(),
-                            None => app.doc.undo(),
+                            None => {
+                                app.doc.undo();
+                                app.status = "Undone".into();
+                            }
                         }
                     }
                 });
@@ -190,6 +196,7 @@ fn features(app: &mut App, ui: &mut egui::Ui) {
     ) {
         sketch_feature(app, |s| FeatureKind::Revolve(Revolve::new(s, false)));
     }
+    advanced::sweep_loft(app, ui);
     ui.separator();
     if tile(
         ui,
@@ -329,6 +336,7 @@ fn features(app: &mut App, ui: &mut egui::Ui) {
             });
         }
     });
+    advanced::shaping(app, ui);
     ui.separator();
     if tile(
         ui,
@@ -396,6 +404,9 @@ fn features(app: &mut App, ui: &mut egui::Ui) {
             );
         }
     });
+    advanced::patterns(app, ui);
+    ui.separator();
+    advanced::bodies(app, ui);
     ui.separator();
     stack(ui, |ui| {
         if small(
