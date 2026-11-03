@@ -50,7 +50,7 @@ The everyday SolidWorks part toolbox: cut, revolve, fillet, chamfer, shell, hole
 - [x] #29 Extrude end conditions: Through All, Up To Next/Vertex/Surface, Mid Plane, Offset From Surface
 - [x] #30 Extrude draft angle and thin feature
 - [x] #31 Revolved Boss/Base and Revolved Cut
-- [ ] #32 Fillet: constant-radius edge fillet
+- [x] #32 Fillet: constant-radius edge fillet
 - [x] #33 Chamfer
 - [x] #34 Shell
 - [x] #35 Hole Wizard: simple, counterbore, countersink and tapped holes
@@ -65,7 +65,7 @@ The everyday SolidWorks part toolbox: cut, revolve, fillet, chamfer, shell, hole
 - [x] #44 Incremental rebuild: only re-evaluate dirty features
 - [x] #45 What's Wrong: rebuild error and warning panel
 - [x] #46 Draft feature
-- [ ] #47 Rib feature
+- [x] #47 Rib feature
 - [x] #48 Measure tool
 - [x] #49 Mass properties
 - [x] #50 Geometry regression corpus and benchmarks
@@ -74,15 +74,15 @@ The everyday SolidWorks part toolbox: cut, revolve, fillet, chamfer, shell, hole
 
 Sweeps, lofts, multibody tools and threads.
 
-- [ ] #51 Swept Boss/Base and Swept Cut
-- [ ] #52 Lofted Boss/Base and Lofted Cut
-- [ ] #53 Variable-size fillet and face fillet
-- [ ] #54 Multibody tools: Combine, Split, Delete/Keep Body
-- [ ] #55 Thread feature (modeled threads)
-- [ ] #56 Helix and spiral curves
-- [ ] #57 Curve-driven and sketch-driven patterns
-- [ ] #58 Move/Copy Body and Scale
-- [ ] #59 Dome and Wrap
+- [x] #51 Swept Boss/Base and Swept Cut
+- [x] #52 Lofted Boss/Base and Lofted Cut
+- [x] #53 Variable-size fillet and face fillet
+- [x] #54 Multibody tools: Combine, Split, Delete/Keep Body
+- [x] #55 Thread feature (modeled threads)
+- [x] #56 Helix and spiral curves
+- [x] #57 Curve-driven and sketch-driven patterns
+- [x] #58 Move/Copy Body and Scale
+- [x] #59 Dome and Wrap
 
 ## [v0.5.0 – Files & Interop](https://github.com/Three-Bugs-Studio/3bcad/milestone/4)
 
