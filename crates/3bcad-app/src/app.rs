@@ -35,6 +35,8 @@ pub const MASS_TOL: f64 = 0.005;
 const EDGE_COLOR: [f32; 3] = [0.08, 0.08, 0.1];
 const PLANE_COLOR: [f32; 3] = [0.25, 0.45, 0.85];
 const REF_COLOR: [f32; 3] = [0.85, 0.5, 0.1];
+/// Helices and other 3D curves, drawn like sketch geometry.
+const SKETCH_CURVE_COLOR: [f32; 3] = [0.1, 0.35, 0.8];
 pub const VIEWPORT_BG: egui::Color32 = ui::theme::SKY_BOTTOM;
 
 pub use threebcad_core::StdPlane as RefPlane;
@@ -240,6 +242,12 @@ impl App {
                         g.line(f32x3(p.origin), f32x3(tip), color, pick);
                     }
                 }
+                FeatureKind::Helix(_) => {
+                    let Some(pts) = built.curves.get(&id) else { continue };
+                    for w in pts.windows(2) {
+                        g.line(f32x3(w[0]), f32x3(w[1]), SKETCH_CURVE_COLOR, pick);
+                    }
+                }
                 _ => continue,
             }
             refs.push(ModelRef::Feature(id));
@@ -325,6 +333,19 @@ impl App {
             ModelRef::Feature(id) if self.doc.point_of(id).is_some() => Some(PointRef::Feature(id)),
             _ => None,
         }
+    }
+
+    /// The feature selected in the FeatureManager, then those added with Ctrl+click, in order.
+    pub fn chosen_features(&self) -> Vec<FeatureId> {
+        let mut out: Vec<FeatureId> = self.selected.into_iter().collect();
+        for r in &self.selection {
+            if let ModelRef::Feature(id) = *r {
+                if !out.contains(&id) {
+                    out.push(id);
+                }
+            }
+        }
+        out
     }
 
     pub fn selected_faces(&self) -> Vec<FaceRef> {
@@ -650,9 +671,11 @@ impl App {
         } else {
             if undo {
                 self.doc.undo();
+                self.status = "Undone".into();
             }
             if redo {
                 self.doc.redo();
+                self.status = "Redone".into();
             }
             if escape && !typing {
                 self.selection.clear();
@@ -711,6 +734,9 @@ impl eframe::App for App {
             ctx.request_repaint();
         }
 
+        // The panels are laid out before the viewport takes a click, so a selection made there shows
+        // (and resizes the viewport for the PropertyManager) on the next frame: ask for it now.
+        let picked_before = (self.selected, self.selection.clone());
         ui::ribbon::show(self, ctx);
         egui::TopBottomPanel::bottom("status").show(ctx, |ui| {
             ui.horizontal(|ui| {
@@ -751,7 +777,7 @@ impl eframe::App for App {
             .frame(egui::Frame::new().fill(VIEWPORT_BG))
             .show(ctx, |ui| ui::viewport::show(self, ui));
         // Hover is found while painting the viewport, so show its highlight on the next frame.
-        if self.sync_states() {
+        if self.sync_states() || picked_before != (self.selected, self.selection.clone()) {
             ctx.request_repaint();
         }
     }
