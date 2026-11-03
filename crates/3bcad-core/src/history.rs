@@ -5,7 +5,7 @@ use petgraph::Direction;
 use threebcad_kernel::Plane;
 use threebcad_sketch::Sketch;
 
-use crate::feature::{Extrude, PlaneRef};
+use crate::feature::{CurveRef, Extrude, HelixDef, PlaneRef, SplitTool, Sweep, SweepProfile};
 use crate::{Feature, FeatureKind};
 
 pub type FeatureId = NodeIndex;
@@ -73,17 +73,46 @@ impl History {
                 self.graph[r].name
             );
         }
-        let needs_sketch = match kind {
-            FeatureKind::Extrude(e) => Some(e.sketch),
-            FeatureKind::Revolve(r) => Some(r.sketch),
-            FeatureKind::Hole(h) => Some(h.sketch),
-            FeatureKind::Rib { sketch, .. } => Some(*sketch),
-            _ => None,
+        let needs_sketch: Vec<FeatureId> = match kind {
+            FeatureKind::Extrude(e) => vec![e.sketch],
+            FeatureKind::Revolve(r) => vec![r.sketch],
+            FeatureKind::Hole(h) => vec![h.sketch],
+            FeatureKind::Rib { sketch, .. }
+            | FeatureKind::Helix(HelixDef { sketch, .. })
+            | FeatureKind::SketchPattern { sketch, .. }
+            | FeatureKind::Wrap { sketch, .. } => vec![*sketch],
+            FeatureKind::Sweep(w) => match (&w.profile, w.path) {
+                (SweepProfile::Sketch(p), CurveRef::Sketch(c)) => vec![*p, c],
+                (SweepProfile::Sketch(p), _) => vec![*p],
+                (_, CurveRef::Sketch(c)) => vec![c],
+                _ => Vec::new(),
+            },
+            FeatureKind::Loft(l) => l.profiles.iter().chain(&l.guides).copied().collect(),
+            FeatureKind::Split {
+                tool: SplitTool::Sketch(s),
+                ..
+            } => vec![*s],
+            _ => Vec::new(),
         };
-        if let Some(s) = needs_sketch {
+        for s in needs_sketch {
             ensure!(
                 self.get(s).is_some_and(|f| f.kind.is_sketch()),
                 "{} needs a sketch",
+                kind.prefix()
+            );
+        }
+        if let FeatureKind::Sweep(Sweep {
+            path: CurveRef::Helix(c),
+            ..
+        })
+        | FeatureKind::CurvePattern {
+            curve: CurveRef::Helix(c),
+            ..
+        } = kind
+        {
+            ensure!(
+                self.get(*c).is_some_and(|f| matches!(f.kind, FeatureKind::Helix(_))),
+                "{} needs a helix",
                 kind.prefix()
             );
         }
