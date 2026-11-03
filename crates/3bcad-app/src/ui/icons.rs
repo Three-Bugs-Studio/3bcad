@@ -850,6 +850,161 @@ pub fn paint(p: &Painter, r: Rect, name: &str, enabled: bool) {
             }
             k.ends(&[(0.5, 0.5)]);
         }
+        // v0.4 features.
+        "sweep" => {
+            k.fit([0.0, 0.0, 0.0], [1.0, 1.0, 1.0]);
+            let path: Vec<(f32, f32)> = (0..=20)
+                .map(|i| {
+                    let a = FRAC_PI_2 * i as f32 / 20.0;
+                    k.u(0.15 + 0.7 * (1.0 - a.cos()), 0.5, 0.15 + 0.7 * a.sin())
+                })
+                .collect();
+            k.tube(&path, 6.0, GOLD);
+            k.sk3(&ring([0.15, 0.5, 0.0], 0.16, 16));
+        }
+        "loft" => {
+            k.fit([0.0, 0.0, 0.0], [1.0, 1.0, 1.0]);
+            let n = 16;
+            let base: Vec<V3> = (0..n)
+                .map(|i| {
+                    let a = TAU * i as f32 / n as f32;
+                    let s = 0.5 / a.cos().abs().max(a.sin().abs());
+                    [0.5 + s * a.cos(), 0.5 + s * a.sin(), 0.0]
+                })
+                .collect();
+            let top = ring([0.5, 0.5, 1.0], 0.24, n);
+            let (_, normals) = edge_normals(&base);
+            k.walls(&base, &top, &normals, 1.0, GOLD);
+            k.face3(&top, &vec![shade([0.0, 0.0, 1.0]); n], GOLD);
+            k.outline3(&top, GOLD.ink);
+        }
+        "helix" => {
+            k.fit([0.0, 0.0, 0.0], [1.0, 1.0, 1.1]);
+            let pts: Vec<(f32, f32)> = (0..=96)
+                .map(|i| {
+                    let t = i as f32 / 96.0;
+                    let a = TAU * 3.0 * t;
+                    k.u(0.5 + 0.45 * a.cos(), 0.5 + 0.45 * a.sin(), 1.1 * t)
+                })
+                .collect();
+            k.sk(&pts);
+        }
+        "thread" => {
+            k.fit([0.0, 0.0, 0.0], [1.0, 1.0, 1.1]);
+            k.prism(&ring([0.5, 0.5, 0.0], 0.4, 24), [0.0, 0.0, 1.1], GOLD);
+            for i in 0..5 {
+                let z = 0.12 + 0.2 * i as f32;
+                let pts: Vec<(f32, f32)> = (0..=12)
+                    .map(|j| {
+                        let a = -FRAC_PI_2 * 0.2 + PI * 0.9 * j as f32 / 12.0 - PI * 0.25;
+                        k.u(0.5 + 0.4 * a.cos(), 0.5 + 0.4 * a.sin(), z + 0.12 * j as f32 / 12.0)
+                    })
+                    .collect();
+                k.line(&pts, GOLD.ink, 1.3);
+            }
+        }
+        "variable_fillet" | "face_fillet" => {
+            k.fit(o, [1.0, 1.0, 0.9]);
+            let mut prof = vec![[0.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 1.0, 0.45]];
+            prof.extend((1..=8).map(|i| {
+                let a = FRAC_PI_2 * i as f32 / 8.0;
+                [0.0, 0.55 + 0.45 * a.cos(), 0.45 + 0.45 * a.sin()]
+            }));
+            prof.push([0.0, 0.0, 0.9]);
+            k.prism(&prof, [1.0, 0.0, 0.0], GOLD);
+            if name == "variable_fillet" {
+                let (a, b) = (k.u(0.05, 0.86, 0.75), k.u(0.95, 0.86, 0.75));
+                k.bead(a.0, a.1, 0.06, BLUE);
+                k.bead(b.0, b.1, 0.11, BLUE);
+            } else {
+                k.plane3(&[[0.0, 0.0, 0.9], [1.0, 0.0, 0.9], [1.0, 0.55, 0.9], [0.0, 0.55, 0.9]]);
+            }
+        }
+        "combine" => {
+            k.fit(o, [1.3, 1.0, 0.7]);
+            k.prism(&rect3(0.0, 0.0, 0.8, 0.8, 0.0), [0.0, 0.0, 0.5], GOLD);
+            k.prism(&rect3(0.5, 0.3, 1.3, 1.0, 0.2), [0.0, 0.0, 0.5], GREY);
+            k.bead(0.8, 0.22, 0.13, GREEN);
+        }
+        "split" => {
+            k.fit([0.0, -0.1, -0.1], [1.2, 1.0, 0.8]);
+            k.prism(&rect3(0.0, 0.0, 0.5, 0.9, 0.0), [0.0, 0.0, 0.6], GOLD);
+            k.plane3(&[[0.6, -0.1, -0.1], [0.6, 1.0, -0.1], [0.6, 1.0, 0.8], [0.6, -0.1, 0.8]]);
+            k.prism(&rect3(0.7, 0.0, 1.2, 0.9, 0.0), [0.0, 0.0, 0.6], GOLD);
+        }
+        "delete_body" => {
+            k.fit(o, [1.0, 1.0, 0.8]);
+            k.prism(&rect3(0.0, 0.0, 1.0, 1.0, 0.0), [0.0, 0.0, 0.8], GREY);
+            k.tube(&[(0.55, 0.55), (0.92, 0.92)], 3.5, RED);
+            k.tube(&[(0.92, 0.55), (0.55, 0.92)], 3.5, RED);
+        }
+        "move_body" => {
+            k.fit(o, [1.0, 1.0, 0.8]);
+            k.prism(&rect3(0.0, 0.0, 0.7, 0.7, 0.0), [0.0, 0.0, 0.5], GOLD);
+            k.arrow((0.5, 0.5), (0.96, 0.5), GREEN);
+            k.arrow((0.5, 0.5), (0.5, 0.04), GREEN);
+        }
+        "scale" => {
+            k.fit(o, [1.0, 1.0, 1.0]);
+            k.outline3(&rect3(0.0, 0.0, 1.0, 1.0, 1.0), INK);
+            k.prism(&rect3(0.0, 0.0, 0.55, 0.55, 0.0), [0.0, 0.0, 0.55], GOLD);
+            k.arrow(k.u(0.55, 0.55, 0.55), k.u(1.0, 1.0, 1.0), GREEN);
+        }
+        "sketch_pattern" => {
+            k.fit(o, [1.0, 1.0, 0.3]);
+            k.plane3(&rect3(0.0, 0.0, 1.0, 1.0, 0.0));
+            for c in [[0.2, 0.25, 0.0], [0.75, 0.2, 0.0], [0.45, 0.75, 0.0]] {
+                k.prism(&ring(c, 0.13, 16), [0.0, 0.0, 0.3], GOLD);
+            }
+        }
+        "curve_pattern" => {
+            k.fit([-0.1, -0.1, 0.0], [1.1, 1.1, 0.3]);
+            let pts: Vec<(f32, f32)> = (0..=24)
+                .map(|i| {
+                    let t = i as f32 / 24.0;
+                    k.u(t, 0.5 + 0.4 * (t * PI).sin() - 0.2, 0.0)
+                })
+                .collect();
+            k.sk(&pts);
+            for i in 0..4 {
+                let t = i as f32 / 3.0;
+                k.prism(
+                    &ring([t, 0.3 + 0.4 * (t * PI).sin(), 0.0], 0.11, 14),
+                    [0.0, 0.0, 0.3],
+                    GOLD,
+                );
+            }
+        }
+        "dome" => {
+            k.fit([0.0, 0.0, 0.0], [1.0, 1.0, 1.0]);
+            k.prism(&ring([0.5, 0.5, 0.0], 0.5, 32), [0.0, 0.0, 0.5], GOLD);
+            let rings: Vec<Vec<V3>> = (0..=6)
+                .map(|i| {
+                    let a = FRAC_PI_2 * 0.96 * i as f32 / 6.0;
+                    ring([0.5, 0.5, 0.5 + 0.5 * a.sin()], 0.5 * a.cos(), 32)
+                })
+                .collect();
+            for w in rings.windows(2) {
+                let (_, normals) = edge_normals(&w[0]);
+                k.walls(&w[0], &w[1], &normals, 1.0, GOLD);
+            }
+        }
+        "wrap" => {
+            k.fit([0.0, 0.0, 0.0], [1.0, 1.0, 1.1]);
+            k.prism(&ring([0.5, 0.5, 0.0], 0.45, 32), [0.0, 0.0, 1.1], GOLD);
+            let band = |z: f32| -> Vec<(f32, f32)> {
+                (0..=10)
+                    .map(|j| {
+                        let a = 0.1 + 0.9 * j as f32 / 10.0;
+                        k.u(0.5 + 0.46 * a.cos(), 0.5 + 0.46 * a.sin(), z)
+                    })
+                    .collect()
+            };
+            let mut pts = band(0.35);
+            pts.extend(band(0.75).into_iter().rev());
+            pts.push(pts[0]);
+            k.sk(&pts);
+        }
         _ => k.bead(0.5, 0.5, 0.14, GREY),
     }
 }
@@ -875,6 +1030,21 @@ pub fn of_feature(kind: &FeatureKind) -> &'static str {
         FeatureKind::CoordSys(_) => "csys",
         FeatureKind::Draft { .. } => "draft",
         FeatureKind::Rib { .. } => "rib",
+        FeatureKind::Sweep(_) => "sweep",
+        FeatureKind::Loft(_) => "loft",
+        FeatureKind::Helix(_) => "helix",
+        FeatureKind::Thread(_) => "thread",
+        FeatureKind::VariableFillet { .. } => "variable_fillet",
+        FeatureKind::FaceFillet { .. } => "face_fillet",
+        FeatureKind::Combine { .. } => "combine",
+        FeatureKind::Split { .. } => "split",
+        FeatureKind::DeleteBody { .. } => "delete_body",
+        FeatureKind::MoveBody(_) => "move_body",
+        FeatureKind::ScaleBody { .. } => "scale",
+        FeatureKind::SketchPattern { .. } => "sketch_pattern",
+        FeatureKind::CurvePattern { .. } => "curve_pattern",
+        FeatureKind::Dome { .. } => "dome",
+        FeatureKind::Wrap { .. } => "wrap",
     }
 }
 
