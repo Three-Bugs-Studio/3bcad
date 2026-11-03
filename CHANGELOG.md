@@ -31,6 +31,8 @@ saved files and workflows; patch versions (0.x.y) only fix bugs.
 - Fillets on round edges: rod ends, hole rims and the root of a boss (the rest of #32).
 - Ctrl+click a second sketch or helix (in the FeatureManager or the graphics area) to pick a sweep's path,
   a loft's next profile or a pattern's sketch.
+- Sketch tools snap to the part origin: a point placed there is fixed to it, so a profile can be centred on the
+  origin and fully defined without guessing its position.
 
 ### Changed
 
