@@ -574,6 +574,52 @@ mod tests {
     }
 
     #[test]
+    fn a_fillet_rounds_a_cylinder_rim_and_a_hole() {
+        // A 20 x 20 x 10 block with a 6 mm hole, and a fillet on the hole's top rim.
+        let mut doc = PartDocument::new("Part");
+        let base = cube(&mut doc, 20.0);
+        let c = Sketch::circle([10.0, 10.0], 3.0);
+        doc.edit(|h| {
+            let s = h.add_sketch(c, Plane::TOP);
+            let mut e = Extrude::cut(s, 20.0);
+            e.end = End::ThroughAll;
+            e.reverse = true;
+            h.add(FeatureKind::Extrude(e)).unwrap();
+        });
+        let _ = base;
+        assert!(doc.errors().is_empty(), "{:?}", doc.errors());
+        let before = vol(&doc);
+        let b = &doc.bodies()[0];
+        let e = b
+            .topo
+            .edges
+            .iter()
+            .position(|e| matches!(e.curve, EdgeCurve::Circle { center, .. } if (center[2] - 20.0).abs() < 1e-6))
+            .expect("hole rim");
+        let edge = doc.edge_ref(0, e).unwrap();
+        let fillet = doc.edit(|h| {
+            h.add(FeatureKind::Fillet {
+                edges: vec![edge],
+                radius: 1.0,
+                propagate: true,
+            })
+            .unwrap()
+        });
+        assert!(doc.errors().is_empty(), "{:?}", doc.errors());
+        // Pappus: the corner's area (1 - π/4) at its centroid, 0.2234 mm out from the rim.
+        let removed = before - vol(&doc);
+        let expected = (1.0 - PI / 4.0) * 2.0 * PI * (3.0 + 0.2234);
+        assert!((removed - expected).abs() < 0.05, "{removed} vs {expected}");
+        // Too large for the plate: a clear error.
+        doc.edit(|h| {
+            if let Some(FeatureKind::Fillet { radius, .. }) = h.get_mut(fillet).map(|f| &mut f.kind) {
+                *radius = 25.0;
+            }
+        });
+        assert!(doc.errors()[&fillet].contains("too large"), "{:?}", doc.errors());
+    }
+
+    #[test]
     fn fillet_chamfer_survive_a_dimension_change() {
         let mut doc = PartDocument::new("Part");
         let base = cube(&mut doc, 10.0);
@@ -1068,5 +1114,61 @@ mod tests {
         // The triangle between the line and the corner (legs 10), 2 thick.
         let added = vol(&doc) - before;
         assert!((added - 0.5 * 10.0 * 10.0 * 2.0).abs() < 0.5, "{added}");
+    }
+
+    #[test]
+    fn a_rib_runs_on_to_the_nearest_wall_and_stops_at_the_floor() {
+        // The same L; a level rib line that stops short of the upright and hangs over the open end.
+        let mut l = Sketch::default();
+        let p = [
+            [0.0, 0.0],
+            [20.0, 0.0],
+            [20.0, 2.0],
+            [2.0, 2.0],
+            [2.0, 20.0],
+            [0.0, 20.0],
+        ]
+        .map(|q| l.add_point(q[0], q[1]));
+        for i in 0..6 {
+            l.add_line(p[i], p[(i + 1) % 6]);
+        }
+        let mut doc = PartDocument::new("Part");
+        doc.edit(|h| {
+            let s = h.add_sketch(l, Plane::FRONT);
+            let mut e = Extrude::boss(s, 20.0);
+            e.reverse = true;
+            h.add(FeatureKind::Extrude(e)).unwrap();
+        });
+        let before = vol(&doc);
+        let mut rib = Sketch::default();
+        let (a, b) = (rib.add_point(6.0, 8.0), rib.add_point(12.0, 8.0));
+        rib.add_line(a, b);
+        doc.edit(|h| {
+            let mid = h
+                .add(FeatureKind::RefPlane(RefPlaneDef::Offset {
+                    base: PlaneRef::Std(StdPlane::Front),
+                    distance: -10.0,
+                    flip: false,
+                }))
+                .unwrap();
+            let plane = Plane {
+                origin: [0.0, 10.0, 0.0],
+                ..Plane::FRONT
+            };
+            let s = h.add_sketch_on(rib, plane, PlaneRef::Feature(mid)).unwrap();
+            h.add(FeatureKind::Rib {
+                sketch: s,
+                thickness: 2.0,
+                both_sides: true,
+                flip: false,
+            })
+            .unwrap()
+        });
+        assert!(doc.errors().is_empty(), "{:?}", doc.errors());
+        // From the upright (x = 2) to the line's end (x = 12), from the floor (y = 2) up to 8.
+        let added = vol(&doc) - before;
+        assert!((added - 10.0 * 6.0 * 2.0).abs() < 0.5, "{added}");
+        let (lo, hi) = threebcad_kernel::boolean::bbox(&doc.bodies()[0].solid);
+        assert!(lo[0] > -1e-6 && hi[0] < 20.0 + 1e-6, "{lo:?} {hi:?}");
     }
 }
