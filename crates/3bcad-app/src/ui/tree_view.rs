@@ -74,6 +74,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                 icons::inline(ui, "origin", true);
                 ui.label("Origin");
             });
+            solid_bodies(app, ui);
 
             let h = app.doc.history();
             let rollback = h.rollback();
@@ -138,7 +139,17 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                 if let Some(e) = row.error.as_ref().or(row.warning.as_ref()) {
                     resp = resp.on_hover_text(e);
                 }
-                if resp.clicked() {
+                let ctrl = ui.input(|i| i.modifiers.command);
+                if resp.clicked() && ctrl && app.selected.is_some_and(|s| s != id) {
+                    // Ctrl+click adds the feature to the selection: a sweep's path, a loft's
+                    // profiles, the sketch a pattern follows.
+                    let r = ModelRef::Feature(id);
+                    if let Some(k) = app.selection.iter().position(|s| *s == r) {
+                        app.selection.remove(k);
+                    } else {
+                        app.selection.push(r);
+                    }
+                } else if resp.clicked() {
                     app.selected = Some(id);
                     app.selection.clear();
                     if matches!(
@@ -148,6 +159,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                                 | FeatureKind::RefAxis(_)
                                 | FeatureKind::RefPoint(_)
                                 | FeatureKind::CoordSys(_)
+                                | FeatureKind::Helix(_)
                         )
                     ) {
                         app.selection = vec![ModelRef::Feature(id)];
@@ -266,6 +278,49 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                     Err(e) => app.status = e.to_string(),
                 },
                 None => {}
+            }
+        });
+}
+
+/// The Solid Bodies folder: one row per body. Clicking a body selects it (as one of its faces) for
+/// the body commands; Ctrl+click adds more.
+fn solid_bodies(app: &mut App, ui: &mut egui::Ui) {
+    let n = app.doc.bodies().len();
+    egui::CollapsingHeader::new(format!("Solid Bodies ({n})"))
+        .id_salt("solid_bodies")
+        .default_open(n > 1)
+        .show(ui, |ui| {
+            for body in 0..n {
+                let r = ModelRef::Face { body, face: 0 };
+                let picked = app
+                    .selection
+                    .iter()
+                    .any(|s| matches!(*s, ModelRef::Face { body: b, .. } if b == body));
+                let made_by = app.doc.bodies()[body]
+                    .csg
+                    .last()
+                    .and_then(|s| app.doc.history().get(s.feature))
+                    .map_or(String::new(), |f| format!(" ({})", f.name));
+                let resp = ui
+                    .horizontal(|ui| {
+                        icons::inline(ui, "box", true);
+                        ui.selectable_label(picked, format!("Body {}{made_by}", body + 1))
+                    })
+                    .inner
+                    .on_hover_text("Click to select the body, Ctrl+click to add it");
+                if resp.clicked() {
+                    if ui.input(|i| i.modifiers.command) {
+                        if picked {
+                            app.selection
+                                .retain(|s| !matches!(*s, ModelRef::Face { body: b, .. } if b == body));
+                        } else {
+                            app.selection.push(r);
+                        }
+                    } else {
+                        app.selection = vec![r];
+                        app.selected = None;
+                    }
+                }
             }
         });
 }

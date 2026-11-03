@@ -20,8 +20,10 @@ feature history, GPU viewport, print tooling) and builds each part in memory-saf
   sketch is under (blue), fully (black) or over (red) defined.
 - **Parametric solver**: Coincident, Horizontal, Vertical, Parallel, Perpendicular, Collinear, Equal,
   Midpoint, Concentric, Symmetric, Tangent and more, solved by Levenberg-Marquardt with exact Jacobians.
-- **B-Rep modelling** on the pure-Rust [`truck`](https://github.com/ricosjp/truck) kernel: Extruded Boss/Base
-  from any closed sketch profile, holes included.
+- **B-Rep modelling** on the pure-Rust [`truck`](https://github.com/ricosjp/truck) kernel: extrude, revolve,
+  sweep and loft (boss or cut), fillets (constant, variable and face), chamfer, shell, draft, rib, Hole Wizard,
+  modelled threads, dome and wrap, and linear, circular, mirror, sketch-driven and curve-driven patterns.
+- **Multibody**: Combine, Split, Delete/Keep, Move/Copy and Scale bodies, listed in a Solid Bodies folder.
 - **3D-print export**: watertight binary STL and 3MF (one object per body), exact STEP, and
   **Send to Slicer** for OrcaSlicer, Bambu Studio and PrusaSlicer.
 
@@ -70,6 +72,7 @@ sudo apt-get install libgtk-3-dev libxkbcommon-dev libwayland-dev
 | Disable snapping while drawing | Hold `Ctrl` |
 | Edit a dimension | Double-click its value |
 | Fillet / Chamfer / Shell | Select edges or faces (Ctrl+click for more), then the Features tab |
+| Sweep / Loft | Select the profile sketch, Ctrl+click the path (or the next profiles), then the Features tab |
 | Rename a feature | Select it and press `F2` |
 | Rebuild everything | `Ctrl+Q` |
 

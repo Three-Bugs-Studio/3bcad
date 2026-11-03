@@ -330,6 +330,178 @@ pub struct CoordSysDef {
     pub z: Option<AxisRef>,
 }
 
+/// A curve a sweep follows or a curve-driven pattern runs along.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CurveRef {
+    /// The open chain (lines, arcs, splines) of a sketch.
+    Sketch(FeatureId),
+    /// A helix or spiral feature.
+    Helix(FeatureId),
+}
+
+/// What a sweep carries along its path.
+#[derive(Clone, Debug, PartialEq)]
+pub enum SweepProfile {
+    /// The closed regions of a sketch.
+    Sketch(FeatureId),
+    /// A circle of this diameter square to the start of the path.
+    Circle(f64),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Sweep {
+    pub profile: SweepProfile,
+    pub path: CurveRef,
+    /// Radians the profile turns about the path from start to end.
+    pub twist: f64,
+    pub cut: bool,
+    /// Boss: combine with the bodies it touches.
+    pub merge: bool,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Loft {
+    /// Sketches with one closed region each, in order.
+    pub profiles: Vec<FeatureId>,
+    /// Sketches with an open chain running from the first profile to the last.
+    pub guides: Vec<FeatureId>,
+    /// Tangency length square to the first / last profile (0: none).
+    pub start_tangent: f64,
+    pub end_tangent: f64,
+    pub cut: bool,
+    pub merge: bool,
+}
+
+/// How big a helix is.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum HelixSize {
+    PitchTurns {
+        pitch: f64,
+        turns: f64,
+    },
+    HeightPitch {
+        height: f64,
+        pitch: f64,
+    },
+    HeightTurns {
+        height: f64,
+        turns: f64,
+    },
+    /// A flat spiral: `pitch` is the gap between turns.
+    Spiral {
+        pitch: f64,
+        turns: f64,
+    },
+}
+
+impl HelixSize {
+    pub fn name(&self) -> &'static str {
+        match self {
+            HelixSize::PitchTurns { .. } => "Pitch and Revolution",
+            HelixSize::HeightPitch { .. } => "Height and Pitch",
+            HelixSize::HeightTurns { .. } => "Height and Revolution",
+            HelixSize::Spiral { .. } => "Spiral",
+        }
+    }
+
+    /// (pitch, turns), the pitch being the rise per turn (0 for a spiral).
+    pub fn pitch_turns(&self) -> (f64, f64) {
+        match *self {
+            HelixSize::PitchTurns { pitch, turns } => (pitch, turns),
+            HelixSize::HeightPitch { height, pitch } => (pitch, if pitch.abs() > 1e-12 { height / pitch } else { 0.0 }),
+            HelixSize::HeightTurns { height, turns } => (if turns.abs() > 1e-12 { height / turns } else { 0.0 }, turns),
+            HelixSize::Spiral { turns, .. } => (0.0, turns),
+        }
+    }
+}
+
+/// A helix or spiral starting on a sketch circle, rising along the sketch normal.
+#[derive(Clone, Debug, PartialEq)]
+pub struct HelixDef {
+    pub sketch: FeatureId,
+    pub size: HelixSize,
+    /// Radians; positive widens the helix as it rises.
+    pub taper: f64,
+    /// Counter-clockwise seen from the end of the axis (right-handed rising).
+    pub ccw: bool,
+    /// Radians from the sketch's x direction.
+    pub start: f64,
+    /// Rise the other way (below the sketch).
+    pub reverse: bool,
+}
+
+/// A modelled thread on a cylindrical face.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ThreadDef {
+    pub face: FaceRef,
+    pub standard: HoleStandard,
+    /// Size from the hole tables ("M6", "1/4").
+    pub size: String,
+    /// Threaded length from the start end (`None`: the whole face).
+    pub length: Option<f64>,
+    /// Distance from the start end to where the thread begins.
+    pub offset: f64,
+    /// Start from the other end of the face.
+    pub flip: bool,
+    pub right: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CombineOp {
+    Add,
+    Subtract,
+    Common,
+}
+
+impl CombineOp {
+    pub fn name(self) -> &'static str {
+        match self {
+            CombineOp::Add => "Add",
+            CombineOp::Subtract => "Subtract",
+            CombineOp::Common => "Common",
+        }
+    }
+}
+
+/// What cuts bodies apart.
+#[derive(Clone, Debug, PartialEq)]
+pub enum SplitTool {
+    Plane(PlaneRef),
+    /// The closed regions of a sketch, through everything both ways.
+    Sketch(FeatureId),
+}
+
+/// Moves (or copies) bodies: a translation, then a rotation, or a face mated onto a plane.
+#[derive(Clone, Debug, PartialEq)]
+pub struct MoveBody {
+    /// A face of each body to move (empty: every body).
+    pub bodies: Vec<FaceRef>,
+    pub translate: [f64; 3],
+    /// About an axis, radians.
+    pub rotate: Option<(AxisRef, f64)>,
+    /// Mate a planar face of the body onto a plane (coincident, facing away from it).
+    pub mate: Option<(FaceRef, PlaneRef)>,
+    pub copy: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WrapKind {
+    Emboss,
+    Deboss,
+    /// A shallow groove that marks the outline only.
+    Scribe,
+}
+
+impl WrapKind {
+    pub fn name(self) -> &'static str {
+        match self {
+            WrapKind::Emboss => "Emboss",
+            WrapKind::Deboss => "Deboss",
+            WrapKind::Scribe => "Scribe",
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum FeatureKind {
     /// A sketch on a plane; `on` makes it follow a face or reference plane when the model changes.
@@ -383,6 +555,74 @@ pub enum FeatureKind {
         /// Grow towards the other side of the line.
         flip: bool,
     },
+    Sweep(Sweep),
+    Loft(Loft),
+    /// A reference curve (no material).
+    Helix(HelixDef),
+    Thread(ThreadDef),
+    /// A fillet on one straight edge whose radius changes along it: `(position 0..1, radius)`.
+    VariableFillet {
+        edge: EdgeRef,
+        radii: Vec<[f64; 2]>,
+    },
+    /// Rounds where face set `a` meets face set `b`.
+    FaceFillet {
+        a: Vec<FaceRef>,
+        b: Vec<FaceRef>,
+        radius: f64,
+    },
+    /// Merges, subtracts or intersects bodies; each body is named by one of its faces.
+    Combine {
+        op: CombineOp,
+        main: FaceRef,
+        tools: Vec<FaceRef>,
+    },
+    Split {
+        tool: SplitTool,
+        /// Bodies to split (empty: all).
+        bodies: Vec<FaceRef>,
+    },
+    /// Removes the bodies, or with `keep` removes every other body.
+    DeleteBody {
+        bodies: Vec<FaceRef>,
+        keep: bool,
+    },
+    MoveBody(MoveBody),
+    /// Scales bodies (empty: all) about a point; non-uniform with different factors.
+    ScaleBody {
+        bodies: Vec<FaceRef>,
+        about: PointRef,
+        factors: [f64; 3],
+    },
+    /// Repeats the seeds at every point of a sketch, relative to the seeds' center.
+    SketchPattern {
+        seeds: Seeds,
+        sketch: FeatureId,
+    },
+    /// Repeats the seeds along a curve.
+    CurvePattern {
+        seeds: Seeds,
+        curve: CurveRef,
+        /// Instances including the seed.
+        count: usize,
+        /// Distance along the curve between instances (`None`: spread over the whole curve).
+        spacing: Option<f64>,
+        /// Turn the instances with the curve.
+        align: bool,
+    },
+    /// Raises (or with `reverse` sinks) a planar face into a smooth cap.
+    Dome {
+        face: FaceRef,
+        height: f64,
+        reverse: bool,
+    },
+    /// Sketch outlines wrapped onto a cylindrical face.
+    Wrap {
+        sketch: FeatureId,
+        face: FaceRef,
+        kind: WrapKind,
+        depth: f64,
+    },
 }
 
 impl FeatureKind {
@@ -412,7 +652,32 @@ impl FeatureKind {
             FeatureKind::CoordSys(_) => "Coordinate System",
             FeatureKind::Draft { .. } => "Draft",
             FeatureKind::Rib { .. } => "Rib",
+            FeatureKind::Sweep(w) if w.cut => "Cut-Sweep",
+            FeatureKind::Sweep(_) => "Sweep",
+            FeatureKind::Loft(l) if l.cut => "Cut-Loft",
+            FeatureKind::Loft(_) => "Loft",
+            FeatureKind::Helix(h) if matches!(h.size, HelixSize::Spiral { .. }) => "Spiral",
+            FeatureKind::Helix(_) => "Helix",
+            FeatureKind::Thread(_) => "Thread",
+            FeatureKind::VariableFillet { .. } => "VarFillet",
+            FeatureKind::FaceFillet { .. } => "FaceFillet",
+            FeatureKind::Combine { .. } => "Combine",
+            FeatureKind::Split { .. } => "Split",
+            FeatureKind::DeleteBody { keep: true, .. } => "Body-Keep",
+            FeatureKind::DeleteBody { .. } => "Body-Delete",
+            FeatureKind::MoveBody(m) if m.copy => "Body-Copy",
+            FeatureKind::MoveBody(_) => "Body-Move",
+            FeatureKind::ScaleBody { .. } => "Scale",
+            FeatureKind::SketchPattern { .. } => "SketchPattern",
+            FeatureKind::CurvePattern { .. } => "CrvPattern",
+            FeatureKind::Dome { .. } => "Dome",
+            FeatureKind::Wrap { .. } => "Wrap",
         }
+    }
+
+    /// Makes a curve, not material.
+    pub fn is_curve(&self) -> bool {
+        matches!(self, FeatureKind::Helix(_))
     }
 
     pub fn is_sketch(&self) -> bool {
@@ -445,6 +710,9 @@ impl FeatureKind {
             End::UpToVertex(v) => vertex(v, out),
             End::UpToSurface(f) | End::OffsetFromSurface(f, _) => face(f, out),
             _ => {}
+        };
+        let curve = |c: &CurveRef, out: &mut Vec<FeatureId>| match c {
+            CurveRef::Sketch(id) | CurveRef::Helix(id) => out.push(*id),
         };
         let seeds = |s: &Seeds, out: &mut Vec<FeatureId>| {
             if let Seeds::Features(f) = s {
@@ -534,6 +802,60 @@ impl FeatureKind {
                 faces.iter().for_each(|f| face(f, &mut out));
             }
             FeatureKind::Rib { sketch, .. } => out.push(*sketch),
+            FeatureKind::Sweep(w) => {
+                if let SweepProfile::Sketch(id) = w.profile {
+                    out.push(id);
+                }
+                curve(&w.path, &mut out);
+            }
+            FeatureKind::Loft(l) => {
+                out.extend(&l.profiles);
+                out.extend(&l.guides);
+            }
+            FeatureKind::Helix(h) => out.push(h.sketch),
+            FeatureKind::Thread(t) => face(&t.face, &mut out),
+            FeatureKind::VariableFillet { edge: e, .. } => edge(e, &mut out),
+            FeatureKind::FaceFillet { a, b, .. } => a.iter().chain(b).for_each(|f| face(f, &mut out)),
+            FeatureKind::Combine { main, tools, .. } => {
+                std::iter::once(main).chain(tools).for_each(|f| face(f, &mut out))
+            }
+            FeatureKind::Split { tool, bodies } => {
+                match tool {
+                    SplitTool::Plane(p) => plane(p, &mut out),
+                    SplitTool::Sketch(id) => out.push(*id),
+                }
+                bodies.iter().for_each(|f| face(f, &mut out));
+            }
+            FeatureKind::DeleteBody { bodies, .. } => bodies.iter().for_each(|f| face(f, &mut out)),
+            FeatureKind::MoveBody(m) => {
+                m.bodies.iter().for_each(|f| face(f, &mut out));
+                if let Some((a, _)) = &m.rotate {
+                    axis(a, &mut out);
+                }
+                if let Some((f, p)) = &m.mate {
+                    face(f, &mut out);
+                    plane(p, &mut out);
+                }
+            }
+            FeatureKind::ScaleBody { bodies, about, .. } => {
+                bodies.iter().for_each(|f| face(f, &mut out));
+                point(about, &mut out);
+            }
+            FeatureKind::SketchPattern { seeds: sd, sketch } => {
+                seeds(sd, &mut out);
+                out.push(*sketch);
+            }
+            FeatureKind::CurvePattern {
+                seeds: sd, curve: c, ..
+            } => {
+                seeds(sd, &mut out);
+                curve(c, &mut out);
+            }
+            FeatureKind::Dome { face: f, .. } => face(f, &mut out),
+            FeatureKind::Wrap { sketch, face: f, .. } => {
+                out.push(*sketch);
+                face(f, &mut out);
+            }
         }
         out.sort();
         out.dedup();

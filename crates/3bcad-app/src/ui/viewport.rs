@@ -96,7 +96,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                     rect,
                     plane,
                 };
-                let color = if app.selected == Some(id) {
+                let color = if app.selected == Some(id) || app.selection.contains(&ModelRef::Feature(id)) {
                     SKETCH_SELECTED
                 } else {
                     SKETCH_COLOR
@@ -188,8 +188,18 @@ fn model_input(app: &mut App, resp: &egui::Response, rect: egui::Rect, size: GVe
         return;
     }
     if let Some(id) = sketch_hit {
-        app.selected = Some(id);
-        app.selection.clear();
+        // Ctrl+click adds a sketch to the selection (a sweep's path, a loft's next profile).
+        if ctrl && app.selected.is_some_and(|s| s != id) {
+            let r = ModelRef::Feature(id);
+            if let Some(k) = app.selection.iter().position(|s| *s == r) {
+                app.selection.remove(k);
+            } else {
+                app.selection.push(r);
+            }
+        } else {
+            app.selected = Some(id);
+            app.selection.clear();
+        }
         return;
     }
     match app.hover {

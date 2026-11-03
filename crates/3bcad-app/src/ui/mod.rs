@@ -1,3 +1,4 @@
+pub mod advanced;
 pub mod evaluate;
 pub mod help;
 pub mod icons;

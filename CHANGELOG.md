@@ -9,8 +9,48 @@ saved files and workflows; patch versions (0.x.y) only fix bugs.
 
 ### Added
 
+- Advanced part modeling (v0.4.0 milestone):
+  - Swept Boss/Base and Swept Cut: a closed profile sketch, or a circle of a given diameter, carried along a
+    sketch path or a helix, with an optional twist.
+  - Lofted Boss/Base and Lofted Cut through two or more profiles, with start/end tangency and guide curves.
+  - Helix and spiral curves: pitch and revolutions, height and pitch, height and revolutions, or a flat
+    spiral; taper, start angle, clockwise or counterclockwise. Helices are drawn in the graphics area and
+    can be picked as a sweep path (springs) or a curve-pattern path.
+  - Thread: a modelled ISO 68 / ANSI thread on a rod (external) or in a hole (internal), full length or a set
+    length and offset, right- or left-handed. The result is watertight and printable.
+  - Variable Fillet (radius control points along a straight edge) and Face Fillet (rounds where two face sets
+    meet).
+  - Multibody tools: a Solid Bodies folder in the FeatureManager, Combine (add, subtract, common), Split by a
+    plane or a sketch, and Delete/Keep Body.
+  - Move/Copy Body by values, a rotation about an axis or by mating a face against a plane, and uniform or
+    non-uniform Scale about a point.
+  - Sketch Pattern (a copy at each sketch point) and Curve Pattern (equal or fixed spacing along a sketch
+    curve or helix, optionally turning with it).
+  - Dome on a flat face (an exact spherical cap on round faces), raised or sunk, and Wrap: emboss, deboss or
+    scribe a sketch onto a cylinder without stretching it.
+- Fillets on round edges: rod ends, hole rims and the root of a boss (the rest of #32).
+- Ctrl+click a second sketch or helix (in the FeatureManager or the graphics area) to pick a sweep's path,
+  a loft's next profile or a pattern's sketch.
 - Sketch tools snap to the part origin: a point placed there is fixed to it, so a profile can be centred on the
   origin and fully defined without guessing its position.
+
+### Changed
+
+- Rib (#47) runs on to the nearest wall in the plane of the sketch and stops at the floor, so a rib between
+  two walls fills the gap exactly.
+- Exporting, mass properties and rebuilds of large curved parts are faster: mesh welding is linear
+  instead of quadratic, and face analysis starts its surface searches from the mesh.
+
+### Fixed
+
+- A revolve whose profile touches the axis at a single corner is refused with a clear message instead of
+  building a solid pinched to a point.
+- A crash deep in the geometry kernel during a rebuild now fails only that feature (shown in What's Wrong)
+  instead of closing the app.
+- Split by a plane that lies on a body's face no longer shaves off a paper-thin body.
+- The PropertyManager panel stays open with nothing selected, so the graphics area no longer resizes (and
+  the model jumps) between two clicks; a selection made in the graphics area shows at once.
+- Undo and Redo clear the status bar instead of leaving the last error showing.
 
 ## [0.3.1] - 2026-10-30
 

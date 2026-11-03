@@ -63,6 +63,17 @@ fn v3(p: Point3) -> P3 {
     [p.x, p.y, p.z]
 }
 
+/// A face on the same surface, facing the same way, with new (oriented) boundaries. Keeps the
+/// surface's own parametrisation, which truck meshes more reliably than an inverted copy.
+pub fn face_like(face: &Face, boundaries: Vec<Wire>) -> anyhow::Result<Face> {
+    if face.orientation() {
+        Ok(Face::try_new(boundaries, face.surface())?)
+    } else {
+        let inv: Vec<Wire> = boundaries.iter().map(|w| w.inverse()).collect();
+        Ok(Face::try_new(inv, face.surface())?.inverse())
+    }
+}
+
 pub fn sub(a: P3, b: P3) -> P3 {
     [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
 }
@@ -179,11 +190,22 @@ fn classify(points: &[P3]) -> EdgeCurve {
 }
 
 /// Outward normal of `face` near `p`: exact from the surface, else from the nearest triangle.
-fn face_normal(face: &Face, tf: &TopoFace, p: P3) -> P3 {
-    let surface = face.oriented_surface();
-    let exact = surface
-        .search_nearest_parameter(Point3::new(p[0], p[1], p[2]), SPHint2D::None, 100)
+/// Mesh vertices of a face with their surface parameters: start points for the exact searches.
+type Hints = Vec<(P3, [f64; 2])>;
+
+fn face_normal(face: &Face, tf: &TopoFace, hints: &Hints, p: P3) -> P3 {
+    let surface = face.surface();
+    let q = Point3::new(p[0], p[1], p[2]);
+    let near = hints
+        .iter()
+        .min_by(|a, b| norm(sub(a.0, p)).total_cmp(&norm(sub(b.0, p))))
+        .map(|h| h.1);
+    let found = near
+        .and_then(|uv| surface.search_nearest_parameter(q, SPHint2D::Parameter(uv[0], uv[1]), 30))
+        .or_else(|| surface.search_nearest_parameter(q, SPHint2D::None, 100));
+    let exact = found
         .map(|(u, v)| surface.normal(u, v))
+        .map(|n| if face.orientation() { n } else { -n })
         .filter(|n| n.magnitude2() > 0.5);
     if let Some(n) = exact {
         return [n.x, n.y, n.z];
@@ -195,7 +217,7 @@ fn face_normal(face: &Face, tf: &TopoFace, p: P3) -> P3 {
 }
 
 /// Cylinder axis and radius from a face's surface: truck builds cylinders by revolving a line.
-fn cylinder_of(face: &Face, tf: &TopoFace) -> Option<(P3, P3, f64)> {
+fn cylinder_of(face: &Face, tf: &TopoFace, hints: &Hints) -> Option<(P3, P3, f64)> {
     if tf.plane.is_some() {
         return None;
     }
@@ -203,15 +225,31 @@ fn cylinder_of(face: &Face, tf: &TopoFace) -> Option<(P3, P3, f64)> {
     if pts.len() < 6 {
         return None;
     }
-    // Axis direction from the normals: all normals are perpendicular to it. Exact normals are
-    // costly (a surface search each), so compare a few spread-out samples, not every vertex.
-    let n0 = face_normal(face, tf, tf.tris[0][0]);
+    // Exact normals are costly (a surface search each): first rule out faces whose mesh does not
+    // even roughly fit a cylinder (helical thread flanks, lofts), from the triangles' own normals.
+    let tri_n = |t: &[P3; 3]| unit(cross(sub(t[1], t[0]), sub(t[2], t[0])));
+    let m0 = tri_n(&tf.tris[0]);
+    let far_tri = tf
+        .tris
+        .iter()
+        .max_by(|a, b| norm(cross(tri_n(a), m0)).total_cmp(&norm(cross(tri_n(b), m0))))?;
+    let rough_axis = cross(m0, tri_n(far_tri));
+    if norm(rough_axis) < 1e-3 {
+        return None;
+    }
+    let rough_axis = unit(rough_axis);
+    if tf.tris.iter().any(|t| dot(tri_n(t), rough_axis).abs() > 0.1) {
+        return None;
+    }
+    // Axis direction from the normals: all normals are perpendicular to it. Compare a few
+    // spread-out samples, not every vertex.
+    let n0 = face_normal(face, tf, hints, tf.tris[0][0]);
     let step = (tf.tris.len() / 16).max(1);
     let (far, n1) = tf
         .tris
         .iter()
         .step_by(step)
-        .map(|t| (t[0], face_normal(face, tf, t[0])))
+        .map(|t| (t[0], face_normal(face, tf, hints, t[0])))
         .max_by(|a, b| norm(cross(a.1, n0)).total_cmp(&norm(cross(b.1, n0))))?;
     let axis = cross(n0, n1);
     if norm(axis) < 1e-6 {
@@ -238,16 +276,28 @@ fn cylinder_of(face: &Face, tf: &TopoFace) -> Option<(P3, P3, f64)> {
 
 /// Faces, edges and vertices of a solid; `tol` is the tessellation tolerance for the faces.
 pub fn analyze(solid: &Solid, tol: f64) -> Topology {
-    let meshed = solid.triangulation(tol);
+    let meshed = solid.robust_triangulation(tol);
     let mut out = Topology::default();
     let faces: Vec<Face> = solid.face_iter().cloned().collect();
+    let mut hints: Vec<Hints> = Vec::new();
     for mface in meshed.face_iter() {
         let mut tris = Vec::new();
+        let mut hint = Hints::new();
         if let Some(mut poly) = mface.surface() {
             if !mface.orientation() {
                 poly.invert();
             }
             let pos = poly.positions();
+            let uvs = poly.uv_coords();
+            let n_tri = poly.faces().triangle_iter().count();
+            let step = (n_tri / 128).max(1);
+            for t in poly.faces().triangle_iter().step_by(step) {
+                for v in t {
+                    if let Some(uv) = v.uv.and_then(|i| uvs.get(i)) {
+                        hint.push((v3(pos[v.pos]), [uv.x, uv.y]));
+                    }
+                }
+            }
             for t in poly.faces().triangle_iter() {
                 tris.push(t.map(|v| v3(pos[v.pos])));
             }
@@ -273,6 +323,7 @@ pub fn analyze(solid: &Solid, tol: f64) -> Topology {
                 .zip(&areas)
                 .all(|(t, &a)| a < 1e-12 || dot(unit(cross(sub(t[1], t[0]), sub(t[2], t[0]))), n) > 1.0 - 1e-9)
         });
+        hints.push(hint);
         out.faces.push(TopoFace {
             plane: (planar && n.is_some()).then(|| Plane::from_origin_normal(sample, n.unwrap())),
             cylinder: None,
@@ -283,7 +334,7 @@ pub fn analyze(solid: &Solid, tol: f64) -> Topology {
     }
     for (i, f) in faces.iter().enumerate() {
         if let Some(tf) = out.faces.get(i) {
-            let c = cylinder_of(f, tf);
+            let c = cylinder_of(f, tf, &hints[i]);
             out.faces[i].cylinder = c;
         }
     }
@@ -328,7 +379,7 @@ pub fn analyze(solid: &Solid, tol: f64) -> Topology {
         let sides = sides_src
             .iter()
             .map(|(fi, oe)| {
-                let normal = unit(face_normal(&faces[*fi], &out.faces[*fi], mid));
+                let normal = unit(face_normal(&faces[*fi], &out.faces[*fi], &hints[*fi], mid));
                 // This face's boundary runs along `oe`: the face lies to its left (n × d).
                 let dir = {
                     let c = oe.oriented_curve();

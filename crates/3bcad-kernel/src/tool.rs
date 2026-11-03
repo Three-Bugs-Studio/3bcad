@@ -2,6 +2,7 @@
 //! extent) instead of a finished B-Rep so patterns, mirrors, shells and drafts can rebuild it.
 
 use std::f64::consts::TAU;
+use std::sync::Arc;
 
 use anyhow::{bail, ensure, Result};
 use truck_modeling::*;
@@ -37,6 +38,44 @@ pub enum Tool {
         a0: f64,
         a1: f64,
     },
+    Shape(Shape),
+}
+
+/// A tool built directly as B-Rep (sweeps, lofts, domes, wraps): its solids, and points on its
+/// faces labelled with the tool face they belong to, for naming. Moving it moves the B-Rep.
+#[derive(Clone, Debug)]
+pub struct Shape {
+    pub solids: Arc<Vec<Solid>>,
+    pub labels: Arc<Vec<([f64; 3], ToolFace)>>,
+    /// A frame for the shape (the profile's plane), moved with it.
+    pub plane: Plane,
+}
+
+impl PartialEq for Shape {
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.solids, &other.solids) && self.plane == other.plane
+    }
+}
+
+impl Shape {
+    /// Labels every face of `solids` by `label(point on the face)`, sampling each face's mesh.
+    pub fn new(solids: Vec<Solid>, plane: Plane, label: impl Fn([f64; 3]) -> ToolFace) -> Shape {
+        let mut labels = Vec::new();
+        for s in &solids {
+            let topo = crate::topology::analyze(s, 0.05);
+            for f in &topo.faces {
+                for t in f.tris.iter().step_by((f.tris.len() / 6).max(1)) {
+                    let c = std::array::from_fn(|i| (t[0][i] + t[1][i] + t[2][i]) / 3.0);
+                    labels.push((c, label(c)));
+                }
+            }
+        }
+        Shape {
+            solids: Arc::new(solids),
+            labels: Arc::new(labels),
+            plane,
+        }
+    }
 }
 
 /// Which face of a tool a point lies on; segments are counted over every loop of every region.
@@ -104,7 +143,7 @@ fn dist_to_segment(p: [f64; 2], s: &ProfileSegment) -> f64 {
     }
 }
 
-fn nearest_segment(regions: &[ProfileRegion], p: [f64; 2]) -> usize {
+pub fn nearest_segment(regions: &[ProfileRegion], p: [f64; 2]) -> usize {
     segments(regions)
         .enumerate()
         .map(|(i, s)| (dist_to_segment(p, s), i))
@@ -116,19 +155,27 @@ impl Tool {
     pub fn plane(&self) -> &Plane {
         match self {
             Tool::Prism { plane, .. } | Tool::Revolution { plane, .. } => plane,
+            Tool::Shape(s) => &s.plane,
         }
     }
 
+    /// The profile (empty for a shape).
     pub fn regions(&self) -> &[ProfileRegion] {
         match self {
             Tool::Prism { regions, .. } | Tool::Revolution { regions, .. } => regions,
+            Tool::Shape(_) => &[],
         }
     }
 
     /// One solid per region.
     pub fn solids(&self) -> Result<Vec<Solid>> {
+        if let Tool::Shape(s) = self {
+            ensure!(!s.solids.is_empty(), "nothing to build");
+            return Ok(s.solids.to_vec());
+        }
         ensure!(!self.regions().is_empty(), "nothing to build");
         match self {
+            Tool::Shape(_) => unreachable!(),
             Tool::Prism {
                 regions,
                 plane,
@@ -216,6 +263,21 @@ impl Tool {
                     .map(|&p| side(p))
                     .fold((f64::INFINITY, f64::NEG_INFINITY), |(a, b), s| (a.min(s), b.max(s)));
                 ensure!(lo > -1e-9 || hi < 1e-9, "the profile crosses the revolve axis");
+                // A corner on the axis whose two sides both leave it pinches the solid to a point
+                // there (two cones tip to tip): not a valid solid.
+                for lp in loops(regions) {
+                    let n = lp.len();
+                    for i in 0..n {
+                        let (prev, next) = (&lp[(i + n - 1) % n], &lp[i]);
+                        let corner = offset::seg_start(next);
+                        let on = |p: [f64; 2]| side(p).abs() < 1e-9;
+                        let along = |seg: &ProfileSegment| matches!(seg, ProfileSegment::Line { from, to } if on(*from) && on(*to));
+                        ensure!(
+                            !(on(corner) && !along(prev) && !along(next) && n > 1),
+                            "the profile touches the revolve axis at a single point, which pinches the part; move it off the axis or along it"
+                        );
+                    }
+                }
                 let sweep = (a1 - a0).clamp(-TAU, TAU);
                 ensure!(sweep.abs() > 1e-9, "the revolve angle must be non-zero");
                 let origin = Point3::new(o[0], o[1], 0.0);
@@ -251,6 +313,11 @@ impl Tool {
             n[0] * nn[0] + n[1] * nn[1] + n[2] * nn[2] < 0.0
         };
         match self.clone() {
+            Tool::Shape(s) => Tool::Shape(Shape {
+                solids: Arc::new(s.solids.iter().map(|x| boolean::transformed(x, m)).collect()),
+                labels: Arc::new(s.labels.iter().map(|&(q, f)| (pt(q), f)).collect()),
+                plane: np,
+            }),
             Tool::Prism {
                 regions, z0, z1, draft, ..
             } => {
@@ -293,6 +360,7 @@ impl Tool {
     /// The tool grown (`t > 0`) or shrunk on every side by `t`.
     pub fn offset(&self, t: f64) -> Result<Tool> {
         Ok(match self.clone() {
+            Tool::Shape(_) => bail!("sweeps, lofts and other built shapes cannot be offset (used by Shell)"),
             Tool::Prism {
                 regions,
                 plane,
@@ -356,6 +424,14 @@ impl Tool {
         let w = d[0] * n[0] + d[1] * n[1] + d[2] * n[2];
         let local = plane.to_local(p);
         match self {
+            Tool::Shape(s) => s
+                .labels
+                .iter()
+                .min_by(|a, b| {
+                    let d = |q: [f64; 3]| (0..3).map(|i| (q[i] - p[i]).powi(2)).sum::<f64>();
+                    d(a.0).total_cmp(&d(b.0))
+                })
+                .map_or(ToolFace::Side(0), |l| l.1),
             Tool::Prism { regions, z0, z1, .. } => {
                 let tol = 1e-5 * (1.0 + (z1 - z0).abs()) + 2.0 * boolean::GROW;
                 if (w - z0.min(*z1)).abs() < tol {
