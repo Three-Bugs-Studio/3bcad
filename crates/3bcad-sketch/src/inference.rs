@@ -15,12 +15,14 @@ pub enum Snap {
     Midpoint(EntityId),
     /// Anywhere on a line, circle or arc: adds a Coincident (point-on-curve) relation.
     OnCurve(EntityId, P2),
+    /// The part origin projected onto the sketch plane: the new point is fixed there.
+    Origin(P2),
 }
 
 impl Snap {
     pub fn pos(&self, sk: &Sketch) -> P2 {
         match *self {
-            Snap::Free(p) | Snap::OnCurve(_, p) => p,
+            Snap::Free(p) | Snap::OnCurve(_, p) | Snap::Origin(p) => p,
             Snap::Point(id) => sk.point(id),
             Snap::Midpoint(e) => {
                 let (a, b) = sk.entity(e).endpoints().expect("line");
@@ -46,12 +48,18 @@ impl Snap {
                 sk.constrain(Constraint::PointOnCurve(q, e));
                 q
             }
+            Snap::Origin(_) => {
+                let q = new(sk);
+                sk.constrain(Constraint::Fix(q, p));
+                q
+            }
         }
     }
 }
 
-/// What the cursor snaps to within `tol` (sketch units): points first, then line midpoints, then curves.
-pub fn snap(sk: &Sketch, cursor: P2, tol: f64, ignore: &[PointId]) -> Snap {
+/// What the cursor snaps to within `tol` (sketch units): points first, then the part `origin`
+/// (in sketch coordinates), then line midpoints, then curves.
+pub fn snap(sk: &Sketch, cursor: P2, tol: f64, ignore: &[PointId], origin: P2) -> Snap {
     let nearest_point = sk
         .point_ids()
         .filter(|p| !ignore.contains(p))
@@ -60,6 +68,9 @@ pub fn snap(sk: &Sketch, cursor: P2, tol: f64, ignore: &[PointId]) -> Snap {
         .min_by(|a, b| a.0.total_cmp(&b.0));
     if let Some((_, p)) = nearest_point {
         return Snap::Point(p);
+    }
+    if geom::dist(origin, cursor) <= tol {
+        return Snap::Origin(origin);
     }
     // Curves that only connect ignored points (the one being drawn) are skipped too.
     let usable = |e: EntityId| !sk.entity(e).points().iter().all(|p| ignore.contains(p));
@@ -157,16 +168,33 @@ mod tests {
         let a = s.add_point(0.0, 0.0);
         let b = s.add_point(10.0, 0.0);
         let l = s.add_line(a, b);
-        assert_eq!(snap(&s, [0.2, 0.1], 0.5, &[]), Snap::Point(a));
-        assert_eq!(snap(&s, [0.2, 0.1], 0.5, &[a]), Snap::OnCurve(l, [0.2, 0.0]));
-        assert_eq!(snap(&s, [5.1, 0.2], 0.5, &[]), Snap::Midpoint(l));
-        assert_eq!(snap(&s, [3.0, 0.3], 0.5, &[]), Snap::OnCurve(l, [3.0, 0.0]));
-        assert_eq!(snap(&s, [3.0, 3.0], 0.5, &[]), Snap::Free([3.0, 3.0]));
+        let far = [100.0, 100.0];
+        assert_eq!(snap(&s, [0.2, 0.1], 0.5, &[], far), Snap::Point(a));
+        assert_eq!(snap(&s, [0.2, 0.1], 0.5, &[a], far), Snap::OnCurve(l, [0.2, 0.0]));
+        assert_eq!(snap(&s, [5.1, 0.2], 0.5, &[], far), Snap::Midpoint(l));
+        assert_eq!(snap(&s, [3.0, 0.3], 0.5, &[], far), Snap::OnCurve(l, [3.0, 0.0]));
+        assert_eq!(snap(&s, [3.0, 3.0], 0.5, &[], far), Snap::Free([3.0, 3.0]));
+        // The origin beats midpoints and curves, but not a sketch point sitting on it.
+        assert_eq!(snap(&s, [5.1, 0.2], 0.5, &[], [5.0, 0.0]), Snap::Origin([5.0, 0.0]));
+        assert_eq!(snap(&s, [0.2, 0.1], 0.5, &[], [0.0, 0.0]), Snap::Point(a));
         // Placing a midpoint snap adds the relation and keeps it satisfied.
         let q = Snap::Midpoint(l).place(&mut s);
         s.constrain(Constraint::Fix(a, [0.0, 0.0]));
         s.drag(&[(b, [20.0, 0.0])]);
         assert!((s.point(q)[0] - 10.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn origin_snap_pins_the_point() {
+        let mut s = Sketch::default();
+        let c = Snap::Origin([0.0, 0.0]).place(&mut s);
+        s.add_circle(c, 5.0);
+        // Dragging the center must not pull it off the origin.
+        s.drag(&[(c, [30.0, 30.0])]);
+        assert!(geom::len(s.point(c)) < 1e-6);
+        assert!(s.constraints().contains(&Constraint::Fix(c, [0.0, 0.0])));
+        // The next click on the origin reuses that point instead of stacking another.
+        assert_eq!(snap(&s, [0.1, 0.0], 0.5, &[], [0.0, 0.0]), Snap::Point(c));
     }
 
     #[test]

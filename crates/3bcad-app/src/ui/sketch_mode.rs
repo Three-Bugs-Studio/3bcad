@@ -542,7 +542,7 @@ impl SketchSession {
         if ctrl {
             return Some((Snap::Free(c), Vec::new()));
         }
-        let snap = inference::snap(&self.sketch, c, tol, &[]);
+        let snap = inference::snap(&self.sketch, c, tol, &[], self.plane.to_local([0.0; 3]));
         let Snap::Free(mut p) = snap else {
             return Some((snap, Vec::new()));
         };
@@ -924,7 +924,7 @@ impl SketchSession {
             let pos = snap.pos(&self.sketch);
             if let Some(s) = view.to_screen(pos) {
                 match snap {
-                    Snap::Point(_) => {
+                    Snap::Point(_) | Snap::Origin(_) => {
                         painter.circle_stroke(s, 7.0, Stroke::new(2.0_f32, INFER));
                     }
                     Snap::Midpoint(_) => {

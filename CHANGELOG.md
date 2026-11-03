@@ -7,6 +7,11 @@ saved files and workflows; patch versions (0.x.y) only fix bugs.
 
 ## [Unreleased]
 
+### Added
+
+- Sketch tools snap to the part origin: a point placed there is fixed to it, so a profile can be centred on the
+  origin and fully defined without guessing its position.
+
 ## [0.3.1] - 2026-10-30
 
 ### Fixed
