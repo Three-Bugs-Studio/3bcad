@@ -84,8 +84,8 @@ fn mesh_tol(s: &Solid, rel: f64, min: f64, max: f64) -> f64 {
 fn volume_at(s: &Solid, rel: f64, min: f64, max: f64) -> Option<f64> {
     let tol = mesh_tol(s, rel, min, max);
     catch_unwind(AssertUnwindSafe(|| {
-        let mut poly = s.triangulation(tol).to_polygon();
-        poly.put_together_same_attrs(TOLERANCE);
+        // The signed volume does not need the duplicated boundary positions welded.
+        let poly = s.robust_triangulation(tol).to_polygon();
         let p = poly.positions();
         poly.faces()
             .triangle_iter()
@@ -132,7 +132,7 @@ fn raw(op: Op, a: &Solid, b: &Solid) -> Option<Solid> {
 /// A mesh at the tolerance of `rough_volume`.
 fn rough_mesh(s: &Solid) -> Option<PolygonMesh> {
     let tol = mesh_tol(s, 5e-3, 5e-3, 0.25);
-    catch_unwind(AssertUnwindSafe(|| s.triangulation(tol).to_polygon())).ok()
+    catch_unwind(AssertUnwindSafe(|| s.robust_triangulation(tol).to_polygon())).ok()
 }
 
 /// How many times the closed mesh `m` wraps around `p`: 1 inside, 0 outside, 1/2 on its surface.

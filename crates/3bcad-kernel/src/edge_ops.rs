@@ -301,6 +301,173 @@ pub fn edge_tool_crossing(topo: &Topology, edge: usize, t: Treatment, flip: bool
     Ok(EdgeTool { tool, add: !convex })
 }
 
+/// How many differently built variable-fillet tools [`variable_fillet`] can make.
+pub const VARIABLE_FILLET_TRIES: usize = 9;
+
+/// A fillet tool whose radius changes along a straight edge: `radii` are `[position 0..1, radius]`
+/// (sorted by position; see [`radius_law`] between them). Returns the tool solid and whether it adds material (concave edge).
+///
+/// truck's booleans often fail to intersect this skinned tool with the faces it grazes, and which
+/// build it accepts is hard to predict, so `attempt` (0..[`VARIABLE_FILLET_TRIES`]) picks one of
+/// several builds of the same fillet (the sections, the crossing margin and the run-outs past the
+/// ends differ; the shape on the part does not):
+/// the caller tries them in turn.
+pub fn variable_fillet(
+    topo: &Topology,
+    edge: usize,
+    radii: &[[f64; 2]],
+    attempt: usize,
+) -> Result<(truck_modeling::Solid, bool)> {
+    use crate::skin::{self, Band, Caps, Ends};
+    ensure!(!radii.is_empty(), "give the fillet at least one radius");
+    let mut radii = radii.to_vec();
+    radii.sort_by(|a, b| a[0].total_cmp(&b[0]));
+    ensure!(radii.iter().all(|r| r[1] > 0.0), "fillet radii must be positive");
+    let e = topo
+        .edges
+        .get(edge)
+        .ok_or_else(|| anyhow::anyhow!("the edge no longer exists"))?;
+    ensure!(e.sides.len() == 2, "the edge must be between two faces");
+    let EdgeCurve::Line { a: start, b: end } = e.curve else {
+        bail!("a variable fillet needs a straight edge");
+    };
+    let (a, b) = (&e.sides[0], &e.sides[1]);
+    let convex = dot(a.inward, b.normal) < 0.0;
+    let attempt = attempt % VARIABLE_FILLET_TRIES;
+    let run_out = [RunOut::Clipped, RunOut::Eased, RunOut::Flat][attempt % 3];
+    let (stations, cross_by) = [(12, CROSS), (24, CROSS), (12, 10.0 * CROSS)][attempt / 3];
+    let r_at = radius_law(&radii, run_out);
+    let max_r = radii.iter().map(|r| r[1]).fold(0.0, f64::max);
+    let behind = if convex { 1.5 * max_r } else { 0.25 * max_r };
+    let len = norm(sub(end, start));
+    let dir = unit(sub(end, start));
+    let x = unit(sub(a.inward, dir.map(|d| d * dot(a.inward, dir))));
+    let y = cross(dir, x);
+    let to2 = |v: P3| [dot(v, x), dot(v, y)];
+    let m = if convex { behind } else { 0.0 };
+    // Stations along the edge (in edge fractions, run-outs included): every control point and
+    // enough in between.
+    let out = m / len.max(1e-12);
+    let mut ts: Vec<f64> = (0..=stations).map(|i| i as f64 / stations as f64).collect();
+    ts.extend(radii.iter().map(|r| r[0].clamp(0.0, 1.0)));
+    if out > 0.0 {
+        ts.extend([-out, 1.0 + out]);
+    }
+    ts.sort_by(f64::total_cmp);
+    ts.dedup_by(|p, q| (*p - *q).abs() < 1e-6);
+    let mut sections = Vec::new();
+    let mut params = Vec::new();
+    for &along in &ts {
+        let r = r_at(along);
+        let (lp, reach) = corner_profile(
+            to2(a.inward),
+            to2(b.inward),
+            Treatment::Fillet { radius: r },
+            convex,
+            behind,
+            cross_by,
+        )?;
+        if (0.0..=1.0).contains(&along) {
+            let mid = std::array::from_fn(|i| start[i] + dir[i] * along * len);
+            check_reach(topo, mid, a, b, reach).or_else(|_| check_reach(topo, e.mid, a, b, reach))?;
+        }
+        let plane = Plane {
+            origin: std::array::from_fn(|i| start[i] + dir[i] * along * len),
+            x,
+            y,
+        };
+        let mat = plane.matrix();
+        sections.push(vec![skin::loop_pieces(&lp)
+            .0
+            .iter()
+            .map(|p| p.transformed(&mat))
+            .collect()]);
+        params.push(along * len);
+    }
+    let solid = skin::skin(
+        &[Band {
+            sections,
+            params,
+            ends: Ends::default(),
+        }],
+        Caps::Planar,
+    )?;
+    Ok((solid, !convex))
+}
+
+/// How the radius continues past the ends of the edge, where the tool is outside the part.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum RunOut {
+    /// Keeps the end slope, clipped at the floor.
+    Clipped,
+    /// Keeps the end slope, easing off smoothly below the floor.
+    Eased,
+    /// Stays at the end radius.
+    Flat,
+}
+
+/// The radius law through `points` ([fraction, radius], sorted): a C¹ piecewise cubic (Hermite,
+/// with Fritsch–Carlson slopes at inner points so it does not overshoot between them). With two
+/// points it is the straight ramp between them. Before the first point and after the last it stays
+/// flat, unless that point is at the end of the edge: then (unless `run_out` is flat) it keeps the
+/// end slope, down to half the smallest radius, so the tool has no kink where it crosses the face at
+/// that end. A kink makes the interpolated tool overshoot, and truck then often cannot intersect it
+/// with the faces. Past the ends the tool is outside the part, so `run_out` never changes the result.
+fn radius_law(points: &[[f64; 2]], run_out: RunOut) -> impl Fn(f64) -> f64 + '_ {
+    let n = points.len();
+    let floor = 0.5 * points.iter().map(|r| r[1]).fold(f64::INFINITY, f64::min);
+    let secant = |i: usize| (points[i + 1][1] - points[i][1]) / (points[i + 1][0] - points[i][0]).max(1e-12);
+    let mut slopes = vec![0.0; n];
+    if n > 1 {
+        slopes[0] = secant(0);
+        slopes[n - 1] = secant(n - 2);
+    }
+    for (i, slope) in slopes.iter_mut().enumerate().take(n.saturating_sub(1)).skip(1) {
+        let (d0, d1) = (secant(i - 1), secant(i));
+        // A local peak or valley is flat there; otherwise the harmonic mean keeps it monotone.
+        *slope = if d0 * d1 <= 0.0 {
+            0.0
+        } else {
+            2.0 / (1.0 / d0 + 1.0 / d1)
+        };
+    }
+    let slope_start = run_out != RunOut::Flat && n > 1 && points[0][0] <= 1e-6;
+    let slope_end = run_out != RunOut::Flat && n > 1 && points[n - 1][0] >= 1.0 - 1e-6;
+    move |t: f64| {
+        let r = if t <= points[0][0] {
+            if slope_start {
+                points[0][1] + slopes[0] * (t - points[0][0])
+            } else {
+                points[0][1]
+            }
+        } else if t >= points[n - 1][0] {
+            if slope_end {
+                points[n - 1][1] + slopes[n - 1] * (t - points[n - 1][0])
+            } else {
+                points[n - 1][1]
+            }
+        } else {
+            let i = points.windows(2).position(|w| t <= w[1][0]).unwrap_or(n - 2);
+            let ([t0, r0], [t1, r1]) = (points[i], points[i + 1]);
+            let h = (t1 - t0).max(1e-12);
+            let u = (t - t0) / h;
+            let (u2, u3) = (u * u, u * u * u);
+            (2.0 * u3 - 3.0 * u2 + 1.0) * r0
+                + (u3 - 2.0 * u2 + u) * h * slopes[i]
+                + (-2.0 * u3 + 3.0 * u2) * r1
+                + (u3 - u2) * h * slopes[i + 1]
+        };
+        if r >= floor {
+            r
+        } else if run_out == RunOut::Eased {
+            // Eases off exponentially instead of clipping: still smooth.
+            floor * ((r - floor) / floor).exp()
+        } else {
+            floor
+        }
+    }
+}
+
 /// The rounded/bevelled band must fit on both faces.
 fn check_reach(
     topo: &Topology,
@@ -443,8 +610,8 @@ mod tests {
     }
 
     #[test]
-    // shortcut: a fillet on a circular edge (torus tool) still fails inside truck-shapeops; the core
-    // reports it as a feature error. Add the fillet case here once truck intersects tori reliably.
+    // A fillet on a circular edge would need a torus tool, which truck-shapeops cannot intersect
+    // tangentially; those are built directly by `round::round_circle` (tested there).
     fn chamfer_a_circular_edge_of_a_cylinder() {
         let cyl = extrude_circle([0.0, 0.0], 5.0, 10.0).unwrap();
         let topo = analyze(&cyl, 0.01);
@@ -488,5 +655,32 @@ mod tests {
         assert!(c.add);
         let v = volume(&apply(&l, &c)).unwrap();
         assert!((v - (36.0 * 10.0 + 0.5 * 10.0)).abs() < 0.05, "{v}");
+    }
+}
+
+#[cfg(test)]
+mod variable_tests {
+    use super::*;
+    use crate::boolean::{subtract, volume};
+    use crate::operations::extrude_polygon;
+    use crate::topology::analyze;
+
+    #[test]
+    fn a_variable_fillet_runs_from_one_radius_to_another() {
+        let cube = extrude_polygon(&[[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 10.0]], 10.0).unwrap();
+        let topo = analyze(&cube, 0.05);
+        let e = topo
+            .edges
+            .iter()
+            .position(|e| matches!(e.curve, EdgeCurve::Line { a, b } if (a[0] - 10.0).abs() < 1e-9 && (b[0] - 10.0).abs() < 1e-9 && (a[2] - 10.0).abs() < 1e-9 && (b[2] - 10.0).abs() < 1e-9))
+            .unwrap();
+        let (tool, add) = variable_fillet(&topo, e, &[[0.0, 1.0], [1.0, 3.0]], 0).unwrap();
+        assert!(!add);
+        let out = subtract(&cube, &tool).unwrap();
+        assert_eq!(out.len(), 1);
+        let removed = 1000.0 - volume(&out[0]).unwrap();
+        // (4 − π)/4 · r² integrated for r from 1 to 3 over 10 mm: (4 − π)/4 · 10 · 13/3.
+        let expected = (4.0 - std::f64::consts::PI) / 4.0 * 10.0 * 13.0 / 3.0;
+        assert!((removed - expected).abs() / expected < 0.03, "{removed} vs {expected}");
     }
 }

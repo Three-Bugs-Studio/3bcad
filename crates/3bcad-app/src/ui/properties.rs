@@ -25,19 +25,33 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
         return;
     }
     if app.selected.is_none() {
-        if let Some((_, name, _)) = app.sketch_target() {
-            let mut start = false;
-            egui::SidePanel::right("property_manager")
-                .default_width(260.0)
-                .show(ctx, |ui| {
-                    ui.heading("Selection");
-                    ui.separator();
-                    ui.label(name);
-                    start = ui.button("✏ Sketch on it").clicked();
-                });
-            if start {
-                app.start_sketch();
-            }
+        // The panel stays even with nothing to show: if it came and went with the selection, the
+        // viewport would resize and the model jump under the cursor between two clicks.
+        let target = app.sketch_target().map(|(_, name, _)| name);
+        let picked: Vec<String> = app.selection.iter().map(|r| app.describe(*r)).collect();
+        let mut start = false;
+        egui::SidePanel::right("property_manager")
+            .default_width(260.0)
+            .show(ctx, |ui| {
+                ui.heading("Selection");
+                ui.separator();
+                match &target {
+                    Some(name) => {
+                        ui.label(name);
+                        start = ui.button("✏ Sketch on it").clicked();
+                    }
+                    None if picked.is_empty() => {
+                        ui.weak("Nothing selected. Click a face, edge or plane, or a feature in the tree to edit it.");
+                    }
+                    None => {
+                        for d in &picked {
+                            ui.label(d);
+                        }
+                    }
+                }
+            });
+        if start {
+            app.start_sketch();
         }
         return;
     }
@@ -45,14 +59,14 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
 }
 
 /// What the current model selection offers to a feature's "Use selection" buttons.
-struct Picks {
-    faces: Vec<FaceRef>,
-    edges: Vec<EdgeRef>,
-    vertex: Option<VertexRef>,
-    axis: Option<(AxisRef, String)>,
-    plane: Option<(PlaneRef, String)>,
-    point: Option<(PointRef, String)>,
-    feature: Option<FeatureId>,
+pub(crate) struct Picks {
+    pub faces: Vec<FaceRef>,
+    pub edges: Vec<EdgeRef>,
+    pub vertex: Option<VertexRef>,
+    pub axis: Option<(AxisRef, String)>,
+    pub plane: Option<(PlaneRef, String)>,
+    pub point: Option<(PointRef, String)>,
+    pub feature: Option<FeatureId>,
 }
 
 fn picks(app: &App) -> Picks {
@@ -79,18 +93,18 @@ fn picks(app: &App) -> Picks {
 /// Edits made by the panel: the new feature kind, and whether a value is being dragged.
 /// A model parameter: a typed value counts once it is finished, not at every key press, which
 /// would rebuild the part and add an undo step each time.
-fn number<Num: egui::emath::Numeric>(v: &mut Num) -> egui::DragValue<'_> {
+pub(crate) fn number<Num: egui::emath::Numeric>(v: &mut Num) -> egui::DragValue<'_> {
     egui::DragValue::new(v).update_while_editing(false)
 }
 
-struct Ed {
-    changed: bool,
+pub(crate) struct Ed {
+    pub changed: bool,
     dragging: bool,
     drag_ended: bool,
 }
 
 impl Ed {
-    fn track(&mut self, r: egui::Response) -> egui::Response {
+    pub fn track(&mut self, r: egui::Response) -> egui::Response {
         if r.changed() {
             self.changed = true;
         }
@@ -103,14 +117,14 @@ impl Ed {
         self.drag_ended |= r.drag_stopped();
     }
 
-    fn length(&mut self, ui: &mut egui::Ui, label: &str, v: &mut f64, min: f64) {
+    pub fn length(&mut self, ui: &mut egui::Ui, label: &str, v: &mut f64, min: f64) {
         ui.horizontal(|ui| {
             ui.label(label);
             self.track(ui.add(number(v).speed(0.1).range(min..=10_000.0).suffix(" mm")));
         });
     }
 
-    fn angle(&mut self, ui: &mut egui::Ui, label: &str, rad: &mut f64, range: std::ops::RangeInclusive<f64>) {
+    pub fn angle(&mut self, ui: &mut egui::Ui, label: &str, rad: &mut f64, range: std::ops::RangeInclusive<f64>) {
         ui.horizontal(|ui| {
             ui.label(label);
             let mut deg = rad.to_degrees();
@@ -123,25 +137,25 @@ impl Ed {
         });
     }
 
-    fn check(&mut self, ui: &mut egui::Ui, v: &mut bool, label: &str) {
+    pub fn check(&mut self, ui: &mut egui::Ui, v: &mut bool, label: &str) {
         self.track(ui.checkbox(v, label));
     }
 
-    fn count(&mut self, ui: &mut egui::Ui, label: &str, v: &mut usize) {
+    pub fn count(&mut self, ui: &mut egui::Ui, label: &str, v: &mut usize) {
         ui.horizontal(|ui| {
             ui.label(label);
             self.track(ui.add(number(v).range(1..=500)));
         });
     }
 
-    fn button(&mut self, ui: &mut egui::Ui, label: &str, enabled: bool) -> bool {
+    pub fn button(&mut self, ui: &mut egui::Ui, label: &str, enabled: bool) -> bool {
         let clicked = ui.add_enabled(enabled, egui::Button::new(label)).clicked();
         self.changed |= clicked;
         clicked
     }
 }
 
-fn describe_plane(h: &History, p: &PlaneRef) -> String {
+pub(crate) fn describe_plane(h: &History, p: &PlaneRef) -> String {
     match p {
         PlaneRef::Std(s) => s.name().into(),
         PlaneRef::Face(f) => format!("a face of {}", h.get(f.tag.feature).map_or("?", |x| x.name.as_str())),
@@ -161,7 +175,7 @@ fn describe_axis(h: &History, a: &AxisRef) -> String {
     }
 }
 
-fn axis_editor(ed: &mut Ed, ui: &mut egui::Ui, h: &History, axis: &mut AxisRef, p: &Picks, label: &str) {
+pub(crate) fn axis_editor(ed: &mut Ed, ui: &mut egui::Ui, h: &History, axis: &mut AxisRef, p: &Picks, label: &str) {
     ui.horizontal_wrapped(|ui| {
         ui.label(format!("{label}: {}", describe_axis(h, axis)));
         for (i, n) in ["X", "Y", "Z"].iter().enumerate() {
@@ -175,7 +189,7 @@ fn axis_editor(ed: &mut Ed, ui: &mut egui::Ui, h: &History, axis: &mut AxisRef, 
     });
 }
 
-fn plane_editor(ed: &mut Ed, ui: &mut egui::Ui, h: &History, plane: &mut PlaneRef, p: &Picks, label: &str) {
+pub(crate) fn plane_editor(ed: &mut Ed, ui: &mut egui::Ui, h: &History, plane: &mut PlaneRef, p: &Picks, label: &str) {
     ui.horizontal_wrapped(|ui| {
         ui.label(format!("{label}: {}", describe_plane(h, plane)));
         if ed.button(ui, "Use selection", p.plane.is_some()) {
@@ -227,7 +241,7 @@ fn end_editor(ed: &mut Ed, ui: &mut egui::Ui, salt: &str, end: &mut End, p: &Pic
     }
 }
 
-fn refs_line(ed: &mut Ed, ui: &mut egui::Ui, what: &str, n: usize, avail: bool) -> bool {
+pub(crate) fn refs_line(ed: &mut Ed, ui: &mut egui::Ui, what: &str, n: usize, avail: bool) -> bool {
     let mut take = false;
     ui.horizontal(|ui| {
         ui.label(format!("{n} {what}"));
@@ -704,6 +718,7 @@ fn feature_panel(app: &mut App, ctx: &egui::Context) {
                             "The rib grows from the line to the nearest wall and stops at the part's bounding box.",
                         );
                     }
+                    other => crate::ui::advanced::editor(&mut ed, ui, h, id, other, &p),
                 }
             });
         });
@@ -736,7 +751,7 @@ fn feature_panel(app: &mut App, ctx: &egui::Context) {
     }
 }
 
-fn seeds_editor(ed: &mut Ed, ui: &mut egui::Ui, h: &History, me: FeatureId, seeds: &mut Seeds) {
+pub(crate) fn seeds_editor(ed: &mut Ed, ui: &mut egui::Ui, h: &History, me: FeatureId, seeds: &mut Seeds) {
     let mut bodies = *seeds == Seeds::Bodies;
     ed.check(ui, &mut bodies, "Bodies (every body so far)");
     if bodies != (*seeds == Seeds::Bodies) {
@@ -758,6 +773,12 @@ fn seeds_editor(ed: &mut Ed, ui: &mut egui::Ui, h: &History, me: FeatureId, seed
                     | FeatureKind::Fillet { .. }
                     | FeatureKind::Chamfer { .. }
                     | FeatureKind::Rib { .. }
+                    | FeatureKind::Sweep(_)
+                    | FeatureKind::Loft(_)
+                    | FeatureKind::VariableFillet { .. }
+                    | FeatureKind::FaceFillet { .. }
+                    | FeatureKind::Dome { .. }
+                    | FeatureKind::Wrap { .. }
             );
             if !solid {
                 continue;

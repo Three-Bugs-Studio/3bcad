@@ -36,7 +36,7 @@ fn f32x3(v: [f64; 3]) -> [f32; 3] {
 
 /// `tol` is the max distance (model units) between mesh and true surface.
 pub fn render_mesh(solid: &Solid, tol: f64) -> RenderMesh {
-    let meshed = solid.triangulation(tol);
+    let meshed = solid.robust_triangulation(tol);
     let mut out = RenderMesh::default();
     for face in meshed.face_iter() {
         let index = out.faces.len() as u32;
@@ -96,12 +96,60 @@ pub fn render_mesh(solid: &Solid, tol: f64) -> RenderMesh {
 /// Watertight mesh: faces share their boundary polylines, and welding merges
 /// the duplicated positions so every edge is used by exactly two triangles.
 pub fn print_mesh(solid: &Solid, tol: f64) -> PrintMesh {
-    let mut poly = solid.triangulation(tol).to_polygon();
-    poly.put_together_same_attrs(TOLERANCE);
+    let poly = solid.robust_triangulation(tol).to_polygon();
+    let (vertices, remap) = weld(poly.positions(), TOLERANCE);
     PrintMesh {
-        vertices: poly.positions().iter().map(|&p| p.into()).collect(),
-        triangles: poly.faces().triangle_iter().map(|t| t.map(|v| v.pos)).collect(),
+        vertices,
+        triangles: poly
+            .faces()
+            .triangle_iter()
+            .map(|t| t.map(|v| remap[v.pos]))
+            .filter(|t| t[0] != t[1] && t[1] != t[2] && t[2] != t[0])
+            .collect(),
     }
+}
+
+/// Merges positions closer than `eps`: the kept positions and each input's index among them.
+/// A hash grid of `eps` cells, so it stays linear (truck's own welding is quadratic, seconds on
+/// a thread's mesh).
+fn weld(positions: &[Point3], eps: f64) -> (Vec<[f64; 3]>, Vec<usize>) {
+    use std::collections::HashMap;
+    let cell = |p: &Point3| {
+        [
+            (p.x / eps).floor() as i64,
+            (p.y / eps).floor() as i64,
+            (p.z / eps).floor() as i64,
+        ]
+    };
+    let mut grid: HashMap<[i64; 3], Vec<usize>> = HashMap::new();
+    let mut kept: Vec<[f64; 3]> = Vec::new();
+    let mut remap = Vec::with_capacity(positions.len());
+    for p in positions {
+        let c = cell(p);
+        let mut found = None;
+        'search: for dx in -1..=1 {
+            for dy in -1..=1 {
+                for dz in -1..=1 {
+                    if let Some(ids) = grid.get(&[c[0] + dx, c[1] + dy, c[2] + dz]) {
+                        for &i in ids {
+                            let q = kept[i];
+                            if (q[0] - p.x).powi(2) + (q[1] - p.y).powi(2) + (q[2] - p.z).powi(2) <= eps * eps {
+                                found = Some(i);
+                                break 'search;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        let i = found.unwrap_or_else(|| {
+            kept.push([p.x, p.y, p.z]);
+            grid.entry(c).or_default().push(kept.len() - 1);
+            kept.len() - 1
+        });
+        remap.push(i);
+    }
+    (kept, remap)
 }
 
 #[cfg(test)]

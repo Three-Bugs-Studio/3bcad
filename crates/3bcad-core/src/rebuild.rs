@@ -20,12 +20,17 @@ use crate::holes::{self, ThreadSpec};
 use crate::naming::{self, FaceTag, Named};
 use crate::{FeatureId, History};
 
+mod advanced;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OpKind {
     Add,
     Sub,
     /// Keep only what is inside the tool (cut with "flip side to cut").
     Keep,
+    /// The body was rebuilt directly rather than by a boolean (threads, round fillets on
+    /// circular edges, …); the step's tool is only a placeholder and cannot be replayed.
+    Direct,
 }
 
 /// How far (mm) a Through All tool runs past the part.
@@ -78,6 +83,10 @@ pub struct Rebuild {
     /// The steps each solid feature applied (patterns and mirrors replay them).
     pub ops: HashMap<FeatureId, Vec<Step>>,
     pub threads: HashMap<FeatureId, ThreadSpec>,
+    /// Reference curves (helices and spirals) for sweeps and patterns.
+    pub helices: HashMap<FeatureId, threebcad_kernel::sweep::Helix>,
+    /// Polylines to draw for curve features.
+    pub curves: HashMap<FeatureId, Vec<P3>>,
     /// Features evaluated in this rebuild (the rest came from the cache).
     pub evaluated: usize,
 }
@@ -248,6 +257,81 @@ fn scale3(a: P3, s: f64) -> P3 {
 }
 
 /// Ray `o + t d` against triangles: smallest `t > min_t`.
+/// Every crossing of the ray with the triangles, nearest first, with crossings of shared triangle
+/// edges counted once.
+fn ray_hits(o: P3, d: P3, tris: &[[P3; 3]]) -> Vec<f64> {
+    // Skewed a hair so the ray does not run along mesh edges.
+    let d = unit(add3(d, [1.3e-7, -0.7e-7, 0.9e-7]));
+    let mut ts: Vec<f64> = tris
+        .iter()
+        .filter_map(|&t| ray_hit(o, d, std::iter::once(t), 1e-6))
+        .collect();
+    ts.sort_by(f64::total_cmp);
+    ts.dedup_by(|a, b| (*a - *b).abs() < 1e-7);
+    ts
+}
+
+/// Whether a point is inside the meshed bodies (odd number of crossings).
+fn inside(p: P3, tris: &[[P3; 3]]) -> bool {
+    ray_hits(p, unit([0.31, 0.57, 0.76]), tris).len() % 2 == 1
+}
+
+/// Where a ray from outside the material enters the nearest wall and leaves it again.
+fn entry_exit(o: P3, d: P3, tris: &[[P3; 3]]) -> Option<(f64, f64)> {
+    let hits = ray_hits(o, d, tris);
+    let e = *hits.first()?;
+    Some((e, hits.get(1).copied().unwrap_or(f64::INFINITY)))
+}
+
+/// A closed polygon without points in the middle of straight runs (or repeated).
+fn drop_collinear(mut pts: Vec<[f64; 2]>) -> Vec<[f64; 2]> {
+    loop {
+        let n = pts.len();
+        if n <= 3 {
+            return pts;
+        }
+        let off = |i: usize| {
+            let (a, b, c) = (pts[(i + n - 1) % n], pts[i], pts[(i + 1) % n]);
+            let (u, v) = ([c[0] - a[0], c[1] - a[1]], [b[0] - a[0], b[1] - a[1]]);
+            let l = u[0].hypot(u[1]);
+            if l < 1e-9 {
+                return 0.0;
+            }
+            (u[0] * v[1] - u[1] * v[0]).abs() / l
+        };
+        match (0..n).find(|&i| off(i) < 1e-6) {
+            Some(i) => {
+                pts.remove(i);
+            }
+            None => return pts,
+        }
+    }
+}
+
+/// Points along an open sketch chain, about one per millimetre (at least 16).
+fn rib_samples(chain: &[ProfileSegment]) -> Vec<[f64; 2]> {
+    let mut pts: Vec<[f64; 2]> = Vec::new();
+    for s in chain {
+        let seg = match *s {
+            ProfileSegment::Line { from, to } => {
+                let l = (to[0] - from[0]).hypot(to[1] - from[1]);
+                let k = (l.ceil() as usize).clamp(16, 200);
+                (0..k)
+                    .map(|i| {
+                        let t = i as f64 / k as f64;
+                        [from[0] + (to[0] - from[0]) * t, from[1] + (to[1] - from[1]) * t]
+                    })
+                    .collect()
+            }
+            _ => offset::sample_loop(std::slice::from_ref(s), 64),
+        };
+        pts.extend(seg);
+    }
+    pts.push(offset::seg_end(chain.last().unwrap()));
+    pts.dedup_by(|a, b| (a[0] - b[0]).hypot(a[1] - b[1]) < 1e-9);
+    pts
+}
+
 fn ray_hit(o: P3, d: P3, tris: impl Iterator<Item = [P3; 3]>, min_t: f64) -> Option<f64> {
     let mut best: Option<f64> = None;
     for [a, b, c] in tris {
@@ -509,6 +593,7 @@ impl Eval {
         let pieces = self.tool_bodies(&step.tool, step.instance)?;
         for (tool, ttopo, ttags) in pieces {
             match step.op {
+                OpKind::Direct => bail!("a directly built step cannot be applied as a tool"),
                 OpKind::Add => {
                     let mut merged: Option<Body> = None;
                     let mut keep = Vec::new();
@@ -809,6 +894,7 @@ impl Eval {
                 both_sides,
                 flip,
             } => self.rib(h, sketch, thickness, both_sides, flip),
+            other => self.advanced(h, other),
         }
     }
 
@@ -958,7 +1044,18 @@ impl Eval {
         propagate: bool,
     ) -> Result<()> {
         ensure!(!edges.is_empty(), "Select edges");
-        let mut picked: Vec<(usize, usize)> = edges.iter().map(|e| self.resolve_edge(e)).collect::<Result<_>>()?;
+        let picked: Vec<(usize, usize)> = edges.iter().map(|e| self.resolve_edge(e)).collect::<Result<_>>()?;
+        self.edge_feature_at(picked, t, flip, propagate)
+    }
+
+    /// `edge_feature` on resolved (body, edge) pairs.
+    fn edge_feature_at(
+        &mut self,
+        mut picked: Vec<(usize, usize)>,
+        t: Treatment,
+        flip: bool,
+        propagate: bool,
+    ) -> Result<()> {
         if propagate {
             // Add neighbours that continue a picked edge without a corner.
             let mut i = 0;
@@ -990,8 +1087,22 @@ impl Eval {
         }
         // Tools come from the topology before any of them is applied.
         let mut tools: Vec<(usize, Arc<Topology>, edge_ops::EdgeTool, usize)> = Vec::new();
+        // Whole circles between a flat face and a cylinder are rounded directly (truck cannot
+        // intersect the tangent torus tool): (body, center, axis, radius, the edge's tool).
+        let mut rounds: Vec<(usize, P3, P3, f64, Arc<Topology>, usize)> = Vec::new();
         for &(b, e) in &picked {
             let topo = &self.s.bodies[b].topo;
+            if let (Treatment::Fillet { .. }, &EdgeCurve::Circle { center, axis, radius }) = (t, &topo.edges[e].curve) {
+                if edge_ops::full_circle(topo, e) {
+                    let dup = rounds
+                        .iter()
+                        .any(|r| r.0 == b && norm(sub(r.1, center)) < 1e-6 && (r.3 - radius).abs() < 1e-6);
+                    if !dup {
+                        rounds.push((b, center, axis, radius, topo.clone(), e));
+                    }
+                    continue;
+                }
+            }
             // The arcs of a whole circle make the same revolved tool: keep one.
             if let EdgeCurve::Circle { center, radius, .. } = topo.edges[e].curve {
                 let dup = edge_ops::full_circle(topo, e)
@@ -1033,7 +1144,64 @@ impl Eval {
                 Err(e) => return Err(e),
             }
         }
+        let Treatment::Fillet { radius: rho } = t else {
+            return Ok(());
+        };
+        for (b, center, axis, radius, topo, e) in rounds {
+            // An earlier round may have split or merged bodies: find the one on this circle.
+            let on = |body: &Body| {
+                body.topo.edges.iter().any(|ed| {
+                    matches!(ed.curve, EdgeCurve::Circle { center: c, radius: r, .. }
+                        if norm(sub(c, center)) < 1e-6 && (r - radius).abs() < 1e-6)
+                })
+            };
+            let b = if self.s.bodies.get(b).is_some_and(on) {
+                b
+            } else {
+                self.s
+                    .bodies
+                    .iter()
+                    .position(on)
+                    .ok_or_else(|| anyhow!("the edge no longer exists"))?
+            };
+            match threebcad_kernel::round::round_circle(&self.s.bodies[b].solid, center, axis, radius, rho) {
+                Ok(solid) => self.direct(b, solid),
+                Err(err) if err.to_string().contains("too large") => return Err(err),
+                Err(_) => {
+                    // Not a plain plane/cylinder rim: try the torus tool.
+                    let et = edge_ops::edge_tool_crossing(&topo, e, t, flip, 1e-2)?;
+                    let step = Step {
+                        feature: self.id,
+                        instance: 0,
+                        op: if et.add { OpKind::Add } else { OpKind::Sub },
+                        tool: et.tool,
+                    };
+                    self.apply(step, true)?;
+                }
+            }
+        }
         Ok(())
+    }
+
+    /// Replaces body `b` by a solid built directly from it.
+    fn direct(&mut self, b: usize, solid: Solid) {
+        let old = self.s.bodies.remove(b);
+        let mut csg = old.csg.clone();
+        csg.push(Step {
+            feature: self.id,
+            instance: 0,
+            op: OpKind::Direct,
+            tool: old.csg.first().map(|s| s.tool.clone()).unwrap_or_else(|| Tool::Prism {
+                regions: Vec::new(),
+                plane: Plane::TOP,
+                z0: 0.0,
+                z1: 0.0,
+                draft: None,
+            }),
+        });
+        let src: [(&Topology, &[FaceTag]); 1] = [(&old.topo, &old.tags)];
+        let body = self.make_body(solid, &src, csg);
+        self.s.bodies.insert(b, body);
     }
 
     fn base_of(&self, b: usize) -> Result<(Step, Vec<Step>)> {
@@ -1041,7 +1209,8 @@ impl Eval {
         let (first, rest) = csg.split_first().ok_or_else(|| anyhow!("the body has no history"))?;
         ensure!(
             first.op == OpKind::Add && rest.iter().all(|s| s.op == OpKind::Sub),
-            "Shell and Draft work on bodies made of one boss followed by cuts, holes, fillets and chamfers"
+            "Shell and Draft work on bodies made of one boss followed by cuts, holes, fillets and chamfers \
+             (threads and fillets on round edges must come after them)"
         );
         Ok((first.clone(), rest.to_vec()))
     }
@@ -1110,6 +1279,7 @@ impl Eval {
                     ensure!(removed.is_empty(), "Shell cannot remove faces of a revolved body yet");
                     base.tool.offset(-(start))
                 }
+                Tool::Shape(_) => bail!("Shell works on extruded and revolved bodies, not on sweeps and lofts"),
             }
         };
         let is_removed = |f: ToolFace| removed.contains(&f);
@@ -1403,6 +1573,11 @@ impl Eval {
 
     /// Replays a body's history with some steps changed; keeps the piece nearest the old body.
     fn replay(&self, csg: &[Step], near: P3) -> Result<Body> {
+        ensure!(
+            csg.iter().all(|s| s.op != OpKind::Direct),
+            "this body has a thread or a rounded circular edge, which cannot be rebuilt this way; \
+             put this feature before them in the tree"
+        );
         let mut bodies: Vec<Tagged> = Vec::new();
         for (i, s) in csg.iter().enumerate() {
             let sub_eval = Eval {
@@ -1422,6 +1597,7 @@ impl Eval {
                         OpKind::Add => boolean::union(solid, ts)?.into_iter().collect(),
                         OpKind::Sub => boolean::subtract(solid, ts)?,
                         OpKind::Keep => boolean::intersect(solid, ts)?,
+                        OpKind::Direct => unreachable!("checked above"),
                     };
                     for r in res {
                         let rt = analyze(&r);
@@ -1522,41 +1698,122 @@ impl Eval {
         let (lo, hi) = self
             .body_bbox()
             .ok_or_else(|| anyhow!("a rib needs a part to grow into"))?;
-        let reach = norm(sub(hi, lo)) * 2.0 + 1.0;
         let center = scale3(add3(lo, hi), 0.5);
         let c2 = plane.to_local(center);
-        let mut regions = Vec::new();
-        for chain in &chains {
-            // Grow towards the nearest wall (a ray from the line's middle), unless flipped.
-            let s = &chain[0];
-            let (a, b) = (offset::seg_start(s), offset::seg_end(s));
-            let left = [-(b[1] - a[1]), b[0] - a[0]];
-            let m = plane.to_world([(a[0] + b[0]) / 2.0, (a[1] + b[1]) / 2.0]);
-            let dir = unit(add3(scale3(plane.x, left[0]), scale3(plane.y, left[1])));
-            let tris = || {
-                self.s
-                    .bodies
-                    .iter()
-                    .flat_map(|b| b.topo.faces.iter().flat_map(|f| f.tris.iter().copied()))
-            };
-            let towards_left = match (ray_hit(m, dir, tris(), 1e-6), ray_hit(m, dir.map(|v| -v), tris(), 1e-6)) {
-                (Some(l), Some(r)) => l <= r,
-                (Some(_), None) => true,
-                (None, Some(_)) => false,
-                (None, None) => left[0] * (c2[0] - a[0]) + left[1] * (c2[1] - a[1]) > 0.0,
-            };
-            let (l, r) = if towards_left != flip {
-                (reach, 0.0)
-            } else {
-                (0.0, reach)
-            };
-            regions.push(offset::thicken_chain(chain, l, r)?);
-        }
         let (z0, z1) = if both {
             (-thickness / 2.0, thickness / 2.0)
         } else {
             (0.0, thickness)
         };
+        let tris: Vec<[P3; 3]> = self
+            .s
+            .bodies
+            .iter()
+            .flat_map(|b| b.topo.faces.iter().flat_map(|f| f.tris.iter().copied()))
+            .collect();
+        let n = plane.normal();
+        // Rays at the middle and near both faces of the rib.
+        let heights = [(z0 + z1) / 2.0, z0 + 0.05 * thickness, z1 - 0.05 * thickness];
+        let world = |p: [f64; 2], z: f64| add3(plane.to_world(p), scale3(n, z));
+        let dir3 = |d: [f64; 2]| unit(add3(scale3(plane.x, d[0]), scale3(plane.y, d[1])));
+        let mut regions = Vec::new();
+        for chain in &chains {
+            let mut pts = rib_samples(chain);
+            // Open ends in the air run on to the nearest wall along their direction.
+            for end in [false, true] {
+                let (p, q) = if end {
+                    (pts[pts.len() - 1], pts[pts.len() - 2])
+                } else {
+                    (pts[0], pts[1])
+                };
+                let t = [p[0] - q[0], p[1] - q[1]];
+                let l = t[0].hypot(t[1]);
+                let pw = world(p, heights[0]);
+                if l < 1e-12 || inside(pw, &tris) || tris.iter().any(|&t| topology::point_triangle(pw, t) < 1e-4) {
+                    continue;
+                }
+                let t = [t[0] / l, t[1] / l];
+                let Some((e, x)) = entry_exit(world(p, heights[0]), dir3(t), &tris) else {
+                    continue;
+                };
+                let go = e + (thickness).min((x - e) / 2.0);
+                let k = ((go / 2.0).ceil() as usize).clamp(1, 16);
+                let ext: Vec<[f64; 2]> = (1..=k)
+                    .map(|i| {
+                        [
+                            p[0] + t[0] * go * i as f64 / k as f64,
+                            p[1] + t[1] * go * i as f64 / k as f64,
+                        ]
+                    })
+                    .collect();
+                if end {
+                    pts.extend(ext);
+                } else {
+                    pts.splice(0..0, ext.into_iter().rev());
+                }
+            }
+            // Which side the rib grows to: the nearer wall from the line's middle, unless flipped.
+            let m = pts.len() / 2;
+            let tang = |i: usize| {
+                let (a, b) = (pts[i.saturating_sub(1)], pts[(i + 1).min(pts.len() - 1)]);
+                let l = (b[0] - a[0]).hypot(b[1] - a[1]).max(1e-300);
+                [(b[0] - a[0]) / l, (b[1] - a[1]) / l]
+            };
+            let left_of = |i: usize| {
+                let t = tang(i);
+                [-t[1], t[0]]
+            };
+            let lm = left_of(m);
+            let pm = world(pts[m], heights[0]);
+            let towards_left = match (
+                entry_exit(pm, dir3(lm), &tris).map(|h| h.0),
+                entry_exit(pm, dir3([-lm[0], -lm[1]]), &tris).map(|h| h.0),
+            ) {
+                (Some(l), Some(r)) => l <= r,
+                (Some(_), None) => true,
+                (None, Some(_)) => false,
+                (None, None) => lm[0] * (c2[0] - pts[m][0]) + lm[1] * (c2[1] - pts[m][1]) > 0.0,
+            };
+            let side = if towards_left != flip { 1.0 } else { -1.0 };
+            // How far each sample reaches: into the nearest wall by up to the thickness, never
+            // through it.
+            let mut reach: Vec<Option<f64>> = Vec::with_capacity(pts.len());
+            for (i, &p) in pts.iter().enumerate() {
+                let d = left_of(i).map(|v| v * side);
+                // On or in a wall already: the neighbours decide.
+                let pw = world(p, heights[0]);
+                if inside(pw, &tris) || tris.iter().any(|&t| topology::point_triangle(pw, t) < 1e-4) {
+                    reach.push(None);
+                    continue;
+                }
+                let mut entry: Option<f64> = None;
+                let mut exit = f64::INFINITY;
+                for &z in &heights {
+                    if let Some((e, x)) = entry_exit(world(p, z), dir3(d), &tris) {
+                        entry = Some(entry.map_or(e, |m: f64| m.max(e)));
+                        exit = exit.min(x);
+                    }
+                }
+                reach.push(entry.map(|e| e + thickness.min(((exit - e) / 2.0).max(0.0))));
+            }
+            ensure!(reach.iter().any(Option::is_some), "the rib does not reach the part");
+            // Samples that miss (past the part's edge) take their nearest neighbour's reach.
+            let filled: Vec<f64> = (0..reach.len())
+                .map(|i| {
+                    (0..reach.len())
+                        .filter_map(|k| reach[k].map(|r| (i.abs_diff(k), r)))
+                        .min_by_key(|x| x.0)
+                        .unwrap()
+                        .1
+                })
+                .collect();
+            let mut poly = pts.clone();
+            for i in (0..pts.len()).rev() {
+                let d = left_of(i).map(|v| v * side);
+                poly.push([pts[i][0] + d[0] * filled[i], pts[i][1] + d[1] * filled[i]]);
+            }
+            regions.push(threebcad_kernel::tool::polygon(&drop_collinear(poly))?);
+        }
         let tool = Tool::Prism {
             regions,
             plane,
@@ -1564,26 +1821,7 @@ impl Eval {
             z1,
             draft: None,
         };
-        // shortcut: the rib stops at the part's bounding box (shrunk 0.1 mm, hidden inside the outer walls), not at the nearest
-        // wall; fine for ribs between walls, too much material for open-sided parts.
-        let inset = 0.1;
-        let bx = Tool::Prism {
-            regions: vec![threebcad_kernel::tool::polygon(&[
-                [lo[0] + inset, lo[1] + inset],
-                [hi[0] - inset, lo[1] + inset],
-                [hi[0] - inset, hi[1] - inset],
-                [lo[0] + inset, hi[1] - inset],
-            ])?],
-            plane: Plane::TOP,
-            z0: lo[2] + inset,
-            z1: hi[2] - inset,
-            draft: None,
-        };
-        let bx = bx.solids()?.remove(0);
-        let mut ribs = Vec::new();
-        for s in tool.solids()? {
-            ribs.extend(boolean::intersect(&s, &bx)?);
-        }
+        let ribs = tool.solids()?;
         ensure!(!ribs.is_empty(), "the rib does not reach the part");
         for r in ribs {
             let t = analyze(&r);
@@ -1632,7 +1870,13 @@ pub fn rebuild(h: &mut History, cache: &mut Vec<CacheEntry>) -> Rebuild {
                 shifted: Cell::new(false),
             };
             let bodies = ev.s.bodies.clone();
-            let result = ev.run(h);
+            // The geometry library can panic deep in a boolean or a tessellation; that is this
+            // feature failing, not the whole rebuild.
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| ev.run(h))).unwrap_or_else(|_| {
+                Err(anyhow::anyhow!(
+                    "the geometry kernel could not compute this feature; try other sizes or move it slightly"
+                ))
+            });
             if ev.shifted.get() {
                 ev.warn("a face or edge this feature uses was split differently since it was picked: check it is still the right one");
             }
