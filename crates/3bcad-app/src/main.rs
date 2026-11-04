@@ -2,6 +2,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod app;
+mod files;
 mod ui;
 
 use eframe::egui;
@@ -11,7 +12,11 @@ fn main() -> eframe::Result {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_title(format!("3BCAD {}", app::VERSION))
-            .with_inner_size([1400.0, 900.0]),
+            .with_inner_size([1400.0, 900.0])
+            .with_icon(
+                eframe::icon_data::from_png_bytes(include_bytes!("../../../assets/icon-256.png"))
+                    .expect("the bundled icon is a PNG"),
+            ),
         renderer: eframe::Renderer::Wgpu,
         depth_buffer: app::DEPTH_BITS,
         multisampling: app::MSAA as u16,

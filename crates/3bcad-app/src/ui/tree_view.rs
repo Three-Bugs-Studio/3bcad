@@ -1,4 +1,4 @@
-//! FeatureManager design tree: reference planes, features with sketch status, rollback bar,
+//! Feature tree: reference planes, features with sketch status, rollback bar,
 //! rename (F2), suppress, drag-to-reorder.
 
 use eframe::egui::{self, Color32, RichText, Sense};
@@ -38,7 +38,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
         .resizable(true)
         .default_width(240.0)
         .show(ctx, |ui| {
-            ui.heading("FeatureManager");
+            ui.heading("Feature Tree");
             ui.separator();
             ui.label(RichText::new(&app.doc.name).strong());
             for rp in RefPlane::ALL {

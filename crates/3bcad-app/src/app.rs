@@ -12,10 +12,10 @@ use threebcad_core::{
 use threebcad_io::Slicer;
 use threebcad_kernel::mass::{self, MassProperties};
 use threebcad_kernel::mesher::{self, PrintMesh};
-use threebcad_kernel::topology::EdgeCurve;
+use threebcad_kernel::topology::{EdgeCurve, TopoEdge, Topology};
 use threebcad_kernel::Plane;
 use threebcad_render::{MeshVertex, OrbitCamera, SceneGeometry};
-use threebcad_sketch::Constraint;
+use threebcad_sketch::{Constraint, Sketch};
 
 use crate::ui::{self, ribbon::RibbonTab, sketch_mode::SketchSession};
 
@@ -81,7 +81,7 @@ pub enum ModelRef {
 pub struct App {
     pub doc: PartDocument,
     pub camera: OrbitCamera,
-    /// Feature selected in the FeatureManager.
+    /// Feature selected in the feature tree.
     pub selected: Option<FeatureId>,
     pub tab: RibbonTab,
     pub status: String,
@@ -104,13 +104,12 @@ pub struct App {
     pub show_measure: bool,
     pub show_mass: bool,
     pub show_shortcuts: bool,
-    /// g/cm³
-    pub density: f64,
     pub mass: Option<(u64, MassProperties)>,
     /// The Measure window's lines, and the model revision and selection they are for.
     pub measured: Option<(u64, Vec<ModelRef>, Vec<String>)>,
     /// Feature being renamed in the tree and the text typed so far.
     pub renaming: Option<(FeatureId, String)>,
+    pub files: crate::files::Files,
     known_problems: usize,
     built_for: Option<(u64, Vec<bool>)>,
 }
@@ -142,10 +141,10 @@ impl App {
             show_measure: false,
             show_mass: false,
             show_shortcuts: false,
-            density: 1.24,
             mass: None,
             measured: None,
             renaming: None,
+            files: crate::files::Files::new(),
             known_problems: 0,
             built_for: None,
         };
@@ -165,7 +164,7 @@ impl App {
     }
 
     /// Rebuilds the scene (meshes, pick ids, planes) when the document or plane visibility changed.
-    fn sync_geometry(&mut self) {
+    pub(crate) fn sync_geometry(&mut self) {
         let key = (
             self.doc.revision(),
             RefPlane::ALL.iter().map(|p| self.plane_visible[p]).collect::<Vec<_>>(),
@@ -199,7 +198,27 @@ impl App {
                 refs.push(ModelRef::Vertex { body, vertex });
             }
         }
-        // Planes sized to the model, like SolidWorks.
+        for (id, mesh) in &self.doc.built().meshes {
+            if self.doc.history().is_suppressed(*id) {
+                continue;
+            }
+            let pick = refs.len() as u32;
+            refs.push(ModelRef::Feature(*id));
+            for t in &mesh.triangles {
+                let [a, b, c] = t.map(|i| mesh.vertices[i]);
+                let n = threebcad_kernel::topology::cross(
+                    threebcad_kernel::topology::sub(b, a),
+                    threebcad_kernel::topology::sub(c, a),
+                );
+                let nor = threebcad_kernel::topology::unit(n).map(|v| v as f32);
+                g.triangles.extend([a, b, c].map(|p| MeshVertex {
+                    pos: p.map(|v| v as f32),
+                    nor,
+                    id: pick,
+                }));
+            }
+        }
+        // Planes sized to the model.
         let half = g
             .bounds()
             .map_or(60.0, |(lo, hi)| (lo.abs().max(hi.abs()).max_element() * 1.2).max(40.0)) as f64;
@@ -335,7 +354,7 @@ impl App {
         }
     }
 
-    /// The feature selected in the FeatureManager, then those added with Ctrl+click, in order.
+    /// The feature selected in the feature tree, then those added with Ctrl+click, in order.
     pub fn chosen_features(&self) -> Vec<FeatureId> {
         let mut out: Vec<FeatureId> = self.selected.into_iter().collect();
         for r in &self.selection {
@@ -358,7 +377,7 @@ impl App {
             .collect()
     }
 
-    /// Selected edges, plus every edge of selected faces (like SolidWorks' Fillet).
+    /// Selected edges, plus every edge of selected faces (what Fillet expects).
     pub fn selected_edges(&self, with_faces: bool) -> Vec<EdgeRef> {
         let mut out = Vec::new();
         for r in &self.selection {
@@ -500,85 +519,21 @@ impl App {
             return;
         };
         let Some(b) = self.doc.bodies().get(body) else { return };
-        let edges: Vec<_> = b
-            .topo
-            .edges
-            .iter()
-            .filter(|e| e.sides.iter().any(|s| s.face == face))
-            .cloned()
-            .collect();
+        let edges = face_edges(&b.topo, face);
         let Some(s) = &mut self.sketch else { return };
-        let plane = s.plane;
         s.checkpoint();
-        let sk = &mut s.sketch;
-        let mut points: Vec<([f64; 2], threebcad_sketch::PointId)> = Vec::new();
-        let mut point = |sk: &mut threebcad_sketch::Sketch, p: [f64; 3]| {
-            let l = plane.to_local(p);
-            if let Some(&(_, id)) = points.iter().find(|(q, _)| (q[0] - l[0]).hypot(q[1] - l[1]) < 1e-6) {
-                return id;
-            }
-            let id = sk.add_point(l[0], l[1]);
-            sk.constrain(Constraint::Fix(id, l));
-            points.push((l, id));
-            id
-        };
-        let mut circles: Vec<([f64; 3], f64)> = Vec::new();
-        let mut added = 0;
-        for e in &edges {
-            match e.curve {
-                EdgeCurve::Line { a, b } => {
-                    let (pa, pb) = (point(sk, a), point(sk, b));
-                    sk.add_line(pa, pb);
-                }
-                EdgeCurve::Circle { center, radius, .. } => {
-                    let same = |c: [f64; 3], r: f64| {
-                        (r - radius).abs() < 1e-6 && (0..3).all(|i| (c[i] - center[i]).abs() < 1e-6)
-                    };
-                    // truck splits a circle into arcs: put the circle back together.
-                    let around: f64 = edges
-                        .iter()
-                        .filter(|o| matches!(o.curve, EdgeCurve::Circle { center: c, radius: r, .. } if same(c, r)))
-                        .map(|o| o.length)
-                        .sum();
-                    if around >= std::f64::consts::TAU * radius * (1.0 - 1e-3) {
-                        if circles.iter().any(|&(c, r)| same(c, r)) {
-                            continue;
-                        }
-                        circles.push((center, radius));
-                        let c = point(sk, center);
-                        let ent = sk.add_circle(c, radius);
-                        sk.constrain(Constraint::Radius(ent, radius));
-                    } else {
-                        let (first, last) = (e.points[0], *e.points.last().unwrap());
-                        let mid = e.points[e.points.len() / 2];
-                        let (lf, lm, ll) = (plane.to_local(first), plane.to_local(mid), plane.to_local(last));
-                        // Sketch arcs run counter-clockwise from start to end.
-                        let turn = (lm[0] - lf[0]) * (ll[1] - lf[1]) - (lm[1] - lf[1]) * (ll[0] - lf[0]);
-                        let (s0, s1) = if turn > 0.0 { (first, last) } else { (last, first) };
-                        let c = point(sk, center);
-                        let (p0, p1) = (point(sk, s0), point(sk, s1));
-                        sk.add_arc(c, p0, p1);
-                    }
-                }
-                EdgeCurve::Other => {
-                    let ids: Vec<_> = e
-                        .points
-                        .iter()
-                        .step_by(4)
-                        .chain(e.points.last())
-                        .map(|&p| point(sk, p))
-                        .collect();
-                    for w in ids.windows(2) {
-                        if w[0] != w[1] {
-                            sk.add_line(w[0], w[1]);
-                        }
-                    }
-                }
-            }
-            added += 1;
-        }
+        let added = add_edges(&mut s.sketch, &edges, s.plane);
         s.refresh();
         self.status = format!("Converted {added} edges of the face");
+    }
+
+    /// A planar face's outline as a sketch on the face's plane.
+    pub fn face_sketch(&self, body: usize, face: usize) -> Option<Sketch> {
+        let topo = &self.doc.bodies().get(body)?.topo;
+        let plane = topo.faces.get(face)?.plane?;
+        let mut sk = Sketch::default();
+        add_edges(&mut sk, &face_edges(topo, face), plane);
+        Some(sk)
     }
 
     pub fn export(&mut self, format: ExportFormat) {
@@ -610,25 +565,27 @@ impl App {
 
     pub fn write(&self, format: ExportFormat, path: &Path) -> io::Result<()> {
         let bodies = self.doc.bodies();
-        if bodies.is_empty() {
+        let references = &self.doc.built().meshes;
+        if bodies.is_empty() && (references.is_empty() || format == ExportFormat::Step) {
             return Err(io::Error::other("the part has no bodies"));
         }
         let meshes = || -> Vec<PrintMesh> {
             bodies
                 .iter()
                 .map(|b| mesher::print_mesh(&b.solid, self.export_tol))
+                .chain(references.iter().map(|(_, m)| (**m).clone()))
                 .collect()
         };
         match format {
             ExportFormat::Stl => threebcad_io::write_stl(path, &meshes()),
             ExportFormat::ThreeMf => threebcad_io::write_3mf(path, &meshes()),
-            ExportFormat::Step => threebcad_io::write_step(path, bodies.iter().map(|b| &b.solid)),
+            ExportFormat::Step => threebcad_io::write_step(path, &self.doc.name, bodies.iter().map(|b| &b.solid)),
         }
     }
 
     /// Mass properties of all bodies, cached per rebuild.
     pub fn mass_properties(&mut self) -> Option<&MassProperties> {
-        if self.doc.bodies().is_empty() {
+        if self.doc.bodies().is_empty() && self.doc.built().meshes.is_empty() {
             return None;
         }
         if self.mass.as_ref().is_none_or(|(rev, _)| *rev != self.doc.revision()) {
@@ -637,6 +594,7 @@ impl App {
                 .bodies()
                 .iter()
                 .map(|b| mesher::print_mesh(&b.solid, MASS_TOL))
+                .chain(self.doc.built().meshes.iter().map(|(_, m)| (**m).clone()))
                 .collect();
             self.mass = Some((self.doc.revision(), mass::mass_properties(&meshes)));
         }
@@ -711,6 +669,84 @@ impl App {
     }
 }
 
+fn face_edges(topo: &Topology, face: usize) -> Vec<TopoEdge> {
+    topo.edges
+        .iter()
+        .filter(|e| e.sides.iter().any(|s| s.face == face))
+        .cloned()
+        .collect()
+}
+
+/// Adds model edges to a sketch as fixed geometry; returns how many were added.
+fn add_edges(sk: &mut Sketch, edges: &[TopoEdge], plane: Plane) -> usize {
+    let mut points: Vec<([f64; 2], threebcad_sketch::PointId)> = Vec::new();
+    let mut point = |sk: &mut threebcad_sketch::Sketch, p: [f64; 3]| {
+        let l = plane.to_local(p);
+        if let Some(&(_, id)) = points.iter().find(|(q, _)| (q[0] - l[0]).hypot(q[1] - l[1]) < 1e-6) {
+            return id;
+        }
+        let id = sk.add_point(l[0], l[1]);
+        sk.constrain(Constraint::Fix(id, l));
+        points.push((l, id));
+        id
+    };
+    let mut circles: Vec<([f64; 3], f64)> = Vec::new();
+    let mut added = 0;
+    for e in edges {
+        match e.curve {
+            EdgeCurve::Line { a, b } => {
+                let (pa, pb) = (point(sk, a), point(sk, b));
+                sk.add_line(pa, pb);
+            }
+            EdgeCurve::Circle { center, radius, .. } => {
+                let same =
+                    |c: [f64; 3], r: f64| (r - radius).abs() < 1e-6 && (0..3).all(|i| (c[i] - center[i]).abs() < 1e-6);
+                // truck splits a circle into arcs: put the circle back together.
+                let around: f64 = edges
+                    .iter()
+                    .filter(|o| matches!(o.curve, EdgeCurve::Circle { center: c, radius: r, .. } if same(c, r)))
+                    .map(|o| o.length)
+                    .sum();
+                if around >= std::f64::consts::TAU * radius * (1.0 - 1e-3) {
+                    if circles.iter().any(|&(c, r)| same(c, r)) {
+                        continue;
+                    }
+                    circles.push((center, radius));
+                    let c = point(sk, center);
+                    let ent = sk.add_circle(c, radius);
+                    sk.constrain(Constraint::Radius(ent, radius));
+                } else {
+                    let (first, last) = (e.points[0], *e.points.last().unwrap());
+                    let mid = e.points[e.points.len() / 2];
+                    let (lf, lm, ll) = (plane.to_local(first), plane.to_local(mid), plane.to_local(last));
+                    // Sketch arcs run counter-clockwise from start to end.
+                    let turn = (lm[0] - lf[0]) * (ll[1] - lf[1]) - (lm[1] - lf[1]) * (ll[0] - lf[0]);
+                    let (s0, s1) = if turn > 0.0 { (first, last) } else { (last, first) };
+                    let c = point(sk, center);
+                    let (p0, p1) = (point(sk, s0), point(sk, s1));
+                    sk.add_arc(c, p0, p1);
+                }
+            }
+            EdgeCurve::Other => {
+                let ids: Vec<_> = e
+                    .points
+                    .iter()
+                    .step_by(4)
+                    .chain(e.points.last())
+                    .map(|&p| point(sk, p))
+                    .collect();
+                for w in ids.windows(2) {
+                    if w[0] != w[1] {
+                        sk.add_line(w[0], w[1]);
+                    }
+                }
+            }
+        }
+        added += 1;
+    }
+    added
+}
+
 /// Ctrl+Z and Ctrl+Y, unless a text field is focused: then they are that field's own undo.
 fn undo_keys(ctx: &egui::Context) -> (bool, bool) {
     if ctx.wants_keyboard_input() {
@@ -726,6 +762,7 @@ fn undo_keys(ctx: &egui::Context) -> (bool, bool) {
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.files_frame(ctx);
         self.shortcuts(ctx);
         if self.selected.is_some_and(|id| self.doc.history().get(id).is_none()) {
             self.selected = None;
@@ -735,14 +772,20 @@ impl eframe::App for App {
         }
 
         // The panels are laid out before the viewport takes a click, so a selection made there shows
-        // (and resizes the viewport for the PropertyManager) on the next frame: ask for it now.
+        // (and resizes the viewport for the Properties panel) on the next frame: ask for it now.
         let picked_before = (self.selected, self.selection.clone());
         ui::ribbon::show(self, ctx);
         egui::TopBottomPanel::bottom("status").show(ctx, |ui| {
             ui.horizontal(|ui| {
                 ui.label(&self.status);
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    ui.label(format!("{} bodies  |  MMGS (mm)", self.doc.bodies().len()));
+                    let u = self.doc.units().system;
+                    ui.menu_button(format!("{} ({})", u.short(), u.length_unit()), |ui| {
+                        crate::files::units_ui(self, ui)
+                    })
+                    .response
+                    .on_hover_text("Unit system");
+                    ui.label(format!("{} bodies", self.doc.bodies().len()));
                     let (errs, warns) = (self.doc.errors().len(), self.doc.warnings().len());
                     if errs + warns > 0 {
                         ui.separator();
@@ -780,6 +823,11 @@ impl eframe::App for App {
         if self.sync_states() || picked_before != (self.selected, self.selection.clone()) {
             ctx.request_repaint();
         }
+    }
+
+    /// A normal exit (saved, or the user chose not to save) leaves nothing to recover.
+    fn on_exit(&mut self) {
+        self.files.clear_recovery();
     }
 }
 

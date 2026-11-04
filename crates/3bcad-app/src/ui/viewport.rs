@@ -53,6 +53,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
         ViewportCallback {
             view_proj: app.camera.view_proj(rect.aspect_ratio()),
             eye: app.camera.eye(),
+            body_color: app.doc.material().color.map(|c| f32::from(c) / 255.0),
             geometry: app.geometry.clone(),
             version: app.geometry_version,
             states: app.states.clone(),
@@ -219,7 +220,7 @@ fn model_input(app: &mut App, resp: &egui::Response, rect: egui::Rect, size: GVe
     }
 }
 
-/// B-Rep vertices are only drawn when hovered or selected, like SolidWorks.
+/// B-Rep vertices are only drawn when hovered or selected, to keep the model readable.
 fn paint_vertex_markers(app: &App, painter: &egui::Painter, rect: egui::Rect, size: GVec2) {
     for &(p, id) in &app.geometry.points {
         let r = app.refs.get(id as usize).copied();

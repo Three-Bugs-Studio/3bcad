@@ -3,6 +3,8 @@
 use eframe::egui::{self, Color32, RichText};
 use threebcad_kernel::topology::{cross, dot, norm, point_triangle, sub, unit, EdgeCurve, P3};
 
+use threebcad_core::material;
+
 use crate::app::{App, ModelRef, MASS_TOL};
 
 /// A hint for a rebuild message.
@@ -25,7 +27,7 @@ pub fn suggestion(msg: &str) -> &'static str {
     } else if has("instance") {
         "Check the skipped instances: they may fall outside the part."
     } else if has("centerline") {
-        "Draw a centerline in the sketch, or pick an axis in the PropertyManager."
+        "Draw a centerline in the sketch, or pick an axis in the Properties panel."
     } else {
         "Double-click the feature to edit it and check its inputs."
     }
@@ -164,6 +166,9 @@ fn min_distance(a: &(Vec<P3>, Vec<[P3; 3]>, P3), b: &(Vec<P3>, Vec<[P3; 3]>, P3)
 
 /// Measurement lines for the current selection.
 pub fn measurements(app: &App) -> Vec<String> {
+    let u = app.doc.units();
+    let len = |mm: f64| u.length(mm);
+    let pt = |p: P3| fmt3(p.map(|v| v / u.system.mm_per_unit()));
     let sel = &app.selection;
     let mut out = Vec::new();
     match sel.as_slice() {
@@ -173,31 +178,32 @@ pub fn measurements(app: &App) -> Vec<String> {
             match *r {
                 ModelRef::Vertex { .. } => {
                     if let Some((_, _, p)) = geometry(app, *r) {
-                        out.push(format!("Point {}", fmt3(p)));
+                        out.push(format!("Point {}", pt(p)));
                     }
                 }
                 ModelRef::Edge { body, edge } => {
                     if let Some(e) = app.doc.bodies().get(body).and_then(|b| b.topo.edges.get(edge)) {
                         match e.curve {
                             EdgeCurve::Line { a, b } => {
-                                out.push(format!("Length {:.3} mm", norm(sub(b, a))));
+                                out.push(format!("Length {}", len(norm(sub(b, a)))));
                             }
                             EdgeCurve::Circle { center, radius, .. } => {
-                                out.push(format!("Arc length {:.3} mm", e.length));
-                                out.push(format!("Radius {radius:.3} mm, diameter {:.3} mm", 2.0 * radius));
-                                out.push(format!("Center {}", fmt3(center)));
+                                out.push(format!("Arc length {}", len(e.length)));
+                                out.push(format!("Radius {}, diameter {}", len(radius), len(2.0 * radius)));
+                                out.push(format!("Center {}", pt(center)));
                             }
-                            EdgeCurve::Other => out.push(format!("Length {:.3} mm", e.length)),
+                            EdgeCurve::Other => out.push(format!("Length {}", len(e.length))),
                         }
                     }
                 }
                 ModelRef::Face { body, face } => {
                     if let Some(f) = app.doc.bodies().get(body).and_then(|b| b.topo.faces.get(face)) {
-                        out.push(format!("Area {:.3} mm²", f.area));
+                        out.push(format!("Area {}", u.area(f.area)));
                         if let Some((_, axis, r)) = f.cylinder {
                             out.push(format!(
-                                "Cylinder radius {r:.3} mm, diameter {:.3} mm, axis {}",
-                                2.0 * r,
+                                "Cylinder radius {}, diameter {}, axis {}",
+                                len(r),
+                                len(2.0 * r),
                                 fmt3(axis)
                             ));
                         }
@@ -213,9 +219,9 @@ pub fn measurements(app: &App) -> Vec<String> {
             out.push(format!("{} → {}", app.describe(*a), app.describe(*b)));
             if let (Some(ga), Some(gb)) = (geometry(app, *a), geometry(app, *b)) {
                 let center = norm(sub(gb.2, ga.2));
-                out.push(format!("Center distance {center:.3} mm"));
+                out.push(format!("Center distance {}", len(center)));
                 let d = sub(gb.2, ga.2);
-                out.push(format!("dX {:.3}  dY {:.3}  dZ {:.3}", d[0], d[1], d[2]));
+                out.push(format!("dX {}  dY {}  dZ {}", len(d[0]), len(d[1]), len(d[2])));
                 // Two parallel flat faces: exact gap between the planes.
                 let planes = match (*a, *b) {
                     (ModelRef::Face { body: b1, face: f1 }, ModelRef::Face { body: b2, face: f2 }) => {
@@ -233,11 +239,11 @@ pub fn measurements(app: &App) -> Vec<String> {
                 match planes {
                     Some((p, q)) if norm(cross(p.normal(), q.normal())) < 1e-9 => {
                         out.push(format!(
-                            "Normal distance {:.3} mm",
-                            dot(sub(q.origin, p.origin), p.normal()).abs()
+                            "Normal distance {}",
+                            len(dot(sub(q.origin, p.origin), p.normal()).abs())
                         ));
                     }
-                    _ => out.push(format!("Minimum distance ≈ {:.3} mm", min_distance(&ga, &gb))),
+                    _ => out.push(format!("Minimum distance ≈ {}", len(min_distance(&ga, &gb)))),
                 }
             }
             if let (Some((u, pu)), Some((v, pv))) = (direction(app, *a), direction(app, *b)) {
@@ -283,61 +289,74 @@ fn measure(app: &mut App, ctx: &egui::Context) {
     app.show_measure = open;
 }
 
-const MATERIALS: [(&str, f64); 6] = [
-    ("PLA", 1.24),
-    ("PETG", 1.27),
-    ("ABS", 1.04),
-    ("Nylon (PA12)", 1.01),
-    ("Aluminium 6061", 2.70),
-    ("Steel", 7.85),
-];
+/// Material picker and editor: the built-in library, or a custom name, density and colour.
+pub fn material_editor(app: &mut App, ui: &mut egui::Ui) {
+    let mut m = app.doc.material().clone();
+    ui.horizontal(|ui| {
+        ui.label("Material");
+        egui::ComboBox::from_id_salt("material")
+            .selected_text(&m.name)
+            .show_ui(ui, |ui| {
+                for preset in material::library() {
+                    let label = format!("{} ({} g/cm³)", preset.name, preset.density);
+                    if ui.selectable_label(preset == m, label).clicked() {
+                        m = preset;
+                    }
+                }
+            });
+    });
+    ui.horizontal(|ui| {
+        ui.label("Name");
+        ui.text_edit_singleline(&mut m.name);
+    });
+    ui.horizontal(|ui| {
+        ui.label("Density");
+        ui.add(
+            egui::DragValue::new(&mut m.density)
+                .speed(0.01)
+                .range(0.001..=30.0)
+                .suffix(" g/cm³"),
+        );
+        ui.label("Colour");
+        ui.color_edit_button_srgb(&mut m.color);
+    });
+    app.doc.set_material(m);
+}
 
 fn mass(app: &mut App, ctx: &egui::Context) {
     if !app.show_mass {
         return;
     }
     let mut open = true;
-    let mut density = app.density;
     let props = app.mass_properties().cloned();
     egui::Window::new("Mass Properties")
         .open(&mut open)
         .default_width(360.0)
         .show(ctx, |ui| {
-            ui.horizontal(|ui| {
-                ui.label("Density");
-                ui.add(
-                    egui::DragValue::new(&mut density)
-                        .speed(0.01)
-                        .range(0.001..=30.0)
-                        .suffix(" g/cm³"),
-                );
-                egui::ComboBox::from_id_salt("material")
-                    .selected_text("Material")
-                    .show_ui(ui, |ui| {
-                        for (name, d) in MATERIALS {
-                            if ui.button(format!("{name} ({d})")).clicked() {
-                                density = d;
-                            }
-                        }
-                    });
-            });
+            material_editor(app, ui);
+            ui.separator();
             let Some(p) = props else {
                 ui.label("The part has no bodies.");
                 return;
             };
-            let g = density / 1000.0; // g/mm³
+            let (u, m) = (app.doc.units(), app.doc.material());
+            let g = m.density / 1000.0; // g/mm³
+            let k = u.system.mm_per_unit().powi(2) * u.system.grams_per_unit();
             let lines = [
-                format!("Mass {:.3} g", p.volume * g),
-                format!("Volume {:.3} mm³", p.volume),
-                format!("Surface area {:.3} mm²", p.area),
-                format!("Center of mass {}", fmt3(p.center)),
+                format!("Material {}", m.name),
+                format!("Mass {}", u.mass(m.mass(p.volume))),
+                format!("Volume {}", u.volume(p.volume)),
+                format!("Surface area {}", u.area(p.area)),
+                format!("Center of mass {}", fmt3(p.center.map(|v| v / u.system.mm_per_unit()))),
                 format!(
-                    "Principal moments (g·mm²) {:.1}, {:.1}, {:.1}",
-                    p.principal[0] * g,
-                    p.principal[1] * g,
-                    p.principal[2] * g
+                    "Principal moments ({}·{}²) {:.1}, {:.1}, {:.1}",
+                    u.system.mass_unit(),
+                    u.system.length_unit(),
+                    p.principal[0] * g / k,
+                    p.principal[1] * g / k,
+                    p.principal[2] * g / k
                 ),
-                format!("Units: mm, g. From a {MASS_TOL} mm tessellation."),
+                format!("Units: {}. From a {MASS_TOL} mm tessellation.", u.system.name()),
             ];
             for l in &lines {
                 ui.label(l);
@@ -347,6 +366,5 @@ fn mass(app: &mut App, ctx: &egui::Context) {
             }
             ui.weak("The center of mass is marked in the graphics area.");
         });
-    app.density = density;
     app.show_mass = open;
 }

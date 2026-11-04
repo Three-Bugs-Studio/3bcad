@@ -1,7 +1,7 @@
 use egui_wgpu::wgpu;
 
 const SHADER: &str = r#"
-struct Globals { view_proj: mat4x4<f32>, eye: vec4<f32> };
+struct Globals { view_proj: mat4x4<f32>, eye: vec4<f32>, body: vec4<f32> };
 @group(0) @binding(0) var<uniform> globals: Globals;
 // Per pick id: 0 = normal, 1 = hovered, 2 = selected.
 @group(0) @binding(1) var<storage, read> states: array<u32>;
@@ -47,7 +47,7 @@ fn fs_mesh(frag: MeshOut) -> @location(0) vec4<f32> {
     let diffuse = max(dot(n, l), 0.0);
     let hemi = 0.5 + 0.5 * n.z;
     let spec = pow(max(dot(n, normalize(l + v)), 0.0), 64.0);
-    let base = vec3<f32>(0.70, 0.74, 0.80);
+    let base = globals.body.rgb;
     let c = base * (0.22 + 0.18 * hemi + 0.6 * diffuse) + vec3<f32>(0.25 * spec);
     return vec4<f32>(tint(c, state_of(frag.id), 0.45), 1.0);
 }

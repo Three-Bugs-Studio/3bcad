@@ -30,7 +30,7 @@ const SHORTCUTS: &[(&str, &[(&str, &str)])] = &[
         "Sketching",
         &[
             ("Sketch tab → Front / Top / Right", "Start a sketch on that plane"),
-            ("Double-click a plane in the FeatureManager", "Start a sketch on it"),
+            ("Double-click a plane in the feature tree", "Start a sketch on it"),
             ("Double-click a sketch", "Edit it"),
             ("Hold Ctrl while drawing", "Turn off snapping and automatic relations"),
             ("Esc, double-click or right-click", "End a line chain / cancel the tool"),

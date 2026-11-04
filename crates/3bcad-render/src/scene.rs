@@ -87,6 +87,7 @@ impl SceneGeometry {
 struct Globals {
     view_proj: [[f32; 4]; 4],
     eye: [f32; 4],
+    body: [f32; 4],
 }
 
 /// GPU state, stored in egui-wgpu's callback resources.
@@ -169,6 +170,8 @@ pub fn install(render_state: &egui_wgpu::RenderState, depth_format: Option<wgpu:
 pub struct ViewportCallback {
     pub view_proj: Mat4,
     pub eye: Vec3,
+    /// Colour of the solid bodies (0..1 per channel).
+    pub body_color: [f32; 3],
     pub geometry: Arc<SceneGeometry>,
     pub version: u64,
     /// Per pick id: 0 = normal, 1 = hovered, 2 = selected.
@@ -202,6 +205,7 @@ impl egui_wgpu::CallbackTrait for ViewportCallback {
         let globals = Globals {
             view_proj: self.view_proj.to_cols_array_2d(),
             eye: self.eye.extend(1.0).to_array(),
+            body: [self.body_color[0], self.body_color[1], self.body_color[2], 1.0],
         };
         queue.write_buffer(&res.globals, 0, bytemuck::bytes_of(&globals));
         if res.version != self.version {

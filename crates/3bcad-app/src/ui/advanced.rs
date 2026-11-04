@@ -1,4 +1,4 @@
-//! The v0.4 features in the UI: their CommandManager commands and their PropertyManager editors.
+//! The v0.4 features in the UI: their ribbon commands and their Properties panel editors.
 //! Sweeps, lofts, helices, threads, variable and face fillets, multibody tools, sketch- and
 //! curve-driven patterns, domes and wraps.
 
@@ -8,7 +8,7 @@ use threebcad_core::*;
 
 use crate::app::{App, ModelRef};
 use crate::ui::icons;
-use crate::ui::properties::{axis_editor, number, plane_editor, refs_line, seeds_editor, Ed, Picks};
+use crate::ui::properties::{axis_editor, length, number, plane_editor, refs_line, seeds_editor, Ed, Picks};
 
 fn name_of(h: &History, id: FeatureId) -> String {
     h.get(id).map_or("?".into(), |f| f.name.clone())
@@ -134,7 +134,7 @@ fn bodies_line(ed: &mut Ed, ui: &mut egui::Ui, list: &mut Vec<FaceRef>, p: &Pick
 fn signed(ed: &mut Ed, ui: &mut egui::Ui, label: &str, v: &mut f64) {
     ui.horizontal(|ui| {
         ui.label(label);
-        ed.track(ui.add(number(v).speed(0.1).suffix(" mm")));
+        ed.track(ui.add(length(v).speed(0.1)));
     });
 }
 
@@ -159,7 +159,7 @@ fn size_editor(ed: &mut Ed, ui: &mut egui::Ui, salt: &str, standard: &mut HoleSt
         });
 }
 
-/// The PropertyManager for a v0.4 feature.
+/// The Properties panel for a v0.4 feature.
 pub(crate) fn editor(ed: &mut Ed, ui: &mut egui::Ui, h: &History, me: FeatureId, kind: &mut FeatureKind, p: &Picks) {
     match kind {
         FeatureKind::Sweep(w) => {
@@ -320,7 +320,7 @@ pub(crate) fn editor(ed: &mut Ed, ui: &mut egui::Ui, h: &History, me: FeatureId,
             for (i, r) in radii.iter_mut().enumerate() {
                 ui.horizontal(|ui| {
                     ed.track(ui.add(number(&mut r[0]).speed(0.01).range(0.0..=1.0).prefix("at ")));
-                    ed.track(ui.add(number(&mut r[1]).speed(0.05).range(0.01..=1000.0).suffix(" mm")));
+                    ed.track(ui.add(length(&mut r[1]).speed(0.05).range(0.01..=1000.0)));
                     if ui.small_button("✖").clicked() {
                         remove = Some(i);
                     }
@@ -500,7 +500,7 @@ pub(crate) fn editor(ed: &mut Ed, ui: &mut egui::Ui, h: &History, me: FeatureId,
     }
 }
 
-/// Sketches and helices picked for a command: the one selected in the FeatureManager first, then
+/// Sketches and helices picked for a command: the one selected in the feature tree first, then
 /// those added with Ctrl+click.
 fn picked(app: &App, keep: impl Fn(&FeatureKind) -> bool) -> Vec<FeatureId> {
     app.chosen_features()

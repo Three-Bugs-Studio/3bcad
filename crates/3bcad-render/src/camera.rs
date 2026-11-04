@@ -15,7 +15,7 @@ pub struct OrbitCamera {
 }
 
 impl Default for OrbitCamera {
-    /// SolidWorks-like isometric-ish start view, Z up.
+    /// Isometric-ish start view, Z up.
     fn default() -> Self {
         let (yaw, pitch) = (-1.0_f32, 0.55_f32);
         let z = Vec3::new(pitch.cos() * yaw.cos(), pitch.cos() * yaw.sin(), pitch.sin());

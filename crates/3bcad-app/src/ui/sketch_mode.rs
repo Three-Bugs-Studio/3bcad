@@ -13,6 +13,8 @@ use threebcad_sketch::inference::{self, Snap};
 use threebcad_sketch::tools::Item;
 use threebcad_sketch::{Analysis, Constraint, EntityId, PointId, Sketch, Status};
 
+use crate::ui::properties::units;
+
 const UNDER: Color32 = Color32::from_rgb(20, 70, 230);
 const FULL: Color32 = Color32::from_rgb(15, 15, 20);
 const OVER: Color32 = Color32::from_rgb(220, 30, 30);
@@ -94,7 +96,7 @@ impl Tool {
             Tool::CornerRect => "Click two opposite corners",
             Tool::CenterRect => "Click the center, then a corner",
             Tool::Rect3Pt => "Click two corners of one side, then the opposite side",
-            Tool::Circle => "Click the center, then the radius (or type it in the PropertyManager)",
+            Tool::Circle => "Click the center, then the radius (or type it in the Properties panel)",
             Tool::PerimeterCircle => "Click three points on the circle",
             Tool::CenterArc => "Click the center, the start, then the end",
             Tool::TangentArc => "Click the end of a line or arc, then the arc end",
@@ -141,7 +143,7 @@ impl Tool {
     }
 }
 
-/// Settings shown in the PropertyManager for the active tool.
+/// Settings shown in the Properties panel for the active tool.
 #[derive(Clone, Debug)]
 pub struct ToolOptions {
     pub polygon_sides: usize,
@@ -678,7 +680,11 @@ impl SketchSession {
     pub fn start_editing(&mut self, i: usize) {
         let c = &self.sketch.constraints()[i];
         if let Some(v) = c.dimension() {
-            let shown = if c.is_angular() { v.to_degrees() } else { v };
+            let shown = if c.is_angular() {
+                v.to_degrees()
+            } else {
+                v / units().system.mm_per_unit()
+            };
             self.editing = Some((i, num(shown)));
         }
     }
@@ -1185,17 +1191,26 @@ impl SketchSession {
         match commit {
             Some(true) => {
                 self.editing = None;
-                match text.trim().parse::<f64>() {
-                    Ok(v) => {
+                let c = &self.sketch.constraints()[i];
+                let typed = if c.is_angular() {
+                    text.trim()
+                        .trim_end_matches('°')
+                        .parse::<f64>()
+                        .ok()
+                        .map(f64::to_radians)
+                } else {
+                    units().parse_length(&text)
+                };
+                match typed {
+                    Some(value) => {
                         let c = &self.sketch.constraints()[i];
-                        let value = if c.is_angular() { v.to_radians() } else { v };
                         if !c.is_angular() && value <= 0.0 {
                             self.message = Some("Lengths must be positive".into());
                         } else {
                             self.set_dimension(i, value);
                         }
                     }
-                    Err(_) => self.message = Some(format!("\"{text}\" is not a number")),
+                    None => self.message = Some(format!("\"{text}\" is not a number or a length")),
                 }
             }
             Some(false) => self.editing = None,
@@ -1323,7 +1338,13 @@ pub fn num(v: f64) -> String {
     s.trim_end_matches('0').trim_end_matches('.').to_string()
 }
 
+/// A dimension's value as shown on the sketch: lengths in document units, without the unit.
 pub fn fmt_value(c: &Constraint, v: f64) -> String {
+    let v = if c.is_angular() {
+        v
+    } else {
+        v / units().system.mm_per_unit()
+    };
     match c {
         Constraint::Angle(..) | Constraint::CircularCopy { .. } => format!("{}°", num(v.to_degrees())),
         Constraint::Radius(..) => format!("R{}", num(v)),

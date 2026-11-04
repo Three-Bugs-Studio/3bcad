@@ -1,4 +1,4 @@
-//! PropertyManager: parameters of the selected feature, or the active sketch tool and selection.
+//! Properties panel: parameters of the selected feature, or the active sketch tool and selection.
 
 use eframe::egui::{self, Color32, RichText};
 use threebcad_core::holes;
@@ -97,6 +97,27 @@ pub(crate) fn number<Num: egui::emath::Numeric>(v: &mut Num) -> egui::DragValue<
     egui::DragValue::new(v).update_while_editing(false)
 }
 
+thread_local! {
+    static UNITS: std::cell::Cell<Units> = std::cell::Cell::new(Units::default());
+}
+
+/// The open part's units, used by every length field and dimension label (set once a frame).
+pub(crate) fn set_units(u: Units) {
+    UNITS.with(|c| c.set(u));
+}
+
+pub(crate) fn units() -> Units {
+    UNITS.with(std::cell::Cell::get)
+}
+
+/// A length field: stores mm, shows document units and reads typed ones ("1in", "2.5 cm").
+pub(crate) fn length(v: &mut f64) -> egui::DragValue<'_> {
+    let u = units();
+    number(v)
+        .custom_formatter(move |mm, _| u.length(mm))
+        .custom_parser(move |s| u.parse_length(s))
+}
+
 pub(crate) struct Ed {
     pub changed: bool,
     dragging: bool,
@@ -120,7 +141,7 @@ impl Ed {
     pub fn length(&mut self, ui: &mut egui::Ui, label: &str, v: &mut f64, min: f64) {
         ui.horizontal(|ui| {
             ui.label(label);
-            self.track(ui.add(number(v).speed(0.1).range(min..=10_000.0).suffix(" mm")));
+            self.track(ui.add(length(v).speed(0.1).range(min..=10_000.0)));
         });
     }
 
@@ -231,7 +252,7 @@ fn end_editor(ed: &mut Ed, ui: &mut egui::Ui, salt: &str, end: &mut End, p: &Pic
         End::OffsetFromSurface(_, d) => {
             ui.horizontal(|ui| {
                 ui.label("Offset");
-                ed.track(ui.add(number(d).speed(0.1).suffix(" mm")));
+                ed.track(ui.add(length(d).speed(0.1)));
             });
         }
         End::UpToVertex(_) | End::UpToSurface(_) => {
@@ -341,13 +362,13 @@ fn feature_panel(app: &mut App, ctx: &egui::Context) {
                         for (i, label, value, is_angle) in dims {
                             ui.horizontal(|ui| {
                                 ui.label(label);
-                                let (mut shown, suffix) = if is_angle {
-                                    (value.to_degrees(), "°")
+                                let mut shown = if is_angle { value.to_degrees() } else { value };
+                                let field = if is_angle {
+                                    number(&mut shown).range(-360.0..=360.0).suffix("°")
                                 } else {
-                                    (value, " mm")
+                                    length(&mut shown).range(0.01..=10_000.0)
                                 };
-                                let range = if is_angle { -360.0..=360.0 } else { 0.01..=10_000.0 };
-                                let r = ui.add(number(&mut shown).speed(0.2).range(range).suffix(suffix));
+                                let r = ui.add(field.speed(0.2));
                                 ed.watch_drag(&r);
                                 if r.changed() {
                                     sketch_dim = Some((i, if is_angle { shown.to_radians() } else { shown }));
@@ -633,7 +654,7 @@ fn feature_panel(app: &mut App, ctx: &egui::Context) {
                             plane_editor(&mut ed, ui, h, base, &p, "Offset from");
                             ui.horizontal(|ui| {
                                 ui.label("Distance");
-                                ed.track(ui.add(number(distance).speed(0.2).suffix(" mm")));
+                                ed.track(ui.add(length(distance).speed(0.2)));
                             });
                             ed.check(ui, flip, "Flip normal");
                         }
@@ -663,7 +684,7 @@ fn feature_panel(app: &mut App, ctx: &egui::Context) {
                             for (i, n) in ["X", "Y", "Z"].iter().enumerate() {
                                 ui.horizontal(|ui| {
                                     ui.label(*n);
-                                    ed.track(ui.add(number(&mut c[i]).speed(0.2).suffix(" mm")));
+                                    ed.track(ui.add(length(&mut c[i]).speed(0.2)));
                                 });
                             }
                         }
@@ -812,7 +833,7 @@ fn sketch_panel(s: &mut SketchSession, ui: &mut egui::Ui) {
             Color32::from_rgb(200, 40, 40),
             "Some relations conflict or repeat each other.",
         );
-        if ui.button("Diagnose (SketchXpert)").clicked() {
+        if ui.button("Diagnose").clicked() {
             s.run_diagnosis();
         }
         if let Some(fixes) = s.diagnosis.clone() {
@@ -912,13 +933,7 @@ fn tool_options(s: &mut SketchSession, ui: &mut egui::Ui) {
                 ui.checkbox(&mut typed, "Radius");
                 let mut r = o.radius.unwrap_or(10.0);
                 if ui
-                    .add_enabled(
-                        typed,
-                        egui::DragValue::new(&mut r)
-                            .speed(0.1)
-                            .range(0.001..=10_000.0)
-                            .suffix(" mm"),
-                    )
+                    .add_enabled(typed, length(&mut r).speed(0.1).range(0.001..=10_000.0))
                     .changed()
                     || typed
                 {
@@ -940,12 +955,7 @@ fn tool_options(s: &mut SketchSession, ui: &mut egui::Ui) {
         Tool::Fillet => {
             ui.horizontal(|ui| {
                 ui.label("Radius");
-                ui.add(
-                    egui::DragValue::new(&mut o.fillet_radius)
-                        .speed(0.1)
-                        .range(0.001..=10_000.0)
-                        .suffix(" mm"),
-                );
+                ui.add(length(&mut o.fillet_radius).speed(0.1).range(0.001..=10_000.0));
             });
         }
         Tool::Chamfer => {
@@ -953,12 +963,7 @@ fn tool_options(s: &mut SketchSession, ui: &mut egui::Ui) {
             ui.radio_value(&mut o.chamfer_angle_mode, true, "Angle-distance");
             ui.horizontal(|ui| {
                 ui.label("Distance");
-                ui.add(
-                    egui::DragValue::new(&mut o.chamfer_d1)
-                        .speed(0.1)
-                        .range(0.001..=10_000.0)
-                        .suffix(" mm"),
-                );
+                ui.add(length(&mut o.chamfer_d1).speed(0.1).range(0.001..=10_000.0));
             });
             ui.horizontal(|ui| {
                 if o.chamfer_angle_mode {
@@ -971,24 +976,14 @@ fn tool_options(s: &mut SketchSession, ui: &mut egui::Ui) {
                     );
                 } else {
                     ui.label("Distance 2");
-                    ui.add(
-                        egui::DragValue::new(&mut o.chamfer_d2)
-                            .speed(0.1)
-                            .range(0.001..=10_000.0)
-                            .suffix(" mm"),
-                    );
+                    ui.add(length(&mut o.chamfer_d2).speed(0.1).range(0.001..=10_000.0));
                 }
             });
         }
         Tool::Offset => {
             ui.horizontal(|ui| {
                 ui.label("Distance");
-                ui.add(
-                    egui::DragValue::new(&mut o.offset)
-                        .speed(0.1)
-                        .range(0.001..=10_000.0)
-                        .suffix(" mm"),
-                );
+                ui.add(length(&mut o.offset).speed(0.1).range(0.001..=10_000.0));
             });
             ui.checkbox(&mut o.offset_reverse, "Reverse");
         }
@@ -999,7 +994,7 @@ fn tool_options(s: &mut SketchSession, ui: &mut egui::Ui) {
             });
             ui.horizontal(|ui| {
                 ui.label("Spacing");
-                ui.add(egui::DragValue::new(&mut o.pattern_spacing).speed(0.1).suffix(" mm"));
+                ui.add(length(&mut o.pattern_spacing).speed(0.1));
             });
             ui.horizontal(|ui| {
                 ui.label("Direction");
