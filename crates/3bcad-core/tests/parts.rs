@@ -61,3 +61,17 @@ fn reference_parts_rebuild_unchanged() {
         "the corpus gained or lost parts"
     );
 }
+
+#[test]
+fn reference_parts_survive_save_and_load() {
+    for (name, build) in corpus::all() {
+        let doc = build();
+        let json = doc.to_json();
+        let back = threebcad_core::PartDocument::from_json(&json).unwrap_or_else(|e| panic!("{name}: {e:#}"));
+        assert!(back.errors().is_empty(), "{name}: {:?}", back.errors());
+        assert_eq!(back.to_json(), json, "{name}: a second save differs");
+        let ((b0, f0, v0), (b1, f1, v1)) = (measure(&doc), measure(&back));
+        assert_eq!((b0, f0), (b1, f1), "{name}");
+        assert!((v1 - v0).abs() <= 1e-9 * v0, "{name}: volume {v0} became {v1}");
+    }
+}

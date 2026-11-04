@@ -1,4 +1,4 @@
-//! Sketch tools: each creates geometry plus the relations SolidWorks would add, so the result
+//! Sketch tools: each creates geometry plus the relations a CAD user expects, so the result
 //! keeps its shape when dimensions change.
 
 use std::collections::HashMap;

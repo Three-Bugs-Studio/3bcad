@@ -2,6 +2,7 @@ use anyhow::{bail, ensure, Result};
 use petgraph::stable_graph::{NodeIndex, StableDiGraph};
 use petgraph::visit::{Dfs, EdgeRef};
 use petgraph::Direction;
+use serde::{Deserialize, Serialize};
 use threebcad_kernel::Plane;
 use threebcad_sketch::Sketch;
 
@@ -10,9 +11,9 @@ use crate::{Feature, FeatureKind};
 
 pub type FeatureId = NodeIndex;
 
-/// The FeatureManager tree: features in build order, a dependency DAG
-/// (edge = "is built from") and a SolidWorks-style rollback bar.
-#[derive(Clone, Debug, Default)]
+/// The feature tree: features in build order, a dependency DAG
+/// (edge = "is built from") and a rollback bar.
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct History {
     graph: StableDiGraph<Feature, ()>,
     order: Vec<FeatureId>,
@@ -119,7 +120,7 @@ impl History {
         Ok(())
     }
 
-    /// New features go in at the rollback bar, like SolidWorks.
+    /// New features go in at the rollback bar.
     fn insert(&mut self, kind: FeatureKind) -> FeatureId {
         let name = self.next_name(kind.prefix());
         let id = self.graph.add_node(Feature {
@@ -159,6 +160,32 @@ impl History {
         for (a, b) in links {
             self.graph.add_edge(a, b, ());
         }
+    }
+
+    /// Checks a tree read from a file: every feature is in the build order once, only uses
+    /// features above it, and its sketch is intact.
+    pub fn validate(&self) -> Result<()> {
+        let mut seen = std::collections::HashSet::new();
+        for &id in &self.order {
+            ensure!(
+                self.graph.contains_node(id) && seen.insert(id),
+                "the feature list is damaged"
+            );
+        }
+        ensure!(seen.len() == self.graph.node_count(), "the feature list is damaged");
+        ensure!(
+            self.rollback <= self.order.len(),
+            "the rollback bar is past the last feature"
+        );
+        for (pos, &id) in self.order.iter().enumerate() {
+            let f = &self.graph[id];
+            self.check_refs(&f.kind, pos)
+                .map_err(|e| anyhow::anyhow!("{}: {e}", f.name))?;
+            if let FeatureKind::Sketch { sketch, .. } = &f.kind {
+                ensure!(sketch.is_consistent(), "{}: the sketch is damaged", f.name);
+            }
+        }
+        Ok(())
     }
 
     pub fn len(&self) -> usize {

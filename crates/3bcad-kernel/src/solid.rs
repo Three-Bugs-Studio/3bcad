@@ -2,10 +2,75 @@
 //! (shells -> faces -> wires -> edges -> vertices) with NURBS geometry, so we
 //! re-export it instead of wrapping it.
 
+use serde::{Deserialize, Serialize};
+
 pub use truck_modeling::{Point3, Solid, Vector3};
 
+/// A solid in truck's serialisable form (`Solid::compress` / `Solid::extract`).
+pub type CompressedSolid =
+    truck_topology::compress::CompressedSolid<Point3, truck_modeling::Curve, truck_modeling::Surface>;
+
+/// Builds a solid from its compressed form. Unlike `Solid::extract` this accepts faces whose
+/// boundary runs along a seam edge twice (every cylinder in a STEP file has one); the shells must
+/// still be closed.
+pub fn extract_solid(cs: &CompressedSolid) -> anyhow::Result<Solid> {
+    use truck_modeling::{Edge, Face, Shell, ShellCondition, Vertex, Wire};
+    let shells = cs
+        .boundaries
+        .iter()
+        .map(|sh| {
+            let vertices: Vec<Vertex> = sh.vertices.iter().map(|p| Vertex::new(*p)).collect();
+            let edges = sh
+                .edges
+                .iter()
+                .map(|e| {
+                    let (a, b) = e.vertices;
+                    anyhow::ensure!(a < vertices.len() && b < vertices.len(), "an edge has no vertex");
+                    Ok(Edge::new_unchecked(&vertices[a], &vertices[b], e.curve.clone()))
+                })
+                .collect::<anyhow::Result<Vec<_>>>()?;
+            let shell = sh
+                .faces
+                .iter()
+                .map(|f| {
+                    let wires = f
+                        .boundaries
+                        .iter()
+                        .map(|w| {
+                            w.iter()
+                                .map(|i| {
+                                    let e = edges
+                                        .get(i.index)
+                                        .ok_or_else(|| anyhow::anyhow!("a face has no edge"))?;
+                                    Ok(if i.orientation { e.clone() } else { e.inverse() })
+                                })
+                                .collect::<anyhow::Result<Wire>>()
+                        })
+                        .collect::<anyhow::Result<Vec<_>>>()?;
+                    anyhow::ensure!(
+                        wires.iter().all(|w| w.is_closed()),
+                        "a face boundary is not a closed loop"
+                    );
+                    let mut face = Face::new_unchecked(wires, f.surface.clone());
+                    if !f.orientation {
+                        face.invert();
+                    }
+                    Ok(face)
+                })
+                .collect::<anyhow::Result<Shell>>()?;
+            anyhow::ensure!(
+                shell.shell_condition() == ShellCondition::Closed,
+                "the shell is not closed"
+            );
+            Ok(shell)
+        })
+        .collect::<anyhow::Result<Vec<_>>>()?;
+    anyhow::ensure!(!shells.is_empty(), "the solid has no shell");
+    Ok(Solid::new_unchecked(shells))
+}
+
 /// A sketch plane: origin plus orthonormal in-plane axes; the normal is `x × y`.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
 pub struct Plane {
     pub origin: [f64; 3],
     pub x: [f64; 3],

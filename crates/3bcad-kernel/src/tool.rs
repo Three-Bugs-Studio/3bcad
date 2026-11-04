@@ -5,6 +5,7 @@ use std::f64::consts::TAU;
 use std::sync::Arc;
 
 use anyhow::{bail, ensure, Result};
+use serde::{Deserialize, Serialize};
 use truck_modeling::*;
 
 use crate::boolean;
@@ -79,7 +80,7 @@ impl Shape {
 }
 
 /// Which face of a tool a point lies on; segments are counted over every loop of every region.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum ToolFace {
     Start,
     End,

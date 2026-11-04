@@ -3,6 +3,7 @@
 
 use std::collections::HashSet;
 
+use serde::{Deserialize, Serialize};
 use truck_meshalgo::prelude::*;
 use truck_modeling::Solid;
 
@@ -24,7 +25,7 @@ pub struct RenderMesh {
 }
 
 /// Welded, indexed triangle mesh for printing (STL / 3MF).
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct PrintMesh {
     pub vertices: Vec<[f64; 3]>,
     pub triangles: Vec<[usize; 3]>,

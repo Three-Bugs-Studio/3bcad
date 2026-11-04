@@ -1,10 +1,14 @@
-use threebcad_kernel::Plane;
+use std::sync::Arc;
+
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use threebcad_kernel::mesher::PrintMesh;
+use threebcad_kernel::{CompressedSolid, Plane};
 use threebcad_sketch::{EntityId, Sketch};
 
 use crate::naming::{EdgeRef, FaceRef, VertexRef};
 use crate::FeatureId;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Feature {
     pub name: String,
     pub kind: FeatureKind,
@@ -13,7 +17,7 @@ pub struct Feature {
 }
 
 /// Front / Top / Right.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum StdPlane {
     Front,
     Top,
@@ -41,7 +45,7 @@ impl StdPlane {
 }
 
 /// A plane to sketch on, mirror about or measure from.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub enum PlaneRef {
     Std(StdPlane),
     /// A planar model face.
@@ -51,7 +55,7 @@ pub enum PlaneRef {
 }
 
 /// A direction or line: pattern directions, revolve and circular pattern axes.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub enum AxisRef {
     /// World X (0), Y (1) or Z (2) through the origin.
     Std(u8),
@@ -63,7 +67,7 @@ pub enum AxisRef {
     Feature(FeatureId),
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub enum PointRef {
     Origin,
     Vertex(VertexRef),
@@ -72,7 +76,7 @@ pub enum PointRef {
 }
 
 /// How far an extrusion goes in one direction.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub enum End {
     Blind(f64),
     ThroughAll,
@@ -98,7 +102,7 @@ impl End {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ThinKind {
     OneDirection,
     MidPlane,
@@ -106,7 +110,7 @@ pub enum ThinKind {
 }
 
 /// Thin feature: a wall of thickness `t1` (and `t2` for two directions) along the profile.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Thin {
     pub kind: ThinKind,
     pub t1: f64,
@@ -115,7 +119,7 @@ pub struct Thin {
     pub reverse: bool,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Extrude {
     pub sketch: FeatureId,
     pub cut: bool,
@@ -155,14 +159,14 @@ impl Extrude {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub enum RevolveAxis {
     /// A line (usually a centerline) of the profile sketch.
     SketchLine(EntityId),
     Axis(AxisRef),
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Revolve {
     pub sketch: FeatureId,
     pub cut: bool,
@@ -190,14 +194,14 @@ impl Revolve {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ChamferKind {
     EqualDistance,
     DistanceDistance,
     AngleDistance,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HoleKind {
     Simple,
     Counterbore,
@@ -223,13 +227,13 @@ impl HoleKind {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HoleStandard {
     Iso,
     Ansi,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Hole {
     /// A sketch whose free points place the holes.
     pub sketch: FeatureId,
@@ -242,14 +246,14 @@ pub struct Hole {
 }
 
 /// What a pattern or mirror repeats.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub enum Seeds {
     Features(Vec<FeatureId>),
     /// Every body that exists before the pattern.
     Bodies,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct PatternDir {
     pub axis: AxisRef,
     pub spacing: f64,
@@ -258,7 +262,7 @@ pub struct PatternDir {
     pub reverse: bool,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct LinearPattern {
     pub seeds: Seeds,
     pub dir1: PatternDir,
@@ -267,7 +271,7 @@ pub struct LinearPattern {
     pub skip: Vec<(usize, usize)>,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct CircularPattern {
     pub seeds: Seeds,
     pub axis: AxisRef,
@@ -279,7 +283,7 @@ pub struct CircularPattern {
     pub skip: Vec<usize>,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Mirror {
     pub seeds: Seeds,
     pub plane: PlaneRef,
@@ -287,7 +291,7 @@ pub struct Mirror {
     pub merge: bool,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub enum RefPlaneDef {
     Offset {
         base: PlaneRef,
@@ -304,7 +308,7 @@ pub enum RefPlaneDef {
     Mid(PlaneRef, PlaneRef),
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub enum RefAxisDef {
     TwoPoints(PointRef, PointRef),
     Edge(EdgeRef),
@@ -312,7 +316,7 @@ pub enum RefAxisDef {
     TwoPlanes(PlaneRef, PlaneRef),
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub enum RefPointDef {
     Vertex(VertexRef),
     FaceCenter(FaceRef),
@@ -321,7 +325,7 @@ pub enum RefPointDef {
     Coords([f64; 3]),
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct CoordSysDef {
     pub origin: PointRef,
     /// X axis direction (default world X).
@@ -331,7 +335,7 @@ pub struct CoordSysDef {
 }
 
 /// A curve a sweep follows or a curve-driven pattern runs along.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CurveRef {
     /// The open chain (lines, arcs, splines) of a sketch.
     Sketch(FeatureId),
@@ -340,7 +344,7 @@ pub enum CurveRef {
 }
 
 /// What a sweep carries along its path.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub enum SweepProfile {
     /// The closed regions of a sketch.
     Sketch(FeatureId),
@@ -348,7 +352,7 @@ pub enum SweepProfile {
     Circle(f64),
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Sweep {
     pub profile: SweepProfile,
     pub path: CurveRef,
@@ -359,7 +363,7 @@ pub struct Sweep {
     pub merge: bool,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Loft {
     /// Sketches with one closed region each, in order.
     pub profiles: Vec<FeatureId>,
@@ -373,7 +377,7 @@ pub struct Loft {
 }
 
 /// How big a helix is.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
 pub enum HelixSize {
     PitchTurns {
         pitch: f64,
@@ -416,7 +420,7 @@ impl HelixSize {
 }
 
 /// A helix or spiral starting on a sketch circle, rising along the sketch normal.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct HelixDef {
     pub sketch: FeatureId,
     pub size: HelixSize,
@@ -431,7 +435,7 @@ pub struct HelixDef {
 }
 
 /// A modelled thread on a cylindrical face.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct ThreadDef {
     pub face: FaceRef,
     pub standard: HoleStandard,
@@ -446,7 +450,7 @@ pub struct ThreadDef {
     pub right: bool,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CombineOp {
     Add,
     Subtract,
@@ -464,7 +468,7 @@ impl CombineOp {
 }
 
 /// What cuts bodies apart.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub enum SplitTool {
     Plane(PlaneRef),
     /// The closed regions of a sketch, through everything both ways.
@@ -472,7 +476,7 @@ pub enum SplitTool {
 }
 
 /// Moves (or copies) bodies: a translation, then a rotation, or a face mated onto a plane.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct MoveBody {
     /// A face of each body to move (empty: every body).
     pub bodies: Vec<FaceRef>,
@@ -484,7 +488,7 @@ pub struct MoveBody {
     pub copy: bool,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum WrapKind {
     Emboss,
     Deboss,
@@ -502,7 +506,7 @@ impl WrapKind {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub enum FeatureKind {
     /// A sketch on a plane; `on` makes it follow a face or reference plane when the model changes.
     Sketch {
@@ -623,10 +627,49 @@ pub enum FeatureKind {
         kind: WrapKind,
         depth: f64,
     },
+    /// Solids read from a STEP file.
+    Imported {
+        file: String,
+        solids: Shared<Vec<CompressedSolid>>,
+    },
+    /// A triangle mesh kept for reference: drawn, measured and exported, but not a solid.
+    ImportedMesh {
+        file: String,
+        mesh: Shared<PrintMesh>,
+    },
+}
+
+/// Big imported data shared by every copy of the tree (undo steps, the rebuild cache); copies are
+/// equal when they share the data.
+#[derive(Clone, Debug)]
+pub struct Shared<T>(pub Arc<T>);
+
+impl<T> Shared<T> {
+    pub fn new(value: T) -> Self {
+        Self(Arc::new(value))
+    }
+}
+
+impl<T> PartialEq for Shared<T> {
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.0, &other.0)
+    }
+}
+
+impl<T: Serialize> Serialize for Shared<T> {
+    fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        self.0.serialize(s)
+    }
+}
+
+impl<'de, T: Deserialize<'de>> Deserialize<'de> for Shared<T> {
+    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        T::deserialize(d).map(Self::new)
+    }
 }
 
 impl FeatureKind {
-    /// Name prefix in the FeatureManager ("Boss-Extrude" + number).
+    /// Name prefix in the feature tree ("Boss-Extrude" + number).
     pub fn prefix(&self) -> &'static str {
         match self {
             FeatureKind::Sketch { .. } => "Sketch",
@@ -672,6 +715,8 @@ impl FeatureKind {
             FeatureKind::CurvePattern { .. } => "CrvPattern",
             FeatureKind::Dome { .. } => "Dome",
             FeatureKind::Wrap { .. } => "Wrap",
+            FeatureKind::Imported { .. } => "Imported",
+            FeatureKind::ImportedMesh { .. } => "Imported Mesh",
         }
     }
 
@@ -856,6 +901,7 @@ impl FeatureKind {
                 out.push(*sketch);
                 face(f, &mut out);
             }
+            FeatureKind::Imported { .. } | FeatureKind::ImportedMesh { .. } => {}
         }
         out.sort();
         out.dedup();

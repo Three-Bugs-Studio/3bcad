@@ -17,9 +17,10 @@ pub use solver::SolveReport;
 
 use geom::P2;
 use scalar::Dual;
+use serde::{Deserialize, Serialize};
 
 /// A 2D sketch. Coordinates are in the sketch plane's local frame.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 pub struct Sketch {
     params: Vec<f64>,
     /// Offset of each point's x coordinate in `params` (y follows it).
@@ -30,7 +31,7 @@ pub struct Sketch {
     labels: Vec<Option<P2>>,
 }
 
-/// How well the sketch is defined, like SolidWorks' status bar.
+/// How well the sketch is defined, as shown in the status bar.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Status {
     #[default]
@@ -108,6 +109,27 @@ impl Sketch {
     fn push_entity(&mut self, geom: Geometry) -> EntityId {
         self.entities.push(Entity::new(geom));
         EntityId(self.entities.len() - 1)
+    }
+
+    /// Whether every index points at something and every value is finite (a sketch read from a
+    /// file may be damaged).
+    pub fn is_consistent(&self) -> bool {
+        let (np, ne) = (self.points.len(), self.entities.len());
+        self.points.iter().all(|&i| i + 1 < self.params.len())
+            && self.params.iter().all(|v| v.is_finite())
+            && self.labels.len() == self.constraints.len()
+            && self.entities.iter().all(|e| {
+                e.points().iter().all(|p| p.0 < np)
+                    && match &e.geom {
+                        Geometry::Circle { radius, .. } => *radius < self.params.len(),
+                        Geometry::Spline { points } => points.len() >= 2,
+                        _ => true,
+                    }
+            })
+            && self
+                .constraints
+                .iter()
+                .all(|c| c.points().iter().all(|p| p.0 < np) && c.entities().iter().all(|e| e.0 < ne))
     }
 
     pub fn point_count(&self) -> usize {
@@ -429,7 +451,7 @@ impl Sketch {
         }
     }
 
-    /// Relations whose removal alone would make an over-defined sketch solvable (SketchXpert-lite).
+    /// Relations whose removal alone would make an over-defined sketch solvable.
     pub fn diagnose(&self) -> Vec<usize> {
         let analysis = self.analyze();
         if analysis.status != Status::OverDefined {

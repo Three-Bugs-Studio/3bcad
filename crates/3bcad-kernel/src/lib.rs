@@ -17,5 +17,5 @@ pub mod tool;
 pub mod topology;
 pub mod wrap;
 
-pub use solid::{Plane, Solid};
+pub use solid::{extract_solid, CompressedSolid, Plane, Solid};
 pub use tool::{Draft, Tool, ToolFace};

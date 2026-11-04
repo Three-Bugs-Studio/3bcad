@@ -7,12 +7,13 @@
 //! two faces they separate and vertices by the faces around them; when several share a name they
 //! are told apart by position.
 
+use serde::{Deserialize, Serialize};
 use threebcad_kernel::topology::{Topology, P3};
 use threebcad_kernel::{Tool, ToolFace};
 
 use crate::FeatureId;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct FaceTag {
     pub feature: FeatureId,
     /// Pattern / mirror instance (0 for the feature itself).
@@ -34,7 +35,7 @@ impl FaceTag {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct FaceRef {
     pub tag: FaceTag,
     /// Which one, when a face was split into several with the same tag.
@@ -43,7 +44,7 @@ pub struct FaceRef {
     pub twins: usize,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct EdgeRef {
     /// Tags of the two faces, sorted.
     pub faces: [FaceTag; 2],
@@ -51,7 +52,7 @@ pub struct EdgeRef {
     pub twins: usize,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct VertexRef {
     /// Tags of the faces meeting at the vertex, sorted.
     pub faces: Vec<FaceTag>,
