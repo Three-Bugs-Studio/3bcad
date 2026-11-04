@@ -7,6 +7,8 @@ saved files and workflows; patch versions (0.x.y) only fix bugs.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-04
+
 ### Added
 
 - Files and interop (v0.5.0 milestone):
@@ -173,7 +175,8 @@ First public preview of 3BCAD.
 - Send to Slicer for OrcaSlicer, Bambu Studio and PrusaSlicer.
 - App version shown in the title bar and ribbon, linking to these release notes.
 
-[Unreleased]: https://github.com/Three-Bugs-Studio/3bcad/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/Three-Bugs-Studio/3bcad/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/Three-Bugs-Studio/3bcad/releases/tag/v0.5.0
 [0.4.0]: https://github.com/Three-Bugs-Studio/3bcad/releases/tag/v0.4.0
 [0.3.1]: https://github.com/Three-Bugs-Studio/3bcad/releases/tag/v0.3.1
 [0.3.0]: https://github.com/Three-Bugs-Studio/3bcad/releases/tag/v0.3.0
