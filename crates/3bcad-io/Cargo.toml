@@ -8,5 +8,8 @@ rust-version.workspace = true
 
 [dependencies]
 threebcad-kernel.workspace = true
+threebcad-sketch.workspace = true
 truck-stepio.workspace = true
+truck-modeling.workspace = true
+truck-topology.workspace = true
 zip.workspace = true

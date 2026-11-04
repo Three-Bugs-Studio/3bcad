@@ -2,10 +2,11 @@ use std::f64::consts::{PI, TAU};
 
 use crate::scalar::Scalar;
 use crate::{EntityId, Geometry, PointId, Sketch};
+use serde::{Deserialize, Serialize};
 
 /// Sketch relations and driving dimensions. Each one contributes residuals that are zero when
 /// it is satisfied; residuals are written once over [`Scalar`] so the solver gets exact derivatives.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub enum Constraint {
     /// Grounds a point.
     Fix(PointId, [f64; 2]),
@@ -91,7 +92,7 @@ impl Constraint {
         }
     }
 
-    /// Short glyph drawn next to the geometry, like SolidWorks' relation icons.
+    /// Short glyph drawn next to the geometry, as a relation icon.
     pub fn glyph(&self) -> &'static str {
         match self {
             Fix(..) => "⚓",

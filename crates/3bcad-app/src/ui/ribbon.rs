@@ -1,5 +1,5 @@
-//! CommandManager ribbon. Each command creates its feature from the current selection with
-//! sensible defaults; the PropertyManager then edits it.
+//! Command ribbon. Each command creates its feature from the current selection with
+//! sensible defaults; the Properties panel then edits it.
 
 use eframe::egui;
 use threebcad_core::*;
@@ -32,7 +32,13 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                 ui.hyperlink_to(format!("v{VERSION}"), RELEASE_NOTES_URL)
                     .on_hover_text("What's new in this version");
                 ui.separator();
-                ui.label(&app.doc.name);
+                crate::files::menu(app, ui);
+                ui.separator();
+                ui.label(format!(
+                    "{}{}",
+                    app.doc.name,
+                    if app.doc.is_dirty() { " *" } else { "" }
+                ));
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if icons::small(ui, "help", "Shortcuts", true, app.show_shortcuts)
                         .on_hover_text("Keyboard shortcuts (F1)")
@@ -72,7 +78,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                     }
                 });
             });
-            // CommandManager: the current tab's commands, then the tabs underneath, like SolidWorks.
+            // Ribbon: the current tab's commands, then the tabs underneath.
             egui::Frame::new()
                 .fill(egui::Color32::from_rgb(250, 250, 250))
                 .stroke(egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(210, 210, 210)))
@@ -103,7 +109,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
         });
 }
 
-/// A CommandManager tile; true when clicked.
+/// A ribbon tile; true when clicked.
 fn tile(ui: &mut egui::Ui, icon: &str, label: &str, enabled: bool, tip: &str) -> bool {
     icons::tile(ui, icon, label, enabled, false)
         .on_hover_text(tip)
@@ -117,7 +123,7 @@ fn small(ui: &mut egui::Ui, icon: &str, label: &str, enabled: bool, tip: &str) -
         .clicked()
 }
 
-/// Commands stacked three high, like SolidWorks' small CommandManager buttons.
+/// Commands stacked three high, as small ribbon buttons.
 fn stack(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui)) {
     ui.vertical(|ui| {
         ui.spacing_mut().item_spacing.y = 1.0;
@@ -152,7 +158,7 @@ fn create(app: &mut App, kind: FeatureKind) {
 fn sketch_feature(app: &mut App, make: impl FnOnce(FeatureId) -> FeatureKind) {
     match source_sketch(app) {
         Some(s) => create(app, make(s)),
-        None => app.status = "Select a sketch (in the FeatureManager or the graphics area) first".into(),
+        None => app.status = "Select a sketch (in the feature tree or the graphics area) first".into(),
     }
 }
 
@@ -602,7 +608,7 @@ fn add_primitive(app: &mut App, sketch: Sketch, depth: f64) {
     }
 }
 
-/// Sketch tools in columns of up to three, grouped like SolidWorks' Sketch tab.
+/// Sketch tools in columns of up to three, grouped by kind.
 const TOOL_COLUMNS: &[&[Tool]] = &[
     &[Tool::Line, Tool::Centerline, Tool::Point],
     &[Tool::CornerRect, Tool::CenterRect, Tool::Rect3Pt],
@@ -691,7 +697,7 @@ fn plane_chooser(app: &mut App, ui: &mut egui::Ui) {
     let tip = if editable.is_some() {
         "Open the selected sketch"
     } else {
-        "Select a sketch in the FeatureManager first"
+        "Select a sketch in the feature tree first"
     };
     if tile(ui, "sketch", "Edit Sketch", editable.is_some(), tip) {
         if let Some(id) = editable {
@@ -804,10 +810,9 @@ fn print(app: &mut App, ui: &mut egui::Ui) {
     ui.vertical(|ui| {
         ui.label("Chord tolerance");
         ui.add(
-            egui::DragValue::new(&mut app.export_tol)
+            crate::ui::properties::length(&mut app.export_tol)
                 .speed(0.001)
-                .range(0.001..=1.0)
-                .suffix(" mm"),
+                .range(0.001..=1.0),
         );
         egui::ComboBox::from_id_salt("slicer")
             .selected_text(app.slicer.name())

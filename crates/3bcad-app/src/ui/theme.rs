@@ -1,4 +1,4 @@
-//! Light, SolidWorks-like look: light grey panels, white lists, blue selection, and a white-to-grey
+//! Light look: light grey panels, white lists, blue selection, and a white-to-grey
 //! gradient behind the model.
 
 use eframe::egui::{self, Color32, CornerRadius, Stroke};

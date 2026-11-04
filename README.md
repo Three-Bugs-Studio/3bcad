@@ -1,19 +1,23 @@
+<p align="center">
+  <img src="assets/logo-wordmark.svg" alt="3BCAD by 3 Bugs Studio" width="440">
+</p>
+
 # 3BCAD
 
 **Open-source parametric 3D CAD in Rust, built for makers, mechanical engineers and the 3D-printing community.**
 
-3BCAD copies the module split that made SolidWorks work (B-Rep kernel, 2D constraint solver,
+3BCAD uses the module split proven by desktop parametric CAD (B-Rep kernel, 2D constraint solver,
 feature history, GPU viewport, print tooling) and builds each part in memory-safe Rust with no C++ toolchain.
 
-> **Status: early prototype (Phase 1).** You can model boxes and cylinders from parametric sketches,
-> edit dimensions, roll back the feature tree, and export to STL / 3MF / STEP. Expect breaking changes.
+> **Status: early preview (v0.x).** You can sketch, model, save and reopen parametric parts, import STEP,
+> meshes and DXF, and export to STL / 3MF / STEP / DXF. Expect breaking changes before 1.0.
 
 ## Features
 
 - **wgpu 3D viewport**: shaded faces, B-Rep edge highlights, ground grid, reference planes, XYZ triad,
   orbit/pan/zoom camera, hover and selection highlighting of faces, edges and vertices.
-- **SolidWorks-style layout (egui)**: CommandManager ribbon, FeatureManager tree with a draggable
-  rollback bar, PropertyManager for live dimension editing, undo/redo.
+- **Familiar CAD layout (egui)**: command ribbon, feature tree with a draggable rollback bar,
+  Properties panel for live dimension editing, undo/redo.
 - **Interactive sketcher**: sketch on the Front/Top/Right plane or a flat face. Draw lines, rectangles,
   circles, arcs, splines, slots and polygons; fillet, chamfer, trim, extend, offset, mirror and pattern them.
   Inferencing adds relations as you draw, Smart Dimension drives the size, and colours show whether the
@@ -24,8 +28,15 @@ feature history, GPU viewport, print tooling) and builds each part in memory-saf
   sweep and loft (boss or cut), fillets (constant, variable and face), chamfer, shell, draft, rib, Hole Wizard,
   modelled threads, dome and wrap, and linear, circular, mirror, sketch-driven and curve-driven patterns.
 - **Multibody**: Combine, Split, Delete/Keep, Move/Copy and Scale bodies, listed in a Solid Bodies folder.
-- **3D-print export**: watertight binary STL and 3MF (one object per body), exact STEP, and
-  **Send to Slicer** for OrcaSlicer, Bambu Studio and PrusaSlicer.
+- **Files**: the native `.3bcad` format keeps the whole feature history (versioned, diff-friendly JSON),
+  with New / Open / Save / Save As, recent files, an unsaved-changes prompt and autosave with crash recovery.
+- **Import**: STEP solids (AP203 / AP214 / AP242), STL / 3MF / OBJ meshes as reference bodies, and DXF
+  drawings as sketches (lines, arcs, circles, polylines, splines, with their units).
+- **Units and materials**: MMGS, CGS or IPS per part (type `1in` in a mm part and it converts), and a
+  material library (PLA, PETG, ABS, aluminium, steel and more, or your own) for mass and colour.
+- **3D-print export**: watertight binary STL and 3MF (one object per body), exact STEP with millimetre units
+  and the part name, DXF of a sketch or a flat face, and **Send to Slicer** for OrcaSlicer, Bambu Studio and
+  PrusaSlicer.
 
 ## Download
 
@@ -65,10 +76,13 @@ sudo apt-get install libgtk-3-dev libxkbcommon-dev libwayland-dev
 | Zoom | Mouse wheel |
 | Zoom to fit | `F` or double-click |
 | Undo / Redo | `Ctrl+Z` / `Ctrl+Y` |
-| Roll back | Drag the blue bar in the FeatureManager, or right-click a feature |
-| Start a sketch | Sketch tab → Front / Top / Right (or a reference plane), double-click a plane in the FeatureManager, or select a flat face → Selected |
+| New / Open / Save / Save As | `Ctrl+N` / `Ctrl+O` / `Ctrl+S` / `Ctrl+Shift+S`, or the **File** menu |
+| Import STEP, STL, 3MF, OBJ or DXF | **File → Import…** |
+| Change units or material | Click the unit system in the status bar, or **File → Units / Material** |
+| Roll back | Drag the blue bar in the feature tree, or right-click a feature |
+| Start a sketch | Sketch tab → Front / Top / Right (or a reference plane), double-click a plane in the feature tree, or select a flat face → Selected |
 | Keyboard shortcuts | `F1` or the Shortcuts button (top right) |
-| Edit a sketch | Double-click it in the FeatureManager or the graphics area |
+| Edit a sketch | Double-click it in the feature tree or the graphics area |
 | Disable snapping while drawing | Hold `Ctrl` |
 | Edit a dimension | Double-click its value |
 | Fillet / Chamfer / Shell | Select edges or faces (Ctrl+click for more), then the Features tab |
@@ -91,7 +105,7 @@ Cargo package names cannot start with a digit, so packages are named `threebcad-
 
 ## Roadmap
 
-3BCAD is working toward the everyday SolidWorks workflow (parts, assemblies, drawings) plus first-class
+3BCAD is working toward the everyday parametric CAD workflow (parts, assemblies, drawings) plus first-class
 3D-printing tools. See [ROADMAP.md](ROADMAP.md) for every planned task, each tracked as a GitHub issue:
 
 | Milestone | Focus |
@@ -99,7 +113,7 @@ Cargo package names cannot start with a digit, so packages are named `threebcad-
 | v0.2.0 | Interactive sketcher: picking, sketch tools, relations, Smart Dimension |
 | v0.3.0 | Core part features: cut, revolve, fillet, chamfer, shell, Hole Wizard, patterns |
 | v0.4.0 | Advanced modeling: sweep, loft, multibody, threads |
-| v0.5.0 | Files: native save/load, STEP/DXF/mesh import, units, materials |
+| v0.5.0 | Files: native save/load, STEP/DXF/mesh import, units, materials (done, unreleased) |
 | v0.6.0 | 3D Print Studio: overhang/thin-wall checks, orientation, rich 3MF |
 | v0.7.0 | Assemblies: mates, interference, exploded views, BOM |
 | v0.8.0 | Drawings: views, sections, dimensions, PDF/DXF |
@@ -124,4 +138,5 @@ at your option.
 Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in the work by you,
 as defined in the Apache-2.0 license, shall be dual licensed as above, without any additional terms or conditions.
 
-SolidWorks, Parasolid and D-Cubed are trademarks of their respective owners. 3BCAD is not affiliated with them.
+3BCAD is an independent open-source project and is not affiliated with, endorsed by or sponsored by any CAD
+vendor. Product names and trademarks belong to their owners.

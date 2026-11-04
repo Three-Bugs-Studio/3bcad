@@ -1,13 +1,15 @@
 //! Sketch geometry. Coordinates live in the owning sketch's flat parameter
 //! vector so the solver can move every degree of freedom at once.
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+use serde::{Deserialize, Serialize};
+
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct PointId(pub usize);
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct EntityId(pub usize);
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub enum Geometry {
     Line {
         a: PointId,
@@ -31,7 +33,7 @@ pub enum Geometry {
     },
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Entity {
     pub geom: Geometry,
     /// Construction geometry constrains the sketch but is never part of a profile.

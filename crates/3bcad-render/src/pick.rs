@@ -44,7 +44,7 @@ fn nearest_triangle<'a>(o: Vec3, d: Vec3, tris: impl Iterator<Item = ([Vec3; 3],
         .min_by(|a, b| a.0.total_cmp(&b.0))
 }
 
-/// What is under `cursor` (pixels from the viewport's top-left), SolidWorks order:
+/// What is under `cursor` (pixels from the viewport's top-left), in pick priority order:
 /// vertices, then edges, then faces, then reference planes.
 pub fn pick(scene: &SceneGeometry, cam: &OrbitCamera, viewport: Vec2, cursor: Vec2, tol_px: f32) -> Option<Hit> {
     let (o, d) = cam.ray(cursor, viewport);

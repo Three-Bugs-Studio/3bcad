@@ -2778,6 +2778,8 @@ checksum = "3672b37090dbd86368a4145bc067582552b29c27377cad4e0a306c97f9bd7772"
 dependencies = [
  "fixedbitset",
  "indexmap",
+ "serde",
+ "serde_derive",
 ]
 
 [[package]]
@@ -3699,6 +3701,8 @@ dependencies = [
  "anyhow",
  "criterion",
  "petgraph",
+ "serde",
+ "serde_json",
  "threebcad-kernel",
  "threebcad-sketch",
 ]
@@ -3708,7 +3712,10 @@ name = "threebcad-io"
 version = "0.4.0"
 dependencies = [
  "threebcad-kernel",
+ "threebcad-sketch",
+ "truck-modeling",
  "truck-stepio",
+ "truck-topology",
  "zip",
 ]
 
@@ -3718,9 +3725,11 @@ version = "0.4.0"
 dependencies = [
  "anyhow",
  "nalgebra",
+ "serde",
  "truck-meshalgo",
  "truck-modeling",
  "truck-shapeops",
+ "truck-topology",
 ]
 
 [[package]]
@@ -3739,6 +3748,7 @@ version = "0.4.0"
 dependencies = [
  "anyhow",
  "nalgebra",
+ "serde",
 ]
 
 [[package]]

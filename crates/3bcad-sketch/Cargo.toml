@@ -9,3 +9,4 @@ rust-version.workspace = true
 [dependencies]
 nalgebra.workspace = true
 anyhow.workspace = true
+serde.workspace = true

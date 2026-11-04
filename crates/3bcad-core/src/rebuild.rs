@@ -87,6 +87,8 @@ pub struct Rebuild {
     pub helices: HashMap<FeatureId, threebcad_kernel::sweep::Helix>,
     /// Polylines to draw for curve features.
     pub curves: HashMap<FeatureId, Vec<P3>>,
+    /// Imported reference meshes (not solids).
+    pub meshes: Vec<(FeatureId, Arc<threebcad_kernel::mesher::PrintMesh>)>,
     /// Features evaluated in this rebuild (the rest came from the cache).
     pub evaluated: usize,
 }

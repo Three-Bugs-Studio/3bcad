@@ -168,8 +168,44 @@ impl Eval {
                 kind,
                 depth,
             } => self.wrap(h, sketch, &face, kind, depth),
+            FeatureKind::Imported { solids, .. } => self.imported(&solids.0),
+            FeatureKind::ImportedMesh { mesh, .. } => {
+                self.s.meshes.push((self.id, mesh.0.clone()));
+                Ok(())
+            }
             other => bail!("{} is not a v0.4 feature", other.prefix()),
         }
+    }
+
+    /// Imported solids become bodies whose faces are named by their order in the file.
+    fn imported(&mut self, solids: &[threebcad_kernel::CompressedSolid]) -> Result<()> {
+        for (region, cs) in solids.iter().enumerate() {
+            let solid =
+                threebcad_kernel::extract_solid(cs).map_err(|e| anyhow!("the imported solid is invalid: {e}"))?;
+            let topo = analyze(&solid);
+            let tags = (0..topo.faces.len())
+                .map(|i| FaceTag {
+                    feature: self.id,
+                    instance: 0,
+                    region: region as u32,
+                    face: ToolFace::Side(i),
+                })
+                .collect();
+            let csg = vec![Step {
+                feature: self.id,
+                instance: 0,
+                op: OpKind::Direct,
+                tool: Tool::Prism {
+                    regions: Vec::new(),
+                    plane: Plane::TOP,
+                    z0: 0.0,
+                    z1: 0.0,
+                    draft: None,
+                },
+            }];
+            self.s.bodies.push(Body { solid, topo, tags, csg });
+        }
+        Ok(())
     }
 
     fn helix(&mut self, h: &History, d: &HelixDef) -> Result<()> {

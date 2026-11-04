@@ -1,16 +1,17 @@
 # 3BCAD architecture
 
 3BCAD is a Cargo workspace of six crates. Each one owns one of the systems that make a parametric
-CAD program, mirroring the split SolidWorks uses (kernel, 2D solver, feature tree, graphics, print tooling).
+CAD program, using the split common to desktop parametric CAD (kernel, 2D solver, feature tree, graphics, print tooling).
 
 ```mermaid
 flowchart LR
     app["threebcad-app<br/>egui UI, sketch mode"] --> core["threebcad-core<br/>feature history, rebuild"]
     app --> render["threebcad-render<br/>wgpu viewport, camera, picking"]
-    app --> io["threebcad-io<br/>STL / 3MF / STEP, slicers"]
+    app --> io["threebcad-io<br/>STL / 3MF / OBJ / STEP / DXF, slicers"]
     core --> sketch["threebcad-sketch<br/>2D geometry, constraint solver"]
     core --> kernel["threebcad-kernel<br/>truck B-Rep, tessellation"]
     io --> kernel
+    io --> sketch
 ```
 
 Dependency rules: `core` never depends on `render` or `app`; `kernel` never depends on `sketch`
@@ -46,7 +47,7 @@ sequenceDiagram
    `analyze()` gets degrees of freedom and conflicts from the Jacobian's null space, which drives
    the blue / black / red colours. `regions()` finds closed loops (with holes) for features.
 2. **History** (`crates/3bcad-core`). Features sit in a `petgraph` DAG (edge = "is built from",
-   recomputed from what each `FeatureKind` references) with a SolidWorks-style rollback bar, suppression
+   recomputed from what each `FeatureKind` references) with a rollback bar, suppression
    and reordering that keeps parents above children. `rebuild.rs` evaluates everything above the bar and
    records per-feature errors and warnings instead of failing the whole part. A cache keeps the state after
    each feature, so a rebuild starts at the first feature that changed (Ctrl+Q clears it).
@@ -70,6 +71,21 @@ sequenceDiagram
    as one undo step when you exit the sketch. `ui/ribbon.rs` creates features from the current
    selection, `ui/properties.rs` edits them, `ui/evaluate.rs` holds What's Wrong, Measure and Mass
    Properties.
+
+## Files
+
+- **Part files** (`crates/3bcad-core/src/document.rs`). A `.3bcad` file is pretty-printed JSON of the
+  feature history (the `History` graph with its node ids), units and material, tagged with a format
+  name and `FORMAT_VERSION`. Geometry is never saved: opening a file rebuilds it. Changing a saved type
+  (`FeatureKind`, `Sketch`, ...) changes the format: bump `FORMAT_VERSION` and teach `migrate` to rewrite
+  the old JSON, and keep the corpus round-trip test (`tests/parts.rs`) passing. Files from a newer version
+  and damaged files (checked by `History::validate` and `Sketch::is_consistent`) are refused.
+- **Imports** (`crates/3bcad-io`). Every reader takes untrusted bytes and returns an error, never a
+  panic; `fuzz/` holds a cargo-fuzz target per reader. STEP solids become an `Imported` feature that
+  stores the compressed truck solid; meshes become `ImportedMesh` reference bodies; DXF becomes a sketch.
+- **App** (`crates/3bcad-app/src/files.rs`). The File menu, recent files and autosave settings
+  (`settings.txt` in the user's config folder) and crash recovery (one autosave file per process in
+  `recovery/`, removed after a save or a normal exit).
 
 ## Adding a new feature type (example: Rib)
 

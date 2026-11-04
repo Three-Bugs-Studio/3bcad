@@ -38,3 +38,18 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libxkbcommon-dev libwayland-dev
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo test --workspace
+
+  # STEP export read back by OpenCASCADE (the kernel behind FreeCAD), checking volume and product name.
+  step-occt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install cadquery-ocp
+      # Tests run in the crate folder, so the output folder must be absolute.
+      - run: STEP_OUT="$GITHUB_WORKSPACE/step-out" cargo test -p threebcad-io --test step_roundtrip -- --ignored
+      - run: python .github/scripts/occt_step_check.py "$GITHUB_WORKSPACE/step-out"

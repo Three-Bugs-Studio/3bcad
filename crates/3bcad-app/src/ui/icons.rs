@@ -1,4 +1,4 @@
-//! Command and tree icons, painted as small shaded 3D icons in the SolidWorks style: gold solids lit
+//! Command and tree icons, painted as small shaded 3D icons: gold solids lit
 //! from the upper left, blue sketches and translucent planes, green "add" and red "remove" arrows,
 //! dark outlines. Solids are built in 3D (z up) and drawn in isometric view; flat marks are placed in
 //! a unit square.
@@ -360,7 +360,7 @@ impl Pen<'_> {
         let (y0, y1) = s
             .iter()
             .fold((f32::MAX, f32::MIN), |(a, b), p| (a.min(p.y), b.max(p.y)));
-        // Each face is a touch brighter at its top, like the gloss on SolidWorks icons.
+        // Each face is a touch brighter at its top, for a little gloss.
         let cols: Vec<Color32> = s
             .iter()
             .zip(lum)
@@ -692,6 +692,18 @@ pub fn paint(p: &Painter, r: Rect, name: &str, enabled: bool) {
             k.flat(&[(0.48, 0.3), (0.62, 0.44), (0.48, 0.44)], GREY, vec2(0.6, 0.8));
             k.arrow((0.34, 0.7), (0.94, 0.1), GREEN);
         }
+        "import" => {
+            k.badge(
+                &[(0.38, 0.3), (0.76, 0.3), (0.9, 0.44), (0.9, 0.92), (0.38, 0.92)],
+                WHITE,
+            );
+            k.flat(&[(0.76, 0.3), (0.9, 0.44), (0.76, 0.44)], GREY, vec2(0.6, 0.8));
+            k.arrow((0.06, 0.1), (0.62, 0.66), BLUE);
+        }
+        "mesh" => {
+            k.badge(&[(0.5, 0.08), (0.94, 0.88), (0.06, 0.88)], GREY);
+            k.line(&[(0.28, 0.48), (0.72, 0.48), (0.5, 0.88), (0.28, 0.48)], INK, 1.2);
+        }
         "slicer" => {
             k.fit([-0.05, 0.0, 0.0], [1.05, 1.0, 0.95]);
             k.prism(&rect3(0.0, 0.0, 1.0, 1.0, 0.0), [0.0, 0.0, 0.08], GREY);
@@ -1009,7 +1021,7 @@ pub fn paint(p: &Painter, r: Rect, name: &str, enabled: bool) {
     }
 }
 
-/// Icon for a feature in the FeatureManager.
+/// Icon for a feature in the feature tree.
 pub fn of_feature(kind: &FeatureKind) -> &'static str {
     match kind {
         FeatureKind::Sketch { .. } => "sketch",
@@ -1045,6 +1057,8 @@ pub fn of_feature(kind: &FeatureKind) -> &'static str {
         FeatureKind::CurvePattern { .. } => "curve_pattern",
         FeatureKind::Dome { .. } => "dome",
         FeatureKind::Wrap { .. } => "wrap",
+        FeatureKind::Imported { .. } => "import",
+        FeatureKind::ImportedMesh { .. } => "mesh",
     }
 }
 
@@ -1066,7 +1080,7 @@ fn frame(ui: &Ui, resp: &Response, selected: bool) {
     }
 }
 
-/// CommandManager button: a large icon over its label.
+/// Ribbon button: a large icon over its label.
 pub fn tile(ui: &mut Ui, icon: &str, label: &str, enabled: bool, selected: bool) -> Response {
     let color = if enabled {
         Color32::from_rgb(30, 30, 30)

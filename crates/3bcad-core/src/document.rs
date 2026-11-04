@@ -1,4 +1,8 @@
 use std::collections::HashMap;
+use std::path::Path;
+
+use anyhow::{bail, ensure, Context};
+use serde::{Deserialize, Serialize};
 
 use threebcad_kernel::topology::P3;
 use threebcad_kernel::Plane;
@@ -6,14 +10,42 @@ use threebcad_sketch::{Sketch, Status};
 
 use crate::naming::{self, EdgeRef, FaceRef, VertexRef};
 use crate::rebuild::{self, CacheEntry};
-use crate::{Body, FeatureId, History, Rebuild};
+use crate::{Body, FeatureId, History, Material, Rebuild, Units};
 
 const UNDO_LIMIT: usize = 100;
 
+/// Tag at the top of every part file, so other JSON is not mistaken for a part.
+const FORMAT: &str = "3bcad-part";
+/// Bump when the saved structure changes, and teach `migrate` to read the old one.
+pub const FORMAT_VERSION: u64 = 1;
+
+/// What a `.3bcad` file holds: the feature history, not the geometry it builds.
+#[derive(Serialize, Deserialize)]
+struct PartFile {
+    format: String,
+    version: u64,
+    name: String,
+    units: Units,
+    material: Material,
+    history: History,
+}
+
+/// Brings an older file's JSON up to `FORMAT_VERSION`, one version at a time.
+fn migrate(file: serde_json::Value, version: u64) -> anyhow::Result<serde_json::Value> {
+    match version {
+        FORMAT_VERSION => Ok(file),
+        v => bail!("this part was saved in format version {v}, which this 3BCAD cannot read"),
+    }
+}
+
 /// A part: its feature history, the bodies it builds, and undo/redo.
-// shortcut: assemblies and save/load are not modelled yet.
+// shortcut: assemblies are not modelled yet.
 pub struct PartDocument {
     pub name: String,
+    units: Units,
+    material: Material,
+    /// Changed since it was last saved or opened.
+    dirty: bool,
     history: History,
     undo: Vec<History>,
     redo: Vec<History>,
@@ -27,6 +59,9 @@ impl PartDocument {
     pub fn new(name: impl Into<String>) -> Self {
         let mut doc = Self {
             name: name.into(),
+            units: Units::default(),
+            material: Material::default(),
+            dirty: false,
             history: History::default(),
             undo: Vec::new(),
             redo: Vec::new(),
@@ -51,7 +86,95 @@ impl PartDocument {
         })
         .expect("demo part builds");
         doc.undo.clear();
+        doc.dirty = false;
         doc
+    }
+
+    /// The part as `.3bcad` JSON (pretty-printed, so files diff well in version control).
+    pub fn to_json(&self) -> String {
+        let file = PartFile {
+            format: FORMAT.into(),
+            version: FORMAT_VERSION,
+            name: self.name.clone(),
+            units: self.units,
+            material: self.material.clone(),
+            history: self.history.clone(),
+        };
+        serde_json::to_string_pretty(&file).expect("a part always serialises")
+    }
+
+    /// Reads `.3bcad` JSON, refusing damaged files and files from a newer 3BCAD.
+    pub fn from_json(text: &str) -> anyhow::Result<Self> {
+        let value: serde_json::Value = serde_json::from_str(text).context("the file is not valid JSON")?;
+        ensure!(
+            value.get("format").and_then(|f| f.as_str()) == Some(FORMAT),
+            "this is not a 3BCAD part file"
+        );
+        let version = value
+            .get("version")
+            .and_then(|v| v.as_u64())
+            .context("the file has no format version")?;
+        ensure!(
+            version <= FORMAT_VERSION,
+            "this part was saved by a newer 3BCAD (format version {version}); this version reads up to              {FORMAT_VERSION}. Update 3BCAD to open it"
+        );
+        let file: PartFile = serde_json::from_value(migrate(value, version)?).context("the part file is damaged")?;
+        let mut history = file.history;
+        history.validate().context("the part file is damaged")?;
+        history.relink();
+        let mut doc = Self::new(file.name);
+        doc.units = file.units;
+        doc.material = file.material;
+        doc.history = history;
+        doc.rebuild();
+        Ok(doc)
+    }
+
+    /// Writes the part next to `path` first and then moves it into place, so a failed save never
+    /// destroys the previous file.
+    pub fn save(&mut self, path: &Path) -> anyhow::Result<()> {
+        self.write_to(path)?;
+        self.dirty = false;
+        Ok(())
+    }
+
+    /// Saves a copy without marking the part saved (autosave).
+    pub fn write_to(&self, path: &Path) -> anyhow::Result<()> {
+        let tmp = path.with_extension("3bcad.tmp");
+        std::fs::write(&tmp, self.to_json()).with_context(|| format!("cannot write {}", tmp.display()))?;
+        std::fs::rename(&tmp, path).with_context(|| format!("cannot replace {}", path.display()))
+    }
+
+    pub fn open(path: &Path) -> anyhow::Result<Self> {
+        let text = std::fs::read_to_string(path).with_context(|| format!("cannot read {}", path.display()))?;
+        Self::from_json(&text)
+    }
+
+    pub fn is_dirty(&self) -> bool {
+        self.dirty
+    }
+
+    /// Marks the part as having unsaved changes (a recovered autosave).
+    pub fn mark_dirty(&mut self) {
+        self.dirty = true;
+    }
+
+    pub fn units(&self) -> Units {
+        self.units
+    }
+
+    pub fn set_units(&mut self, units: Units) {
+        self.dirty |= units != self.units;
+        self.units = units;
+    }
+
+    pub fn material(&self) -> &Material {
+        &self.material
+    }
+
+    pub fn set_material(&mut self, material: Material) {
+        self.dirty |= material != self.material;
+        self.material = material;
     }
 
     pub fn history(&self) -> &History {
@@ -99,6 +222,7 @@ impl PartDocument {
             self.redo.clear();
         }
         self.merge_key = key;
+        self.dirty = true;
         let r = f(&mut self.history);
         self.history.relink();
         self.rebuild();
@@ -122,6 +246,7 @@ impl PartDocument {
         if let Some(prev) = self.undo.pop() {
             self.redo.push(std::mem::replace(&mut self.history, prev));
             self.merge_key = None;
+            self.dirty = true;
             self.rebuild();
         }
     }
@@ -130,6 +255,7 @@ impl PartDocument {
         if let Some(next) = self.redo.pop() {
             self.undo.push(std::mem::replace(&mut self.history, next));
             self.merge_key = None;
+            self.dirty = true;
             self.rebuild();
         }
     }
@@ -189,6 +315,40 @@ mod tests {
 
     use super::*;
     use crate::feature::*;
+
+    #[test]
+    fn damaged_or_newer_files_are_refused() {
+        let doc = PartDocument::demo();
+        let json = doc.to_json();
+        let err = |text: &str| format!("{:#}", PartDocument::from_json(text).err().expect("refused"));
+        assert!(err(&json[..json.len() / 2]).contains("not valid JSON"));
+        assert!(err("{\"format\": \"something-else\"}").contains("not a 3BCAD part"));
+        assert!(err(&json.replacen("\"version\": 1", "\"version\": 99", 1)).contains("newer 3BCAD"));
+        // A feature pointing at a sketch that is not in the file.
+        let bad = json.replacen("\"sketch\": 0", "\"sketch\": 7", 1);
+        assert_ne!(bad, json);
+        assert!(err(&bad).contains("damaged"));
+        // A sketch line pointing at a point that does not exist.
+        let v: serde_json::Value = serde_json::from_str(&json).unwrap();
+        let mut v2 = v.clone();
+        let nodes = v2["history"]["graph"]["nodes"].as_array_mut().unwrap();
+        nodes[0]["kind"]["Sketch"]["sketch"]["entities"][0]["geom"]["Line"]["a"] = 999.into();
+        assert!(err(&v2.to_string()).contains("damaged"));
+        // Units and material are kept; a save clears the dirty flag.
+        let mut d = PartDocument::demo();
+        d.set_units(crate::Units {
+            system: crate::UnitSystem::Ips,
+            decimals: 3,
+        });
+        assert!(d.is_dirty());
+        let path = std::env::temp_dir().join(format!("3bcad-doc-{}.3bcad", std::process::id()));
+        d.save(&path).unwrap();
+        assert!(!d.is_dirty());
+        let back = PartDocument::open(&path).unwrap();
+        assert_eq!(back.units(), d.units());
+        assert_eq!(back.history().len(), d.history().len());
+        std::fs::remove_file(path).ok();
+    }
 
     /// Volume from a fine mesh (holes are small next to the part, so a coarse one is too rough).
     fn vol(doc: &PartDocument) -> f64 {

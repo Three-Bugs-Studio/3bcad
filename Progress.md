@@ -17,7 +17,7 @@ Last updated: 2026-10-26. Full plan: [ROADMAP.md](ROADMAP.md).
 | --- | --- | --- | --- |
 | 1 | Viewport picking | ✅ | Faces, edges, vertices, planes; Ctrl adds, Esc clears; occlusion-aware |
 | 2 | Pre-highlight and highlight colours | ✅ | GPU state buffer, no mesh re-upload |
-| 3 | Front / Top / Right planes and origin | ✅ | Translucent, show/hide and selectable in the FeatureManager |
+| 3 | Front / Top / Right planes and origin | ✅ | Translucent, show/hide and selectable in the feature tree |
 | 4 | Sketch mode with Normal To | ✅ | Planes or flat faces; animated Normal To; OK / Cancel corner |
 | 5 | Line tool | ✅ | Chaining, auto-close, snapping |
 | 6 | Rectangle tools | ✅ | Corner, center, 3-point |
