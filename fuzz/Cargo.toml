@@ -1,0 +1,50 @@
+[package]
+name = "threebcad-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+threebcad-io = { path = "../crates/3bcad-io" }
+
+# Not part of the main workspace: cargo-fuzz needs nightly and its own build flags.
+[workspace]
+
+[[bin]]
+name = "stl"
+path = "fuzz_targets/stl.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "obj"
+path = "fuzz_targets/obj.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "threemf"
+path = "fuzz_targets/threemf.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "dxf"
+path = "fuzz_targets/dxf.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "step"
+path = "fuzz_targets/step.rs"
+test = false
+doc = false
+bench = false

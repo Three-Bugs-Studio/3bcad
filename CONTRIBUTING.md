@@ -49,6 +49,19 @@ cargo test --workspace
 - New dependencies need a reason in the PR description. Prefer pure-Rust crates with MIT/Apache-2.0 compatible licenses.
 - Update `README.md` if you change user-facing behaviour.
 
+## Fuzzing
+
+File importers read untrusted input and must return an error, never panic. Each parser has a
+[cargo-fuzz](https://github.com/rust-fuzz/cargo-fuzz) target in `fuzz/` (`stl`, `obj`, `threemf`, `dxf`, `step`),
+run nightly by the `Fuzz` workflow. To run one locally (nightly toolchain, Linux or macOS):
+
+```bash
+cargo install cargo-fuzz
+cargo +nightly fuzz run stl -- -max_total_time=60
+```
+
+A crash is saved under `fuzz/artifacts/<target>/`; add the input as a regression test next to the parser.
+
 ## Commit messages
 
 Releases are automated from commit messages, so every commit must be a
