@@ -1,12 +1,12 @@
 # 3BCAD Roadmap
 
-3BCAD aims for the everyday workflow of SolidWorks — parts, assemblies and drawings — plus first-class
+3BCAD aims for the everyday workflow of desktop parametric CAD — parts, assemblies and drawings — plus first-class
 3D-printing tools. Every item below is a GitHub issue; pick one, comment that you are on it, and see
 [CONTRIBUTING.md](CONTRIBUTING.md). Issues labelled `good first issue` are a good start.
 
 Order is a plan, not a promise: milestones ship when they are ready.
 
-**Done in v0.1.0:** wgpu viewport, ribbon/FeatureManager/PropertyManager layout, parametric sketches with
+**Done in v0.1.0:** wgpu viewport, ribbon/feature tree/Properties panel layout, parametric sketches with
 a Levenberg-Marquardt solver, Extruded Boss from rectangles/circles, rollback bar, undo/redo,
 STL/3MF/STEP export and Send to Slicer.
 
@@ -34,7 +34,7 @@ Draw, constrain and dimension sketches directly in the viewport.
 - [ ] #18 Smart Dimension tool in the viewport
 - [ ] #19 More sketch relations: Parallel, Perpendicular, Equal, Midpoint, Concentric, Collinear, Symmetric, Point-on-curve
 - [ ] #20 Sketch definition status colours (under / fully / over-defined)
-- [ ] #21 Diagnose over-defined sketches (SketchXpert-lite)
+- [ ] #21 Diagnose over-defined sketches
 - [ ] #22 Multi-loop profiles: regions with holes and unordered lines
 - [ ] #23 Solver performance: analytic Jacobians and sparse solve
 - [ ] #24 Drag under-defined sketch geometry with live solving
@@ -42,7 +42,7 @@ Draw, constrain and dimension sketches directly in the viewport.
 
 ## [v0.3.0 – Core Part Features](https://github.com/Three-Bugs-Studio/3bcad/milestone/2)
 
-The everyday SolidWorks part toolbox: cut, revolve, fillet, chamfer, shell, holes, patterns.
+The everyday part toolbox: cut, revolve, fillet, chamfer, shell, holes, patterns.
 
 - [x] #26 Integrate boolean operations (truck-shapeops)
 - [x] #27 Extruded Cut
@@ -59,7 +59,7 @@ The everyday SolidWorks part toolbox: cut, revolve, fillet, chamfer, shell, hole
 - [x] #38 Mirror features and bodies
 - [x] #39 Reference geometry: planes, axes, points and coordinate systems
 - [x] #40 Sketch on a planar face
-- [x] #41 Edit Feature / Edit Sketch, rename and reorder in the FeatureManager
+- [x] #41 Edit Feature / Edit Sketch, rename and reorder in the feature tree
 - [x] #42 Suppress / unsuppress features
 - [x] #43 Persistent face/edge naming across rebuilds (topological naming)
 - [x] #44 Incremental rebuild: only re-evaluate dirty features
@@ -88,16 +88,16 @@ Sweeps, lofts, multibody tools and threads.
 
 Native save/load, STEP/DXF/mesh import, units and materials.
 
-- [ ] #60 Native .3bcad document format (save / load)
-- [ ] #61 File menu: New, Open, Save, Save As, recent files and unsaved-changes prompt
-- [ ] #62 Autosave and crash recovery
-- [ ] #63 STEP import (AP203/AP214/AP242)
-- [ ] #64 STEP export: units, names and round-trip validation
-- [ ] #65 Mesh import: STL, 3MF and OBJ as reference bodies
-- [ ] #66 DXF import into sketches and DXF export of sketches
-- [ ] #67 Document units and precision (mm / cm / inch)
-- [ ] #68 Material library
-- [ ] #69 Fuzz testing for all importers
+- [x] #60 Native .3bcad document format (save / load)
+- [x] #61 File menu: New, Open, Save, Save As, recent files and unsaved-changes prompt
+- [x] #62 Autosave and crash recovery
+- [x] #63 STEP import (AP203/AP214/AP242)
+- [x] #64 STEP export: units, names and round-trip validation
+- [x] #65 Mesh import: STL, 3MF and OBJ as reference bodies
+- [x] #66 DXF import into sketches and DXF export of sketches
+- [x] #67 Document units and precision (mm / cm / inch)
+- [x] #68 Material library
+- [x] #69 Fuzz testing for all importers
 
 ## [v0.6.0 – 3D Print Studio](https://github.com/Three-Bugs-Studio/3bcad/milestone/5)
 

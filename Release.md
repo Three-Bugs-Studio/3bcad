@@ -30,13 +30,13 @@ tracks the next release only.
 Run `cargo run` on the branch, then:
 
 1. **Picking**: hover the cube; faces, edges and corners highlight orange. Click selects (blue), Ctrl+click
-   adds, Esc clears. Click the Front Plane in the FeatureManager; it highlights.
+   adds, Esc clears. Click the Front Plane in the feature tree; it highlights.
 2. **Sketch mode**: with the Top Plane selected, Sketch tab → ✏ Sketch. The view animates straight down.
 3. **Drawing**: draw a Corner Rectangle, a Circle inside it, a Line chain that closes, a 3 Point Arc, a Slot
    and a Polygon. Previews follow the cursor; snapping shows ◉ / M markers and dotted alignment lines.
 4. **Dimensions**: Smart Dimension the rectangle's width and height (drop above/beside for H/V) and the circle's
    diameter. Edit values inline. Geometry turns black when fully defined; the status bar shows the DOF.
-5. **Relations**: select two lines, add Parallel / Equal from the PropertyManager; delete one with ✖.
+5. **Relations**: select two lines, add Parallel / Equal from the Properties panel; delete one with ✖.
 6. **Over-defined**: add a dimension that repeats another; the sketch turns red. Diagnose lists the culprits;
    deleting one turns it back.
 7. **Edit tools**: Fillet a rectangle corner, Trim a line between two crossings, Offset a chain, Mirror about a

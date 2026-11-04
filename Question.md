@@ -5,8 +5,8 @@ Decisions the maintainer (@DongDuong2001) needs to make. Answer inline or in PR
 
 ## For v0.2.0
 
-1. **Plane orientation.** 3BCAD is Z-up (good for 3D printing): Top = XY, Front = XZ, Right = YZ. SolidWorks
-   is Y-up, where Front = XY. Keep Z-up naming, or match SolidWorks exactly?
+1. **Plane orientation.** 3BCAD is Z-up (good for 3D printing): Top = XY, Front = XZ, Right = YZ. Many desktop
+   CAD apps are Y-up, where Front = XY. Keep Z-up naming, or switch to Y-up?
 2. **Pattern instance count (#15).** To make the count editable after Apply, the pattern has to become a
    regenerating "sketch pattern" object instead of plain copies. Do it in v0.2.x, or move #15 to v0.3.0?
 3. **Release timing.** Tag v0.2.0 as soon as PR #120 is merged and manually tested, or wait to bundle it with

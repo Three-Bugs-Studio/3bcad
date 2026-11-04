@@ -5,7 +5,7 @@ Last updated: 2026-10-26 · Branch `feat/v0.2.0-interactive-sketcher` · PR [#12
 ## Task
 
 Implement the **v0.2.0 – Interactive Sketcher** milestone (issues #1–#25): picking, sketch mode on planes and
-faces, every SolidWorks-style sketch tool, inferencing, Smart Dimension, relations, definition status,
+faces, every standard sketch tool, inferencing, Smart Dimension, relations, definition status,
 diagnosis, multi-loop profiles, a faster solver, dragging and an architecture guide.
 
 ## Current Phase
