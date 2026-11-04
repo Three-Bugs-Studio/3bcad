@@ -197,7 +197,7 @@ impl App {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
             self.files.pending = Some(Pending::Close);
         }
-        self.autosave();
+        self.autosave(ctx);
         let title = title(&self.doc);
         if title != self.files.title {
             ctx.send_viewport_cmd(egui::ViewportCommand::Title(title.clone()));
@@ -207,13 +207,19 @@ impl App {
         self.recovery_prompt(ctx);
     }
 
-    fn autosave(&mut self) {
+    fn autosave(&mut self, ctx: &egui::Context) {
         let every = self.files.settings.autosave_minutes;
         if every == 0 || !self.doc.is_dirty() {
             self.files.last_autosave = Instant::now();
             return;
         }
-        if self.files.last_autosave.elapsed() < Duration::from_secs(u64::from(every) * 60) {
+        let due = Duration::from_secs(u64::from(every) * 60);
+        if let Some(left) = due
+            .checked_sub(self.files.last_autosave.elapsed())
+            .filter(|d| !d.is_zero())
+        {
+            // egui only runs frames on input, so wake up when the autosave is due.
+            ctx.request_repaint_after(left);
             return;
         }
         self.files.last_autosave = Instant::now();
