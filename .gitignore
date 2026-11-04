@@ -2,5 +2,6 @@
 *.stl
 *.3mf
 *.step
+!crates/3bcad-io/tests/data/*.step
 .pudo/
 __pycache__/

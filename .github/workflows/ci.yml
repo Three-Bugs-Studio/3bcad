@@ -50,5 +50,6 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install cadquery-ocp
-      - run: STEP_OUT=step-out cargo test -p threebcad-io --test step_roundtrip -- --ignored
-      - run: python .github/scripts/occt_step_check.py step-out
+      # Tests run in the crate folder, so the output folder must be absolute.
+      - run: STEP_OUT="$GITHUB_WORKSPACE/step-out" cargo test -p threebcad-io --test step_roundtrip -- --ignored
+      - run: python .github/scripts/occt_step_check.py "$GITHUB_WORKSPACE/step-out"
