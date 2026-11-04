@@ -1,12 +1,16 @@
-//! Export (STL, 3MF, STEP) and the bridge to desktop slicers.
+//! Import (STL, OBJ, 3MF, DXF), export (STL, 3MF, STEP, DXF) and the bridge to desktop slicers.
 
+pub mod dxf;
+pub mod mesh;
 pub mod slicer;
 pub mod step;
 pub mod stl;
 pub mod threemf;
 
+pub use dxf::{read_dxf, write_dxf};
+pub use mesh::read_mesh;
 pub use slicer::Slicer;
-pub use step::write_step;
+pub use step::{read_step, write_step, StepImport};
 pub use stl::write_stl;
 pub use threemf::write_3mf;
 
@@ -44,7 +48,7 @@ mod tests {
         assert!(zip.by_name("[Content_Types].xml").is_ok() && zip.by_name("_rels/.rels").is_ok());
 
         let step = dir.join("cube.step");
-        write_step(&step, [&solid]).unwrap();
+        write_step(&step, "cube", [&solid]).unwrap();
         let text = std::fs::read_to_string(&step).unwrap();
         assert!(text.starts_with("ISO-10303-21;") && text.contains("MANIFOLD_SOLID_BREP"));
 
@@ -67,7 +71,7 @@ mod tests {
         );
         let cut = threebcad_kernel::boolean::subtract(&cube, &hole).unwrap().remove(0);
         let path = std::env::temp_dir().join(format!("3bcad-step-bool-{}.step", std::process::id()));
-        write_step(&path, [&cut]).unwrap();
+        write_step(&path, "cut", [&cut]).unwrap();
         let text = std::fs::read_to_string(&path).unwrap();
         let faces = text.matches("= ADVANCED_FACE(").count() + text.matches("= FACE_SURFACE(").count();
         assert!(text.contains("MANIFOLD_SOLID_BREP"));
