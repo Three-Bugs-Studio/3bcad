@@ -4,9 +4,10 @@ use std::path::Path;
 
 use threebcad_kernel::mesher::PrintMesh;
 
-/// Binary STL, all bodies in one file.
-pub fn write_stl(path: &Path, meshes: &[PrintMesh]) -> io::Result<()> {
-    let count: usize = meshes.iter().map(|m| m.triangles.len()).sum();
+/// Binary STL, all bodies in one file (STL has no names, so they are dropped).
+pub fn write_stl(path: &Path, objects: &[(&str, &PrintMesh)]) -> io::Result<()> {
+    let meshes = objects.iter().map(|(_, m)| *m);
+    let count: usize = meshes.clone().map(|m| m.triangles.len()).sum();
     let count = u32::try_from(count).map_err(|_| io::Error::other("too many triangles for STL"))?;
     let mut w = BufWriter::new(File::create(path)?);
     let mut header = [0u8; 80];

@@ -317,7 +317,7 @@ mod tests {
 
     fn binary_stl(m: &PrintMesh) -> Vec<u8> {
         let path = std::env::temp_dir().join(format!("3bcad-mesh-{}.stl", std::process::id()));
-        crate::write_stl(&path, std::slice::from_ref(m)).unwrap();
+        crate::write_stl(&path, &[("cube", m)]).unwrap();
         let mut b = std::fs::read(&path).unwrap();
         std::fs::remove_file(path).ok();
         b[..5].copy_from_slice(b"solid"); // some exporters do this; the size check must still win
@@ -326,7 +326,7 @@ mod tests {
 
     fn sample_3mf(m: &PrintMesh) -> Vec<u8> {
         let path = std::env::temp_dir().join(format!("3bcad-mesh-{}.3mf", std::process::id()));
-        crate::write_3mf(&path, std::slice::from_ref(m)).unwrap();
+        crate::write_3mf(&path, &[("cube", m)], &crate::threemf::Info::default()).unwrap();
         let b = std::fs::read(&path).unwrap();
         std::fs::remove_file(path).ok();
         b
