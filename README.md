@@ -15,23 +15,26 @@ community.**
 
 3BCAD is a feature-based solid modeller. You draw constrained 2D sketches, turn them into solids with
 features (extrude, revolve, sweep, loft, fillet, shell, holes, patterns...), and every feature stays
-editable: change a dimension and the whole part rebuilds. When the part is done, the built-in 3D Print
-studio lays it out on your printer's bed, shows where it needs support or is too thin to print, adds
-clearances so printed parts fit together, and sends it to your slicer.
+editable: change a dimension and the whole part rebuilds. Parts go together in assemblies, held by mates
+you can drag against, checked for interference, exploded step by step and listed in a bill of materials.
+When the part is done, the built-in 3D Print studio lays it out on your printer's bed, shows where it needs
+support or is too thin to print, adds clearances so printed parts fit together, and sends it to your
+slicer.
 
 Everything is written in memory-safe Rust: the B-Rep geometry kernel ([`truck`](https://github.com/ricosjp/truck)),
 the 2D constraint solver, the feature history, the GPU viewport and the file formats. There is no C++
 toolchain to install, and one `cargo run` builds the whole application on Windows, macOS and Linux.
 
-> **Status: early preview (v0.x).** You can sketch, model, save and reopen parametric parts, import STEP,
-> meshes and DXF, check and orient them for printing, and export STL / 3MF / STEP / DXF. Assemblies and
-> drawings are on the [roadmap](#roadmap). Expect breaking changes before 1.0.
+> **Status: early preview (v0.x).** You can sketch, model, save and reopen parametric parts, put them
+> together in assemblies, import STEP, meshes and DXF, check and orient them for printing, and export
+> STL / 3MF / STEP / DXF. Drawings are on the [roadmap](#roadmap). Expect breaking changes before 1.0.
 
 ## Contents
 
 - [Features](#features)
 - [Your first part](#your-first-part)
 - [Printing a part](#printing-a-part)
+- [Your first assembly](#your-first-assembly)
 - [Download](#download) and [build from source](#build-from-source)
 - [Controls](#controls)
 - [Files](#files)
@@ -86,6 +89,22 @@ toolchain to install, and one `cargo run` builds the whole application on Window
 - **Send to Slicer** opens the part in OrcaSlicer, Bambu Studio or PrusaSlicer. The chosen slicer is
   remembered, and if it is installed somewhere unusual you can point 3BCAD at it once.
 
+### Assemblies
+
+- Insert parts and sub-assemblies as components. The first one is fixed at the origin; each part stays in
+  its own file, and the assembly picks up a part's changes as soon as the file is saved.
+- Mates between flat and cylindrical faces: coincident, concentric, distance, angle, parallel,
+  perpendicular, tangent and lock, each with Flip. A solver places the parts, and a mate that contradicts
+  the others is named in the tree instead of moving anything.
+- Drag a component to move it, Shift+drag to turn it: it moves only where its mates let it.
+- Interference check: parts that overlap are listed with the shared volume and shown in red; parts that
+  only touch, like a pin in a hole of its own size, are fine.
+- Exploded views, step by step, played as an animation or scrubbed with a slider.
+- Bill of materials, top-level or indented, with part numbers, descriptions, materials and your own
+  custom properties, exported as CSV.
+- Export the assembly as STEP (each part once, every component named and placed) or as a 3MF with one
+  object per part, laid out on the bed for the slicer.
+
 ### Files and interop
 
 - The native `.3bcad` format stores the whole feature history as versioned, diff-friendly JSON. Saves are
@@ -130,6 +149,20 @@ toolchain to install, and one `cargo run` builds the whole application on Window
 4. For parts that fit together, select the faces of a hole or pin and click **Fit** on the **Features**
    tab, then choose a press, slip or loose preset.
 5. Pick a **Quality** and **Export 3MF** or **Export STL**, or choose your slicer and **Send to Slicer**.
+
+## Your first assembly
+
+1. Save the parts you want to put together (for example a plate with a hole and a pin) as `.3bcad` files.
+2. **File → New Assembly**, then **Insert** on the **Assembly** tab and pick the plate: it is fixed at the
+   origin. Insert the pin; it lands beside the plate.
+3. Click the pin's round face, Ctrl+click the hole's face and click **Concentric**. Click the pin's end and
+   Ctrl+click the plate's bottom, then **Coincident** (tick **Flip alignment** in the Properties panel if it
+   lands the wrong way round).
+4. Drag the pin: it only turns in the hole. Delete the coincident mate and it slides along it too.
+5. Click **Interference** to check that nothing overlaps, **Explode Step** to pull the pin out along a
+   picked face, and **BOM** for the parts list (part numbers come from **File → Properties…**).
+6. To change a part, select it and click **Edit Part**; save it and click **Back to** the assembly.
+7. Export the assembly as **STEP**, or as **3MF** to print every part in one go.
 
 ## Download
 
@@ -189,6 +222,9 @@ cargo test --workspace
 | Fillet / Chamfer / Shell / Fit | Select edges or faces (Ctrl+click for more), then the Features tab |
 | Sweep / Loft | Select the profile sketch, Ctrl+click the path (or the next profiles), then the Features tab |
 | Print on another face | 3D Print tab: select the face → **Lay Flat** |
+| Mate two parts | Click a face, Ctrl+click a face of the other part, then a mate on the Assembly tab |
+| Move or turn a component | Drag it, or Shift+drag it (assemblies) |
+| Delete a component, mate or explode step | Select it and press `Delete` |
 | Rename a feature | Select it and press `F2` |
 | Rebuild everything | `Ctrl+Q` |
 | Keyboard shortcuts | `F1` or the Shortcuts button (top right) |
@@ -197,7 +233,8 @@ cargo test --workspace
 
 | File | What it is |
 | --- | --- |
-| `.3bcad` | A part: its feature history, units, material and print orientation as pretty-printed JSON. Geometry is rebuilt on open. |
+| `.3bcad` | A part: its feature history, units, material, print orientation and custom properties as pretty-printed JSON. Geometry is rebuilt on open. |
+| `.3bcasm` | An assembly: the files it uses (relative to the assembly, so they can move together), where each component sits, its mates and exploded view. |
 | `settings.txt` | Preferences (recent files, autosave, slicer and its location, printer, check and export settings) in `%APPDATA%\3BCAD`, `~/Library/Application Support/3BCAD` or `~/.config/3bcad`. |
 | `recovery/` | Autosaves next to `settings.txt`, removed after a save or a normal exit. |
 
@@ -207,9 +244,9 @@ cargo test --workspace
 
 | Crate (folder) | Package | Role |
 | --- | --- | --- |
-| `crates/3bcad-core` | `threebcad-core` | Feature history graph (`petgraph`), rebuild with persistent face naming and caching, part documents, undo/redo |
+| `crates/3bcad-core` | `threebcad-core` | Feature history graph (`petgraph`), rebuild with persistent face naming and caching, part and assembly documents, bill of materials, undo/redo |
 | `crates/3bcad-sketch` | `threebcad-sketch` | 2D entities, relations, the Levenberg-Marquardt solver, profiles and sketch tools |
-| `crates/3bcad-kernel` | `threebcad-kernel` | `truck` B-Rep bridge: feature tools, booleans, fillets, threads, tessellation, mass properties, print checks |
+| `crates/3bcad-kernel` | `threebcad-kernel` | `truck` B-Rep bridge: feature tools, booleans, fillets, threads, tessellation, mass properties, print checks, the mate solver and interference |
 | `crates/3bcad-render` | `threebcad-render` | wgpu pipelines, orbit camera, scene buffers and picking |
 | `crates/3bcad-io` | `threebcad-io` | STL, 3MF, OBJ, STEP and DXF import/export, printer presets, slicer launcher |
 | `crates/3bcad-app` | `threebcad-app` | Desktop app (`eframe` = winit + egui + egui-wgpu), binary `3bcad` |
@@ -229,8 +266,8 @@ adding a feature type or a sketch relation. Every importer has a fuzz target in 
 | v0.3.0 | Core part features: cut, revolve, fillet, chamfer, shell, holes, patterns (done) |
 | v0.4.0 | Advanced modeling: sweep, loft, multibody, threads (done) |
 | v0.5.0 | Files: native save/load, STEP/DXF/mesh import, units, materials (done) |
-| v0.6.0 | 3D Print studio: overhang and thin-wall checks, orientation, fits, rich 3MF (done, unreleased) |
-| v0.7.0 | Assemblies: mates, interference, exploded views, BOM |
+| v0.6.0 | 3D Print studio: overhang and thin-wall checks, orientation, fits, rich 3MF (done) |
+| v0.7.0 | Assemblies: mates, interference, exploded views, BOM (done, unreleased) |
 | v0.8.0 | Drawings: views, sections, dimensions, PDF/DXF |
 | v0.9.0 | Design intent: equations, configurations, appearances |
 | v1.0.0 | Production ready: installers, signing, performance, docs, accessibility |
