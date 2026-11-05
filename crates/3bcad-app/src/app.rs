@@ -80,7 +80,10 @@ pub enum ModelRef {
 }
 
 pub struct App {
+    /// The part being edited, or (while an assembly is open) the last part, kept out of sight.
     pub doc: PartDocument,
+    /// The open assembly; parts are edited in their own files.
+    pub asm: Option<crate::assembly::Session>,
     pub camera: OrbitCamera,
     /// Feature selected in the feature tree.
     pub selected: Option<FeatureId>,
@@ -130,6 +133,7 @@ impl App {
         ui::theme::apply(&cc.egui_ctx);
         let mut app = Self {
             doc: PartDocument::demo(),
+            asm: None,
             camera: OrbitCamera::default(),
             selected: None,
             tab: RibbonTab::Features,
@@ -166,6 +170,9 @@ impl App {
     }
 
     pub fn describe(&self, r: ModelRef) -> String {
+        if let Some(s) = &self.asm {
+            return s.describe(r);
+        }
         match r {
             ModelRef::Face { body, face } => format!("Face {} of body {}", face + 1, body + 1),
             ModelRef::Edge { body, edge } => format!("Edge {} of body {}", edge + 1, body + 1),
@@ -189,6 +196,9 @@ impl App {
     /// Rebuilds the scene (meshes, pick ids, planes) when the document, plane visibility or the
     /// print view changed.
     pub(crate) fn sync_geometry(&mut self) {
+        if self.asm.is_some() {
+            return self.sync_assembly();
+        }
         let view = self.print_view();
         let key = (
             self.doc.revision(),
@@ -336,7 +346,7 @@ impl App {
     }
 
     /// Recomputes the highlight states buffer from hover and selection; true when it changed.
-    fn sync_states(&mut self) -> bool {
+    pub(crate) fn sync_states(&mut self) -> bool {
         let states: Vec<u32> = self
             .refs
             .iter()
@@ -587,7 +597,7 @@ impl App {
         let ext = format.ext();
         let Some(path) = rfd::FileDialog::new()
             .add_filter(ext.to_uppercase(), &[ext])
-            .set_file_name(format!("{}.{ext}", self.doc.name))
+            .set_file_name(format!("{}.{ext}", self.doc_name()))
             .save_file()
         else {
             return;
@@ -599,7 +609,7 @@ impl App {
     }
 
     pub fn send_to_slicer(&mut self) {
-        let path = std::env::temp_dir().join(format!("{}.3mf", self.doc.name));
+        let path = std::env::temp_dir().join(format!("{}.3mf", self.doc_name()));
         let slicer = self.files.settings.slicer;
         let located = self.files.settings.slicer_paths[slicer as usize].clone();
         let name = slicer.name();
@@ -654,6 +664,9 @@ impl App {
 
     /// STL and 3MF are written as the part sits on the printer's bed; STEP in model space.
     pub fn write(&mut self, format: ExportFormat, path: &Path) -> io::Result<()> {
+        if self.asm.is_some() {
+            return self.write_assembly(format, path);
+        }
         let bodies = self.doc.bodies();
         if bodies.is_empty() && (self.doc.built().meshes.is_empty() || format == ExportFormat::Step) {
             return Err(io::Error::other("the part has no bodies"));
@@ -862,6 +875,10 @@ fn undo_keys(ctx: &egui::Context) -> (bool, bool) {
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.files_frame(ctx);
+        crate::files::properties_window(self, ctx);
+        if self.asm.is_some() {
+            return ui::assembly::frame(self, ctx);
+        }
         self.shortcuts(ctx);
         if self.selected.is_some_and(|id| self.doc.history().get(id).is_none()) {
             self.selected = None;

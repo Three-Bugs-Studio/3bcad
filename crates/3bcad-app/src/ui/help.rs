@@ -29,7 +29,7 @@ const SHORTCUTS: &[(&str, &[(&str, &str)])] = &[
     (
         "Sketching",
         &[
-            ("Sketch tab → Front / Top / Right", "Start a sketch on that plane"),
+            ("Sketch tab > Front / Top / Right", "Start a sketch on that plane"),
             ("Double-click a plane in the feature tree", "Start a sketch on it"),
             ("Double-click a sketch", "Edit it"),
             ("Hold Ctrl while drawing", "Turn off snapping and automatic relations"),
@@ -48,6 +48,16 @@ const SHORTCUTS: &[(&str, &[(&str, &str)])] = &[
             ("Drag the blue bar", "Roll back the part"),
             ("Ctrl+Q (or Ctrl+B)", "Rebuild every feature"),
             ("F1", "Show or hide this window"),
+        ],
+    ),
+    (
+        "Assemblies",
+        &[
+            ("Click a face, Ctrl+click another part's face", "Pick them for a mate"),
+            ("Drag a component", "Move it as far as its mates let it"),
+            ("Shift+drag a component", "Turn it"),
+            ("Double-click a component in the tree", "Edit its part"),
+            ("Delete", "Delete the selected component, mate or explode step"),
         ],
     ),
 ];
