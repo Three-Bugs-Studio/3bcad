@@ -627,6 +627,12 @@ pub enum FeatureKind {
         kind: WrapKind,
         depth: f64,
     },
+    /// Moves faces `clearance` into the part (flat faces along their normal, cylinders radially)
+    /// so printed parts slide together: holes grow, pins and tabs shrink.
+    Fit {
+        faces: Vec<FaceRef>,
+        clearance: f64,
+    },
     /// Solids read from a STEP file.
     Imported {
         file: String,
@@ -715,6 +721,7 @@ impl FeatureKind {
             FeatureKind::CurvePattern { .. } => "CrvPattern",
             FeatureKind::Dome { .. } => "Dome",
             FeatureKind::Wrap { .. } => "Wrap",
+            FeatureKind::Fit { .. } => "Fit",
             FeatureKind::Imported { .. } => "Imported",
             FeatureKind::ImportedMesh { .. } => "Imported Mesh",
         }
@@ -786,7 +793,9 @@ impl FeatureKind {
             FeatureKind::Fillet { edges, .. } | FeatureKind::Chamfer { edges, .. } => {
                 edges.iter().for_each(|e| edge(e, &mut out))
             }
-            FeatureKind::Shell { faces, .. } => faces.iter().for_each(|f| face(f, &mut out)),
+            FeatureKind::Shell { faces, .. } | FeatureKind::Fit { faces, .. } => {
+                faces.iter().for_each(|f| face(f, &mut out))
+            }
             FeatureKind::Hole(h) => {
                 out.push(h.sketch);
                 end(&h.end, &mut out);
