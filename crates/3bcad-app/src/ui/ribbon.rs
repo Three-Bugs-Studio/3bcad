@@ -3,11 +3,10 @@
 
 use eframe::egui;
 use threebcad_core::*;
-use threebcad_io::Slicer;
 use threebcad_kernel::Plane;
 use threebcad_sketch::Sketch;
 
-use crate::app::{App, ExportFormat, ModelRef, RELEASE_NOTES_URL, VERSION};
+use crate::app::{App, ModelRef, RELEASE_NOTES_URL, VERSION};
 use crate::ui::sketch_mode::Tool;
 use crate::ui::{advanced, icons, theme};
 
@@ -90,7 +89,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                         RibbonTab::Features => features(app, ui),
                         RibbonTab::Sketch => sketch(app, ui),
                         RibbonTab::Evaluate => evaluate(app, ui),
-                        RibbonTab::Print => print(app, ui),
+                        RibbonTab::Print => crate::ui::print::tab(app, ui),
                     });
                 });
             ui.horizontal(|ui| {
@@ -793,42 +792,5 @@ fn evaluate(app: &mut App, ui: &mut egui::Ui) {
     ) {
         app.doc.force_rebuild();
         app.status = format!("Rebuilt {} features", app.doc.built().evaluated);
-    }
-}
-
-fn print(app: &mut App, ui: &mut egui::Ui) {
-    for (format, label) in [
-        (ExportFormat::Stl, "Export STL"),
-        (ExportFormat::ThreeMf, "Export 3MF"),
-        (ExportFormat::Step, "Export STEP"),
-    ] {
-        if tile(ui, "export", label, true, "Save the part to a file") {
-            app.export(format);
-        }
-    }
-    ui.separator();
-    ui.vertical(|ui| {
-        ui.label("Chord tolerance");
-        ui.add(
-            crate::ui::properties::length(&mut app.export_tol)
-                .speed(0.001)
-                .range(0.001..=1.0),
-        );
-        egui::ComboBox::from_id_salt("slicer")
-            .selected_text(app.slicer.name())
-            .show_ui(ui, |ui| {
-                for s in Slicer::ALL {
-                    ui.selectable_value(&mut app.slicer, s, s.name());
-                }
-            });
-    });
-    if tile(
-        ui,
-        "slicer",
-        "Send to Slicer",
-        true,
-        "Open the part in the chosen slicer",
-    ) {
-        app.send_to_slicer();
     }
 }

@@ -6,6 +6,8 @@ use std::time::{Duration, Instant};
 
 use eframe::egui::{self, Key, KeyboardShortcut, Modifiers};
 use threebcad_core::{FeatureKind, PartDocument, PlaneRef, Shared, UnitSystem, Units};
+use threebcad_io::printer::PRINTERS;
+use threebcad_io::Slicer;
 use threebcad_kernel::Plane;
 
 use crate::app::{App, VERSION};
@@ -19,6 +21,20 @@ pub struct Settings {
     /// 0 turns autosave off.
     pub autosave_minutes: u32,
     pub recent: Vec<PathBuf>,
+    /// The slicer Send to Slicer opens, and where the user located each one (`Slicer as usize`).
+    pub slicer: Slicer,
+    pub slicer_paths: [Option<PathBuf>; 3],
+    /// The printer parts are laid out for, and its build volume (mm).
+    pub printer: String,
+    pub bed: [f64; 3],
+    /// The steepest overhang printed without support, in degrees from vertical.
+    pub overhang_deg: f64,
+    pub nozzle: f64,
+    /// The thinnest wall worth printing (mm).
+    pub min_wall: f64,
+    /// Export meshing: chord (mm) and angle (degrees) tolerance.
+    pub chord: f64,
+    pub angle_deg: f64,
 }
 
 impl Default for Settings {
@@ -26,28 +42,79 @@ impl Default for Settings {
         Self {
             autosave_minutes: 10,
             recent: Vec::new(),
+            slicer: Slicer::OrcaSlicer,
+            slicer_paths: Default::default(),
+            printer: PRINTERS[0].name.into(),
+            bed: PRINTERS[0].bed,
+            overhang_deg: 45.0,
+            nozzle: 0.4,
+            min_wall: 0.8,
+            chord: 0.01,
+            angle_deg: 10.0,
         }
     }
 }
 
 impl Settings {
     pub fn parse(text: &str) -> Self {
-        let mut s = Self {
-            recent: Vec::new(),
-            ..Self::default()
-        };
-        for line in text.lines() {
-            match line.split_once('=') {
-                Some(("autosave_minutes", v)) => s.autosave_minutes = v.trim().parse().unwrap_or(s.autosave_minutes),
-                Some(("recent", v)) if s.recent.len() < MAX_RECENT => s.recent.push(PathBuf::from(v)),
-                _ => {}
+        let mut s = Self::default();
+        for (k, v) in text.lines().filter_map(|l| l.split_once('=')) {
+            // A hand-edited file may hold anything: keep the default for what does not parse.
+            let num = |old: f64| {
+                v.trim()
+                    .parse::<f64>()
+                    .ok()
+                    .filter(|x| x.is_finite() && *x > 0.0)
+                    .unwrap_or(old)
+            };
+            match k {
+                "autosave_minutes" => s.autosave_minutes = v.trim().parse().unwrap_or(s.autosave_minutes),
+                "recent" if s.recent.len() < MAX_RECENT => s.recent.push(PathBuf::from(v)),
+                "slicer" => s.slicer = Slicer::from_name(v).unwrap_or(s.slicer),
+                "printer" => s.printer = v.into(),
+                "bed" => {
+                    let n: Vec<f64> = v
+                        .split(',')
+                        .filter_map(|x| x.trim().parse().ok())
+                        .filter(|x: &f64| x.is_finite() && *x > 0.0)
+                        .collect();
+                    if let [x, y, z] = n[..] {
+                        s.bed = [x, y, z];
+                    }
+                }
+                "overhang_deg" => s.overhang_deg = num(s.overhang_deg).min(90.0),
+                "nozzle" => s.nozzle = num(s.nozzle),
+                "min_wall" => s.min_wall = num(s.min_wall),
+                "chord" => s.chord = num(s.chord),
+                "angle_deg" => s.angle_deg = num(s.angle_deg).min(90.0),
+                _ => {
+                    if let Some(sl) = k.strip_prefix("slicer_path.").and_then(Slicer::from_name) {
+                        s.slicer_paths[sl as usize] = Some(PathBuf::from(v));
+                    }
+                }
             }
         }
         s
     }
 
     pub fn to_text(&self) -> String {
-        let mut out = format!("autosave_minutes={}\n", self.autosave_minutes);
+        let [x, y, z] = self.bed;
+        let mut out = format!(
+            "autosave_minutes={}\nslicer={}\nprinter={}\nbed={x},{y},{z}\noverhang_deg={}\nnozzle={}\nmin_wall={}\nchord={}\nangle_deg={}\n",
+            self.autosave_minutes,
+            self.slicer.name(),
+            self.printer,
+            self.overhang_deg,
+            self.nozzle,
+            self.min_wall,
+            self.chord,
+            self.angle_deg
+        );
+        for s in Slicer::ALL {
+            if let Some(p) = &self.slicer_paths[s as usize] {
+                out += &format!("slicer_path.{}={}\n", s.name(), p.display());
+            }
+        }
         for p in &self.recent {
             out += &format!("recent={}\n", p.display());
         }
@@ -62,8 +129,12 @@ impl Settings {
 
     pub fn save(&self) {
         if let Some(d) = config_dir() {
-            // Losing a preference is not worth an error message.
-            let _ = std::fs::create_dir_all(&d).and_then(|()| std::fs::write(d.join("settings.txt"), self.to_text()));
+            // Written aside and moved into place, so a crash mid-write keeps the old file (with the
+            // recent files and located slicers). Losing one change is not worth an error message.
+            let tmp = d.join("settings.txt.tmp");
+            let _ = std::fs::create_dir_all(&d)
+                .and_then(|()| std::fs::write(&tmp, self.to_text()))
+                .and_then(|()| std::fs::rename(&tmp, d.join("settings.txt")));
         }
     }
 
@@ -117,6 +188,8 @@ pub enum Pending {
 /// File state the app keeps between frames.
 pub struct Files {
     pub settings: Settings,
+    /// Settings changed since they were saved; written once the mouse is up, not every drag frame.
+    pub settings_changed: bool,
     pub path: Option<PathBuf>,
     pub pending: Option<Pending>,
     /// A recovery file to offer on startup.
@@ -135,6 +208,7 @@ impl Files {
             .and_then(|d| leftover_recovery(d, &recovery_file(d)));
         Self {
             settings: Settings::load(),
+            settings_changed: false,
             path: None,
             pending: None,
             offer,
@@ -198,6 +272,10 @@ impl App {
             self.files.pending = Some(Pending::Close);
         }
         self.autosave(ctx);
+        if self.files.settings_changed && !ctx.input(|i| i.pointer.any_down()) {
+            self.files.settings.save();
+            self.files.settings_changed = false;
+        }
         let title = title(&self.doc);
         if title != self.files.title {
             ctx.send_viewport_cmd(egui::ViewportCommand::Title(title.clone()));
@@ -275,6 +353,7 @@ impl App {
         self.selected = None;
         self.selection.clear();
         self.renaming = None;
+        self.forget_caches();
         self.sync_geometry();
         self.zoom_to_fit();
     }
@@ -596,8 +675,15 @@ mod tests {
         assert_eq!(s.recent[0], Path::new("part5.3bcad"));
         assert_eq!(s.recent.iter().filter(|p| p.ends_with("part5.3bcad")).count(), 1);
         s.autosave_minutes = 3;
+        s.slicer = Slicer::PrusaSlicer;
+        s.slicer_paths[Slicer::BambuStudio as usize] = Some(PathBuf::from("D:\\Apps\\Bambu Studio\\bambu-studio.exe"));
+        s.printer = "Custom".into();
+        s.bed = [300.0, 250.5, 400.0];
+        s.min_wall = 1.2;
+        s.angle_deg = 5.0;
         assert_eq!(Settings::parse(&s.to_text()), s);
-        assert_eq!(Settings::parse("junk\nautosave_minutes=x").autosave_minutes, 10);
+        let junk = Settings::parse("junk\nautosave_minutes=x\nbed=1,2\nnozzle=-1\nchord=NaN\nslicer=Cura");
+        assert_eq!(junk, Settings::default());
     }
 
     #[test]

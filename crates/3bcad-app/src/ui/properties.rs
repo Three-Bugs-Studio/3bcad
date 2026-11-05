@@ -463,6 +463,11 @@ fn feature_panel(app: &mut App, ctx: &egui::Context) {
                             if ed.button(ui, "Centerline", r.axis.is_some()) {
                                 r.axis = None;
                             }
+                            for (i, n) in ["X", "Y", "Z"].iter().enumerate() {
+                                if ed.button(ui, n, true) {
+                                    r.axis = Some(RevolveAxis::Axis(AxisRef::Std(i as u8)));
+                                }
+                            }
                             if ed.button(ui, "Use selection", p.axis.is_some()) {
                                 r.axis = Some(RevolveAxis::Axis(p.axis.clone().unwrap().0));
                             }
@@ -763,6 +768,8 @@ fn feature_panel(app: &mut App, ctx: &egui::Context) {
             Ok(()) => {
                 let merge = ed.dragging.then(|| key(id, 0xFFFF));
                 let _ = app.doc.edit_merging(merge, |h| h.replace(id, kind));
+                // The status bar may still show the error this edit fixed.
+                app.status = app.doc.errors().get(&id).cloned().unwrap_or_else(|| "Ready".into());
             }
             Err(e) => app.status = e.to_string(),
         }

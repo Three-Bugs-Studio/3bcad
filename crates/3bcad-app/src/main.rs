@@ -3,6 +3,7 @@
 
 mod app;
 mod files;
+mod print;
 mod ui;
 
 use eframe::egui;

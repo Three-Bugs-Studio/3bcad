@@ -94,10 +94,59 @@ pub fn render_mesh(solid: &Solid, tol: f64) -> RenderMesh {
     out
 }
 
+/// What `Solid::robust_triangulation` returns.
+type Meshed = truck_topology::Solid<Point3, PolylineCurve<Point3>, Option<PolygonMesh>>;
+
+/// The finest chord tolerance the angle tolerance may drive an export to (mm).
+const MIN_TOL: f64 = 1e-4;
+
 /// Watertight mesh: faces share their boundary polylines, and welding merges
 /// the duplicated positions so every edge is used by exactly two triangles.
 pub fn print_mesh(solid: &Solid, tol: f64) -> PrintMesh {
-    let poly = solid.robust_triangulation(tol).to_polygon();
+    welded(&solid.robust_triangulation(tol))
+}
+
+/// `print_mesh` within a chord tolerance (mm) and an angle tolerance (radians): curved faces are
+/// meshed finer until no triangle spans more than `angle` of the surface's turn.
+pub fn print_mesh_within(solid: &Solid, chord: f64, angle: f64) -> PrintMesh {
+    let mut tol = chord;
+    let mut meshed = solid.robust_triangulation(tol);
+    for _ in 0..6 {
+        let turn = max_turn(&meshed);
+        if turn <= angle || tol <= MIN_TOL {
+            break;
+        }
+        // A facet's turn grows with the square root of its chord deviation.
+        tol = (tol * (angle / turn).powi(2) * 0.8).max(MIN_TOL);
+        meshed = solid.robust_triangulation(tol);
+    }
+    welded(&meshed)
+}
+
+/// The widest angle (radians) between the surface normals at the corners of one triangle.
+fn max_turn(meshed: &Meshed) -> f64 {
+    meshed
+        .face_iter()
+        .filter_map(|f| f.surface())
+        .flat_map(|poly| {
+            let nor = poly.normals().to_vec();
+            poly.faces()
+                .triangle_iter()
+                .filter_map(|t| {
+                    let n = [t[0].nor?, t[1].nor?, t[2].nor?].map(|i| nor[i].normalize());
+                    Some(
+                        (0..3)
+                            .map(|k| n[k].dot(n[(k + 1) % 3]).clamp(-1.0, 1.0).acos())
+                            .fold(0.0, f64::max),
+                    )
+                })
+                .collect::<Vec<_>>()
+        })
+        .fold(0.0, f64::max)
+}
+
+fn welded(meshed: &Meshed) -> PrintMesh {
+    let poly = meshed.to_polygon();
     let (vertices, remap) = weld(poly.positions(), TOLERANCE);
     PrintMesh {
         vertices,
@@ -289,6 +338,23 @@ mod tests {
     }
 
     #[test]
+    fn an_angle_tolerance_rounds_out_a_coarse_cylinder() {
+        let cyl = extrude_circle([0.0, 0.0], 4.0, 10.0).unwrap();
+        let exact = PI * 16.0 * 10.0;
+        let coarse = print_mesh_within(&cyl, 0.5, PI);
+        let fine = print_mesh_within(&cyl, 0.5, 5f64.to_radians());
+        assert_watertight(&fine);
+        assert!(fine.triangles.len() > coarse.triangles.len());
+        // 5° facets: a 72-gon, 0.13 % short of the circle.
+        assert!(
+            (volume(&fine) - exact).abs() / exact < 0.003,
+            "volume {}",
+            volume(&fine)
+        );
+        assert!((volume(&coarse) - exact).abs() > (volume(&fine) - exact).abs());
+    }
+
+    #[test]
     fn render_mesh_keeps_faces_edges_and_planes() {
         let solid = extrude_polygon(&[[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 10.0]], 5.0).unwrap();
         let m = render_mesh(&solid, 0.05);
@@ -299,6 +365,13 @@ mod tests {
         assert_eq!(m.face_of.len(), m.positions.len());
         let top = m.faces.iter().flatten().find(|p| p.normal()[2] > 0.5).unwrap();
         assert!((top.origin[2] - 5.0).abs() < 1e-9);
+        // Triangles wind counter-clockwise seen from outside: the print checks rely on it.
+        for t in m.positions.chunks_exact(3) {
+            let [a, b, c] = [t[0], t[1], t[2]].map(|p| p.map(f64::from));
+            let n = crate::topology::cross(crate::topology::sub(b, a), crate::topology::sub(c, a));
+            let out = crate::topology::sub(a, [5.0, 5.0, 2.5]);
+            assert!(crate::topology::dot(n, out) > 0.0);
+        }
 
         let cyl = render_mesh(&extrude_circle([0.0, 0.0], 4.0, 10.0).unwrap(), 0.05);
         assert_eq!(

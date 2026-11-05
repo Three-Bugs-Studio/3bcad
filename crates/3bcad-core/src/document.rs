@@ -17,7 +17,11 @@ const UNDO_LIMIT: usize = 100;
 /// Tag at the top of every part file, so other JSON is not mistaken for a part.
 const FORMAT: &str = "3bcad-part";
 /// Bump when the saved structure changes, and teach `migrate` to read the old one.
-pub const FORMAT_VERSION: u64 = 1;
+/// 2 (v0.6): the Fit feature and the print orientation.
+pub const FORMAT_VERSION: u64 = 2;
+
+/// The outward normal of the face a new part prints on: its bottom.
+pub const DEFAULT_PRINT_DOWN: P3 = [0.0, 0.0, -1.0];
 
 /// What a `.3bcad` file holds: the feature history, not the geometry it builds.
 #[derive(Serialize, Deserialize)]
@@ -27,13 +31,21 @@ struct PartFile {
     name: String,
     units: Units,
     material: Material,
+    #[serde(default = "default_print_down")]
+    print_down: P3,
     history: History,
+}
+
+fn default_print_down() -> P3 {
+    DEFAULT_PRINT_DOWN
 }
 
 /// Brings an older file's JSON up to `FORMAT_VERSION`, one version at a time.
 fn migrate(file: serde_json::Value, version: u64) -> anyhow::Result<serde_json::Value> {
     match version {
         FORMAT_VERSION => Ok(file),
+        // Version 2 only added things: a version 1 file reads as it is.
+        1 => migrate(file, 2),
         v => bail!("this part was saved in format version {v}, which this 3BCAD cannot read"),
     }
 }
@@ -44,6 +56,8 @@ pub struct PartDocument {
     pub name: String,
     units: Units,
     material: Material,
+    /// Outward normal of the face that rests on the printer bed.
+    print_down: P3,
     /// Changed since it was last saved or opened.
     dirty: bool,
     history: History,
@@ -61,6 +75,7 @@ impl PartDocument {
             name: name.into(),
             units: Units::default(),
             material: Material::default(),
+            print_down: DEFAULT_PRINT_DOWN,
             dirty: false,
             history: History::default(),
             undo: Vec::new(),
@@ -98,6 +113,7 @@ impl PartDocument {
             name: self.name.clone(),
             units: self.units,
             material: self.material.clone(),
+            print_down: self.print_down,
             history: self.history.clone(),
         };
         serde_json::to_string_pretty(&file).expect("a part always serialises")
@@ -116,7 +132,7 @@ impl PartDocument {
             .context("the file has no format version")?;
         ensure!(
             version <= FORMAT_VERSION,
-            "this part was saved by a newer 3BCAD (format version {version}); this version reads up to              {FORMAT_VERSION}. Update 3BCAD to open it"
+            "this part was saved by a newer 3BCAD (format version {version}); this version reads up to {FORMAT_VERSION}. Update 3BCAD to open it"
         );
         let file: PartFile = serde_json::from_value(migrate(value, version)?).context("the part file is damaged")?;
         let mut history = file.history;
@@ -125,6 +141,7 @@ impl PartDocument {
         let mut doc = Self::new(file.name);
         doc.units = file.units;
         doc.material = file.material;
+        doc.print_down = file.print_down;
         doc.history = history;
         doc.rebuild();
         Ok(doc)
@@ -175,6 +192,15 @@ impl PartDocument {
     pub fn set_material(&mut self, material: Material) {
         self.dirty |= material != self.material;
         self.material = material;
+    }
+
+    pub fn print_down(&self) -> P3 {
+        self.print_down
+    }
+
+    pub fn set_print_down(&mut self, down: P3) {
+        self.dirty |= down != self.print_down;
+        self.print_down = down;
     }
 
     pub fn history(&self) -> &History {
@@ -323,7 +349,15 @@ mod tests {
         let err = |text: &str| format!("{:#}", PartDocument::from_json(text).err().expect("refused"));
         assert!(err(&json[..json.len() / 2]).contains("not valid JSON"));
         assert!(err("{\"format\": \"something-else\"}").contains("not a 3BCAD part"));
-        assert!(err(&json.replacen("\"version\": 1", "\"version\": 99", 1)).contains("newer 3BCAD"));
+        let version = format!("\"version\": {FORMAT_VERSION}");
+        assert!(err(&json.replacen(&version, "\"version\": 99", 1)).contains("newer 3BCAD"));
+        // A v0.5 file (format 1, no print orientation) opens, printed on its bottom.
+        let mut v1: serde_json::Value = serde_json::from_str(&json.replacen(&version, "\"version\": 1", 1)).unwrap();
+        v1.as_object_mut().unwrap().remove("print_down");
+        assert_eq!(
+            PartDocument::from_json(&v1.to_string()).unwrap().print_down(),
+            DEFAULT_PRINT_DOWN
+        );
         // A feature pointing at a sketch that is not in the file.
         let bad = json.replacen("\"sketch\": 0", "\"sketch\": 7", 1);
         assert_ne!(bad, json);
@@ -340,12 +374,14 @@ mod tests {
             system: crate::UnitSystem::Ips,
             decimals: 3,
         });
+        d.set_print_down([1.0, 0.0, 0.0]);
         assert!(d.is_dirty());
         let path = std::env::temp_dir().join(format!("3bcad-doc-{}.3bcad", std::process::id()));
         d.save(&path).unwrap();
         assert!(!d.is_dirty());
         let back = PartDocument::open(&path).unwrap();
         assert_eq!(back.units(), d.units());
+        assert_eq!(back.print_down(), [1.0, 0.0, 0.0]);
         assert_eq!(back.history().len(), d.history().len());
         std::fs::remove_file(path).ok();
     }
@@ -1330,5 +1366,191 @@ mod tests {
         assert!((added - 10.0 * 6.0 * 2.0).abs() < 0.5, "{added}");
         let (lo, hi) = threebcad_kernel::boolean::bbox(&doc.bodies()[0].solid);
         assert!(lo[0] > -1e-6 && hi[0] < 20.0 + 1e-6, "{lo:?} {hi:?}");
+    }
+
+    fn faces_where(doc: &PartDocument, keep: impl Fn(&threebcad_kernel::topology::TopoFace) -> bool) -> Vec<FaceRef> {
+        let topo = &doc.bodies()[0].topo;
+        (0..topo.faces.len())
+            .filter(|&i| keep(&topo.faces[i]))
+            .filter_map(|i| doc.face_ref(0, i))
+            .collect()
+    }
+
+    /// Whether the first body has a cylindrical face of radius `r`.
+    fn has_radius(doc: &PartDocument, r: f64) -> bool {
+        doc.bodies()[0]
+            .topo
+            .faces
+            .iter()
+            .any(|f| f.cylinder.is_some_and(|c| (c.2 - r).abs() < 1e-6))
+    }
+
+    #[test]
+    fn fit_grows_a_hole_and_moves_a_flat_face() {
+        // A 20 mm cube with a 6 mm hole through it.
+        let mut doc = PartDocument::new("Part");
+        cube(&mut doc, 20.0);
+        doc.edit(|h| {
+            let s = h.add_sketch(Sketch::circle([10.0, 10.0], 3.0), Plane::TOP);
+            let mut e = Extrude::cut(s, 20.0);
+            e.end = End::ThroughAll;
+            e.reverse = true;
+            h.add(FeatureKind::Extrude(e)).unwrap();
+        });
+        let before = vol(&doc);
+        // One of the hole's two half faces is enough.
+        let hole = faces_where(&doc, |f| f.cylinder.is_some())[..1].to_vec();
+        doc.edit(|h| {
+            h.add(FeatureKind::Fit {
+                faces: hole,
+                clearance: 0.2,
+            })
+            .unwrap()
+        });
+        assert!(doc.errors().is_empty(), "{:?}", doc.errors());
+        assert!(has_radius(&doc, 3.2) && !has_radius(&doc, 3.0));
+        let grown = PI * (3.2f64.powi(2) - 9.0) * 20.0;
+        assert!(
+            (before - vol(&doc) - grown).abs() < 0.02 * grown,
+            "{} vs {grown}",
+            before - vol(&doc)
+        );
+
+        // The top face, hole and all, moves 0.5 mm down; the hole wall is left alone.
+        let before = vol(&doc);
+        let top = top_face(&doc, 20.0);
+        doc.edit(|h| {
+            h.add(FeatureKind::Fit {
+                faces: vec![top],
+                clearance: 0.5,
+            })
+            .unwrap()
+        });
+        assert!(doc.errors().is_empty(), "{:?}", doc.errors());
+        let (_, hi) = threebcad_kernel::boolean::bbox(&doc.bodies()[0].solid);
+        assert!((hi[2] - 19.5).abs() < 1e-2, "{hi:?}");
+        let moved = (400.0 - PI * 3.2f64.powi(2)) * 0.5;
+        assert!(
+            (before - vol(&doc) - moved).abs() < 0.02 * moved,
+            "{} vs {moved}",
+            before - vol(&doc)
+        );
+    }
+
+    #[test]
+    fn fit_shrinks_a_pin_standing_on_a_plate() {
+        // A 20 x 20 x 2 plate with a 6 mm pin rising to 12.
+        let mut doc = PartDocument::new("Part");
+        doc.edit(|h| {
+            let s = h.add_sketch(Sketch::rectangle(20.0, 20.0), Plane::TOP);
+            h.add_extrude(s, 2.0).unwrap();
+            let c = h.add_sketch(Sketch::circle([10.0, 10.0], 3.0), Plane::TOP);
+            h.add_extrude(c, 12.0).unwrap();
+        });
+        assert_eq!(doc.bodies().len(), 1);
+        let before = vol(&doc);
+        let pin = faces_where(&doc, |f| f.cylinder.is_some());
+        let fit = doc.edit(|h| {
+            h.add(FeatureKind::Fit {
+                faces: pin,
+                clearance: 0.2,
+            })
+            .unwrap()
+        });
+        assert!(doc.errors().is_empty(), "{:?}", doc.errors());
+        assert!(has_radius(&doc, 2.8));
+        let shrunk = PI * (9.0 - 2.8f64.powi(2)) * 10.0;
+        assert!(
+            (before - vol(&doc) - shrunk).abs() < 0.02 * shrunk,
+            "{} vs {shrunk}",
+            before - vol(&doc)
+        );
+        // A clearance as big as the pin is refused.
+        doc.edit(|h| {
+            if let Some(FeatureKind::Fit { clearance, .. }) = h.get_mut(fit).map(|f| &mut f.kind) {
+                *clearance = 3.0;
+            }
+        });
+        assert!(doc.errors()[&fit].contains("radius"), "{:?}", doc.errors());
+    }
+
+    #[test]
+    fn fit_on_one_wall_leaves_the_coaxial_hole_in_the_other() {
+        // A U bracket (two 10 mm walls) with one 4 mm hole along X through both walls.
+        let mut doc = PartDocument::new("Part");
+        doc.edit(|h| {
+            let u = [
+                [0.0, 0.0],
+                [30.0, 0.0],
+                [30.0, 10.0],
+                [20.0, 10.0],
+                [20.0, 3.0],
+                [10.0, 3.0],
+                [10.0, 10.0],
+                [0.0, 10.0],
+            ];
+            let s = h.add_sketch(polygon_sketch(&u), Plane::TOP);
+            h.add_extrude(s, 10.0).unwrap();
+            let c = h.add_sketch(Sketch::circle([6.5, 5.0], 2.0), Plane::RIGHT);
+            let mut e = Extrude::cut(c, 10.0);
+            e.end = End::ThroughAll;
+            e.reverse = true;
+            h.add(FeatureKind::Extrude(e)).unwrap();
+        });
+        assert!(doc.errors().is_empty(), "{:?}", doc.errors());
+        let before = vol(&doc);
+        let left = faces_where(&doc, |f| {
+            f.cylinder.is_some() && f.tris.iter().flatten().all(|p| p[0] < 10.0 + 1e-6)
+        });
+        assert!(!left.is_empty());
+        doc.edit(|h| {
+            h.add(FeatureKind::Fit {
+                faces: left[..1].to_vec(),
+                clearance: 0.2,
+            })
+            .unwrap()
+        });
+        assert!(doc.errors().is_empty(), "{:?}", doc.errors());
+        let one_wall = PI * (2.2f64.powi(2) - 4.0) * 10.0;
+        assert!(
+            (before - vol(&doc) - one_wall).abs() < 0.05 * one_wall,
+            "{} vs {one_wall}",
+            before - vol(&doc)
+        );
+        assert!(has_radius(&doc, 2.0) && has_radius(&doc, 2.2));
+    }
+
+    #[test]
+    fn fit_shrinks_a_square_tab_on_all_four_sides() {
+        // A 20 x 20 x 2 plate with a 4 x 4 tab rising to 10.
+        let mut doc = PartDocument::new("Part");
+        doc.edit(|h| {
+            let s = h.add_sketch(Sketch::rectangle(20.0, 20.0), Plane::TOP);
+            h.add_extrude(s, 2.0).unwrap();
+            let t = h.add_sketch(
+                polygon_sketch(&[[8.0, 8.0], [12.0, 8.0], [12.0, 12.0], [8.0, 12.0]]),
+                Plane::TOP,
+            );
+            h.add_extrude(t, 10.0).unwrap();
+        });
+        let before = vol(&doc);
+        let sides = faces_where(&doc, |f| {
+            f.plane.is_some_and(|p| p.normal()[2].abs() < 1e-9) && f.tris.iter().flatten().all(|p| p[2] > 2.0 - 1e-9)
+        });
+        assert_eq!(sides.len(), 4);
+        doc.edit(|h| {
+            h.add(FeatureKind::Fit {
+                faces: sides,
+                clearance: 0.2,
+            })
+            .unwrap()
+        });
+        assert!(doc.errors().is_empty(), "{:?}", doc.errors());
+        let removed = (16.0 - 3.6 * 3.6) * 8.0;
+        assert!(
+            (before - vol(&doc) - removed).abs() < 1e-3,
+            "{} vs {removed}",
+            before - vol(&doc)
+        );
     }
 }

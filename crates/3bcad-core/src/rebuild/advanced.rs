@@ -168,6 +168,7 @@ impl Eval {
                 kind,
                 depth,
             } => self.wrap(h, sketch, &face, kind, depth),
+            FeatureKind::Fit { faces, clearance } => self.fit(&faces, clearance),
             FeatureKind::Imported { solids, .. } => self.imported(&solids.0),
             FeatureKind::ImportedMesh { mesh, .. } => {
                 self.s.meshes.push((self.id, mesh.0.clone()));
@@ -1031,6 +1032,51 @@ impl Eval {
             lp = reverse_chain(&lp);
         }
         Ok(lp)
+    }
+
+    /// Fit: moves each face `clearance` into the part, so holes grow and pins and tabs shrink.
+    fn fit(&mut self, faces: &[crate::naming::FaceRef], clearance: f64) -> Result<()> {
+        ensure!(!faces.is_empty(), "select the faces of the holes, pins or slots to fit");
+        ensure!(clearance > 1e-6, "the clearance must be positive");
+        let mut by_body: Vec<(usize, Vec<usize>)> = Vec::new();
+        for picked in faces {
+            let (b, f) = self.resolve_face(picked)?;
+            match by_body.iter_mut().find(|(bb, _)| *bb == b) {
+                Some((_, list)) => list.push(f),
+                None => by_body.push((b, vec![f])),
+            }
+        }
+        // Picking one face of a hole or pin picks it all: truck splits round faces in two along
+        // seams. Only faces joined by a seam: a separate hole on the same axis keeps its size.
+        for (b, list) in &mut by_body {
+            let topo = &self.s.bodies[*b].topo;
+            let same = |f: usize, g: usize| match (topo.faces[f].cylinder, topo.faces[g].cylinder) {
+                (Some((o, d, r)), Some((o2, d2, r2))) => {
+                    let d = unit(d);
+                    (r2 - r).abs() < 1e-6 && norm(cross(unit(d2), d)) < 1e-6 && norm(cross(sub(o2, o), d)) < 1e-6
+                }
+                _ => false,
+            };
+            let mut k = 0;
+            while k < list.len() {
+                let f = list[k];
+                for e in topo.edges.iter().filter(|e| e.sides.iter().any(|s| s.face == f)) {
+                    for g in e.sides.iter().map(|s| s.face) {
+                        if g != f && same(f, g) && !list.contains(&g) {
+                            list.push(g);
+                        }
+                    }
+                }
+                k += 1;
+            }
+        }
+        // Bodies keep their places in the list, so every index stays valid.
+        for (b, list) in by_body {
+            let body = &self.s.bodies[b];
+            let solid = threebcad_kernel::fit::move_faces(&body.solid, &body.topo, &list, clearance)?;
+            self.direct(b, solid);
+        }
+        Ok(())
     }
 
     fn dome(&mut self, face: &crate::naming::FaceRef, height: f64, reverse: bool) -> Result<()> {

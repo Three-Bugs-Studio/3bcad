@@ -1,5 +1,7 @@
 use egui_wgpu::wgpu;
 
+use crate::scene::{LineVertex, MeshVertex};
+
 const SHADER: &str = r#"
 struct Globals { view_proj: mat4x4<f32>, eye: vec4<f32>, body: vec4<f32> };
 @group(0) @binding(0) var<uniform> globals: Globals;
@@ -25,15 +27,22 @@ struct MeshOut {
     @location(0) world: vec3<f32>,
     @location(1) normal: vec3<f32>,
     @location(2) @interpolate(flat) id: u32,
+    @location(3) tint: vec4<f32>,
 };
 
 @vertex
-fn vs_mesh(@location(0) pos: vec3<f32>, @location(1) nor: vec3<f32>, @location(2) id: u32) -> MeshOut {
+fn vs_mesh(
+    @location(0) pos: vec3<f32>,
+    @location(1) nor: vec3<f32>,
+    @location(2) id: u32,
+    @location(3) tint: vec4<f32>,
+) -> MeshOut {
     var out: MeshOut;
     out.clip = globals.view_proj * vec4<f32>(pos, 1.0);
     out.world = pos;
     out.normal = nor;
     out.id = id;
+    out.tint = tint;
     return out;
 }
 
@@ -47,7 +56,7 @@ fn fs_mesh(frag: MeshOut) -> @location(0) vec4<f32> {
     let diffuse = max(dot(n, l), 0.0);
     let hemi = 0.5 + 0.5 * n.z;
     let spec = pow(max(dot(n, normalize(l + v)), 0.0), 64.0);
-    let base = globals.body.rgb;
+    let base = mix(globals.body.rgb, frag.tint.rgb, frag.tint.a);
     let c = base * (0.22 + 0.18 * hemi + 0.6 * diffuse) + vec3<f32>(0.25 * spec);
     return vec4<f32>(tint(c, state_of(frag.id), 0.45), 1.0);
 }
@@ -122,9 +131,16 @@ impl Pipelines {
             bind_group_layouts: &[&bind_group_layout],
             push_constant_ranges: &[],
         });
-        // Every vertex type is (vec3, vec3, u32 pick id): (position, normal|color, id).
-        let attributes = wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x3, 2 => Uint32];
+        // Lines and planes are (position, colour, pick id); mesh vertices are (position, normal,
+        // pick id, tint).
+        let line_attributes = wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x3, 2 => Uint32];
+        let mesh_attributes = wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x3, 2 => Uint32, 3 => Unorm8x4];
         let make = |vs: &str, fs: &str, topology, bias, blend: Option<wgpu::BlendState>, depth_write| {
+            let (stride, attributes): (usize, &[wgpu::VertexAttribute]) = if vs == "vs_mesh" {
+                (std::mem::size_of::<MeshVertex>(), &mesh_attributes)
+            } else {
+                (std::mem::size_of::<LineVertex>(), &line_attributes)
+            };
             device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                 label: Some(fs),
                 layout: Some(&layout),
@@ -133,9 +149,9 @@ impl Pipelines {
                     entry_point: Some(vs),
                     compilation_options: Default::default(),
                     buffers: &[wgpu::VertexBufferLayout {
-                        array_stride: 28,
+                        array_stride: stride as u64,
                         step_mode: wgpu::VertexStepMode::Vertex,
-                        attributes: &attributes,
+                        attributes,
                     }],
                 },
                 fragment: Some(wgpu::FragmentState {

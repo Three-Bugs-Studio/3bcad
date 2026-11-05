@@ -690,7 +690,19 @@ impl SketchSession {
     }
 
     fn click(&mut self, view: &View, pos: Pos2, ctrl: bool) {
-        let hit = self.hit(view, pos);
+        let mut hit = self.hit(view, pos);
+        // The part origin is not a sketch point: dimensioning to it adds a point fixed there, as
+        // the drawing tools' origin snap does.
+        let origin = self.plane.to_local([0.0; 3]);
+        if self.tool == Tool::SmartDimension
+            && self.dim_items.len() < 2
+            && hit.is_none()
+            && view.to_screen(origin).is_some_and(|o| o.distance(pos) <= PICK_PX)
+        {
+            self.checkpoint();
+            hit = Some(Item::Point(Snap::Origin(origin).place(&mut self.sketch)));
+            self.refresh();
+        }
         let at = view.to_sketch(pos);
         match self.tool {
             Tool::Select | Tool::Offset | Tool::Mirror | Tool::LinearPattern | Tool::CircularPattern => match hit {

@@ -2,6 +2,7 @@
 
 pub mod dxf;
 pub mod mesh;
+pub mod printer;
 pub mod slicer;
 pub mod step;
 pub mod stl;
@@ -30,14 +31,14 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
 
         let stl = dir.join("cube.stl");
-        write_stl(&stl, std::slice::from_ref(&mesh)).unwrap();
+        write_stl(&stl, &[("cube", &mesh)]).unwrap();
         assert_eq!(
             std::fs::metadata(&stl).unwrap().len(),
             84 + 50 * mesh.triangles.len() as u64
         );
 
         let tmf = dir.join("cube.3mf");
-        write_3mf(&tmf, std::slice::from_ref(&mesh)).unwrap();
+        write_3mf(&tmf, &[("cube", &mesh)], &threemf::Info::default()).unwrap();
         let mut zip = zip::ZipArchive::new(std::fs::File::open(&tmf).unwrap()).unwrap();
         let mut model = String::new();
         zip.by_name("3D/3dmodel.model")

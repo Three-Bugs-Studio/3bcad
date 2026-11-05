@@ -494,10 +494,53 @@ pub(crate) fn editor(ed: &mut Ed, ui: &mut egui::Ui, h: &History, me: FeatureId,
             ed.length(ui, "Depth", depth, 0.001);
             ui.weak("Sketch on a plane parallel to the cylinder's axis; the sketch rolls onto the surface without stretching.");
         }
+        FeatureKind::Fit { faces, clearance } => {
+            faces_line(ed, ui, "faces to move", faces, p);
+            ed.length(ui, "Clearance", clearance, 0.001);
+            ui.label("Presets (per side)");
+            egui::Grid::new("fit_presets").show(ui, |ui| {
+                ui.label("");
+                for fit in ["Press", "Slip", "Loose"] {
+                    ui.label(fit);
+                }
+                ui.end_row();
+                for (process, values) in FIT_PRESETS {
+                    ui.label(process);
+                    for v in values {
+                        if ed.button(ui, &crate::ui::properties::units().length(v), true) {
+                            *clearance = v;
+                        }
+                    }
+                    ui.end_row();
+                }
+            });
+            ui.weak("Holes grow and pins, tabs and slots' walls move in by the clearance. Fit one part of each pair.");
+        }
         other => {
             ui.label(format!("{} has no properties to edit.", other.prefix()));
         }
     }
+}
+
+/// Clearance per side (mm) for press, slip and loose fits, by printing process and material.
+const FIT_PRESETS: [(&str, [f64; 3]); 4] = [
+    ("FDM: PLA, PETG", [0.05, 0.15, 0.3]),
+    ("FDM: ABS, ASA, nylon", [0.1, 0.2, 0.35]),
+    ("Resin (SLA, DLP)", [0.025, 0.075, 0.15]),
+    ("Powder (SLS, MJF)", [0.1, 0.2, 0.3]),
+];
+
+/// A slip fit for the part's material.
+fn slip_fit(material: &str) -> f64 {
+    let m = material.to_ascii_lowercase();
+    let row = if m.contains("resin") {
+        2
+    } else if ["abs", "asa", "nylon", "pc"].iter().any(|k| m.contains(k)) {
+        1
+    } else {
+        0
+    };
+    FIT_PRESETS[row].1[1]
 }
 
 /// Sketches and helices picked for a command: the one selected in the feature tree first, then
@@ -809,6 +852,22 @@ pub(crate) fn shaping(app: &mut App, ui: &mut egui::Ui) {
                 ),
                 _ => app.status = "Wrap: select a sketch, then Ctrl+click the cylindrical face to wrap onto".into(),
             }
+        }
+    });
+    stack(ui, |ui| {
+        if small(
+            ui,
+            "fit",
+            "Fit",
+            "Select the faces of a hole, pin, tab or slot: they move in by a press, slip or loose clearance",
+        ) {
+            let faces = app.selected_faces();
+            if faces.is_empty() {
+                app.status = "Fit: select the faces of a hole, pin, tab or slot (Ctrl+click for more)".into();
+                return;
+            }
+            let clearance = slip_fit(&app.doc.material().name);
+            create(app, FeatureKind::Fit { faces, clearance });
         }
     });
 }

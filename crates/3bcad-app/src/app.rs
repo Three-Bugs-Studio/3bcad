@@ -17,6 +17,7 @@ use threebcad_kernel::Plane;
 use threebcad_render::{MeshVertex, OrbitCamera, SceneGeometry};
 use threebcad_sketch::{Constraint, Sketch};
 
+use crate::print::{Objects, PrintReport, PrintView};
 use crate::ui::{self, ribbon::RibbonTab, sketch_mode::SketchSession};
 
 /// From the workspace `version`; release tags must match it.
@@ -85,9 +86,14 @@ pub struct App {
     pub selected: Option<FeatureId>,
     pub tab: RibbonTab,
     pub status: String,
-    /// Export tessellation: max chord deviation in mm.
-    pub export_tol: f64,
-    pub slicer: Slicer,
+    /// The 3D Print tab's overlays, and what its checks found.
+    pub show_overhangs: bool,
+    pub show_thin: bool,
+    pub print: PrintReport,
+    /// A slicer Send to Slicer could not find, waiting for the user to locate it.
+    pub slicer_missing: Option<Slicer>,
+    /// Export meshes, before they are placed on the bed, and what they were made for.
+    export_cache: Option<(ExportKey, Arc<Objects>)>,
     pub geometry: Arc<SceneGeometry>,
     pub geometry_version: u64,
     /// Pick id -> model item.
@@ -111,8 +117,11 @@ pub struct App {
     pub renaming: Option<(FeatureId, String)>,
     pub files: crate::files::Files,
     known_problems: usize,
-    built_for: Option<(u64, Vec<bool>)>,
+    built_for: Option<(u64, Vec<bool>, Option<PrintView>)>,
 }
+
+/// What export meshes are made for: the part's name (the objects carry it), its revision, and the chord and angle tolerance.
+type ExportKey = (String, u64, [f64; 2]);
 
 impl App {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Result<Self, &'static str> {
@@ -125,8 +134,11 @@ impl App {
             selected: None,
             tab: RibbonTab::Features,
             status: "Ready".into(),
-            export_tol: 0.01,
-            slicer: Slicer::OrcaSlicer,
+            show_overhangs: false,
+            show_thin: false,
+            print: PrintReport::default(),
+            slicer_missing: None,
+            export_cache: None,
             geometry: Arc::default(),
             geometry_version: 0,
             refs: Vec::new(),
@@ -163,17 +175,34 @@ impl App {
         }
     }
 
-    /// Rebuilds the scene (meshes, pick ids, planes) when the document or plane visibility changed.
+    /// The 3D Print tab's view of the part, while that tab is open (and no sketch is).
+    pub fn print_view(&self) -> Option<PrintView> {
+        let s = &self.files.settings;
+        (self.tab == RibbonTab::Print && self.sketch.is_none()).then(|| PrintView {
+            down: self.doc.print_down(),
+            bed: s.bed,
+            overhang: self.show_overhangs.then(|| s.overhang_deg.to_radians()),
+            thin: self.show_thin.then_some((s.nozzle, s.min_wall)),
+        })
+    }
+
+    /// Rebuilds the scene (meshes, pick ids, planes) when the document, plane visibility or the
+    /// print view changed.
     pub(crate) fn sync_geometry(&mut self) {
+        let view = self.print_view();
         let key = (
             self.doc.revision(),
             RefPlane::ALL.iter().map(|p| self.plane_visible[p]).collect::<Vec<_>>(),
+            view,
         );
         if self.built_for.as_ref() == Some(&key) {
             return;
         }
+        let refit = self.built_for.as_ref().is_some_and(|k| k.2.is_some() != view.is_some());
         let mut g = SceneGeometry::default();
-        g.add_grid(100.0, 5.0);
+        if view.is_none() {
+            g.add_grid(100.0, 5.0);
+        }
         let mut refs = Vec::new();
         for (body, b) in self.doc.bodies().iter().enumerate() {
             let m = mesher::render_mesh(&b.solid, DISPLAY_TOL);
@@ -184,7 +213,12 @@ impl App {
                     .iter()
                     .zip(&m.normals)
                     .zip(&m.face_of)
-                    .map(|((&pos, &nor), &f)| MeshVertex { pos, nor, id: base + f }),
+                    .map(|((&pos, &nor), &f)| MeshVertex {
+                        pos,
+                        nor,
+                        id: base + f,
+                        tint: [0; 4],
+                    }),
             );
             for (edge, poly) in m.edges.iter().enumerate() {
                 let id = refs.len() as u32;
@@ -215,9 +249,37 @@ impl App {
                     pos: p.map(|v| v as f32),
                     nor,
                     id: pick,
+                    tint: [0; 4],
                 }));
             }
         }
+        match view {
+            // On the bed the part moves, so the model-space planes and references stay hidden.
+            Some(v) => self.print = crate::print::lay_out(&mut g, &v),
+            None => self.add_references(&mut g, &mut refs),
+        }
+        self.geometry = Arc::new(g);
+        self.geometry_version += 1;
+        self.refs = refs;
+        // Face/edge indices may now mean something else; planes and features stay valid.
+        self.selection
+            .retain(|r| matches!(r, ModelRef::Plane(_) | ModelRef::Feature(_)));
+        self.hover = None;
+        self.built_for = Some(key);
+        self.mass = None;
+        // Open What's Wrong when a rebuild brings new problems.
+        let problems = self.doc.errors().len();
+        if problems > self.known_problems {
+            self.show_whats_wrong = true;
+        }
+        self.known_problems = problems;
+        if refit {
+            self.zoom_to_fit();
+        }
+    }
+
+    /// Reference planes and the reference geometry features above the rollback bar.
+    fn add_references(&self, g: &mut SceneGeometry, refs: &mut Vec<ModelRef>) {
         // Planes sized to the model.
         let half = g
             .bounds()
@@ -271,21 +333,6 @@ impl App {
             }
             refs.push(ModelRef::Feature(id));
         }
-        self.geometry = Arc::new(g);
-        self.geometry_version += 1;
-        self.refs = refs;
-        // Face/edge indices may now mean something else; planes and features stay valid.
-        self.selection
-            .retain(|r| matches!(r, ModelRef::Plane(_) | ModelRef::Feature(_)));
-        self.hover = None;
-        self.built_for = Some(key);
-        self.mass = None;
-        // Open What's Wrong when a rebuild brings new problems.
-        let problems = self.doc.errors().len();
-        if problems > self.known_problems {
-            self.show_whats_wrong = true;
-        }
-        self.known_problems = problems;
     }
 
     /// Recomputes the highlight states buffer from hover and selection; true when it changed.
@@ -553,34 +600,86 @@ impl App {
 
     pub fn send_to_slicer(&mut self) {
         let path = std::env::temp_dir().join(format!("{}.3mf", self.doc.name));
-        let name = self.slicer.name();
-        self.status = match self
-            .write(ExportFormat::ThreeMf, &path)
-            .and_then(|()| self.slicer.launch(&path))
-        {
-            Ok(_) => format!("Opened {} in {name}", path.display()),
-            Err(e) => format!("Could not open {name}: {e}"),
+        let slicer = self.files.settings.slicer;
+        let located = self.files.settings.slicer_paths[slicer as usize].clone();
+        let name = slicer.name();
+        self.status = match self.write(ExportFormat::ThreeMf, &path) {
+            Err(e) => format!("Could not write {}: {e}", path.display()),
+            Ok(()) => match slicer.launch(&path, located.as_deref()) {
+                Ok(()) => format!("Opened {} in {name}", path.display()),
+                Err(e) => {
+                    if e.kind() == io::ErrorKind::NotFound {
+                        self.slicer_missing = Some(slicer);
+                    }
+                    format!("Could not open {name}: {e}")
+                }
+            },
         };
     }
 
-    pub fn write(&self, format: ExportFormat, path: &Path) -> io::Result<()> {
+    fn export_key(&self) -> ExportKey {
+        let s = &self.files.settings;
+        (self.doc.name.clone(), self.doc.revision(), [s.chord, s.angle_deg])
+    }
+
+    /// The bodies meshed for export (not yet placed on the bed), made again only when the part or
+    /// the export quality changed.
+    pub fn export_objects(&mut self) -> Arc<Objects> {
+        let key = self.export_key();
+        match &self.export_cache {
+            Some((k, objects)) if *k == key => objects.clone(),
+            _ => {
+                let s = &self.files.settings;
+                let objects = Arc::new(crate::print::export_meshes(&self.doc, s.chord, s.angle_deg));
+                self.export_cache = Some((key, objects.clone()));
+                objects
+            }
+        }
+    }
+
+    /// The export meshes' triangle count, if they are made for the current settings.
+    pub fn export_triangles(&self) -> Option<usize> {
+        let (k, objects) = self.export_cache.as_ref()?;
+        (*k == self.export_key()).then(|| objects.iter().map(|(_, m)| m.triangles.len()).sum())
+    }
+
+    /// Drops everything cached for the open part: another part's revisions count from the start
+    /// again, so they could match.
+    pub(crate) fn forget_caches(&mut self) {
+        self.built_for = None;
+        self.export_cache = None;
+        self.mass = None;
+        self.measured = None;
+    }
+
+    /// STL and 3MF are written as the part sits on the printer's bed; STEP in model space.
+    pub fn write(&mut self, format: ExportFormat, path: &Path) -> io::Result<()> {
         let bodies = self.doc.bodies();
-        let references = &self.doc.built().meshes;
-        if bodies.is_empty() && (references.is_empty() || format == ExportFormat::Step) {
+        if bodies.is_empty() && (self.doc.built().meshes.is_empty() || format == ExportFormat::Step) {
             return Err(io::Error::other("the part has no bodies"));
         }
-        let meshes = || -> Vec<PrintMesh> {
-            bodies
-                .iter()
-                .map(|b| mesher::print_mesh(&b.solid, self.export_tol))
-                .chain(references.iter().map(|(_, m)| (**m).clone()))
-                .collect()
-        };
-        match format {
-            ExportFormat::Stl => threebcad_io::write_stl(path, &meshes()),
-            ExportFormat::ThreeMf => threebcad_io::write_3mf(path, &meshes()),
-            ExportFormat::Step => threebcad_io::write_step(path, &self.doc.name, bodies.iter().map(|b| &b.solid)),
+        if format == ExportFormat::Step {
+            return threebcad_io::write_step(path, &self.doc.name, bodies.iter().map(|b| &b.solid));
         }
+        let (down, bed) = (self.doc.print_down(), self.files.settings.bed);
+        let objects = crate::print::on_bed(&self.export_objects(), down, bed);
+        let named: Vec<(&str, &PrintMesh)> = objects.iter().map(|(n, m)| (n.as_str(), m)).collect();
+        if format == ExportFormat::Stl {
+            return threebcad_io::write_stl(path, &named);
+        }
+        let s = &self.files.settings;
+        let material = self.doc.material();
+        let info = threebcad_io::threemf::Info {
+            title: self.doc.name.clone(),
+            material: material.name.clone(),
+            color: material.color,
+            settings: vec![
+                ("Printer".into(), s.printer.clone()),
+                ("NozzleDiameter".into(), format!("{}", s.nozzle)),
+                ("OverhangAngle".into(), format!("{}", s.overhang_deg)),
+            ],
+        };
+        threebcad_io::write_3mf(path, &named, &info)
     }
 
     /// Mass properties of all bodies, cached per rebuild.
@@ -816,6 +915,7 @@ impl eframe::App for App {
         self.sync_geometry();
         ui::evaluate::windows(self, ctx);
         ui::help::window(self, ctx);
+        ui::print::slicer_prompt(self, ctx);
         egui::CentralPanel::default()
             .frame(egui::Frame::new().fill(VIEWPORT_BG))
             .show(ctx, |ui| ui::viewport::show(self, ui));

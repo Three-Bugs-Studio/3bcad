@@ -3,11 +3,13 @@
 pub mod boolean;
 pub mod dome;
 pub mod edge_ops;
+pub mod fit;
 pub mod loft;
 pub mod mass;
 pub mod mesher;
 pub mod offset;
 pub mod operations;
+pub mod print;
 pub mod round;
 pub mod skin;
 pub mod solid;

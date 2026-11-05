@@ -15,6 +15,8 @@ pub struct MeshVertex {
     pub pos: [f32; 3],
     pub nor: [f32; 3],
     pub id: u32,
+    /// An analysis colour over the body colour (sRGB), alpha saying how much of it: 0 for none.
+    pub tint: [u8; 4],
 }
 
 #[repr(C)]

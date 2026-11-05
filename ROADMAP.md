@@ -1,6 +1,6 @@
 # 3BCAD Roadmap
 
-3BCAD aims for the everyday workflow of desktop parametric CAD — parts, assemblies and drawings — plus first-class
+3BCAD aims for the everyday parametric CAD workflow — parts, assemblies and drawings — plus first-class
 3D-printing tools. Every item below is a GitHub issue; pick one, comment that you are on it, and see
 [CONTRIBUTING.md](CONTRIBUTING.md). Issues labelled `good first issue` are a good start.
 
@@ -49,11 +49,11 @@ The everyday part toolbox: cut, revolve, fillet, chamfer, shell, holes, patterns
 - [x] #28 Merge result: combine touching bodies into one
 - [x] #29 Extrude end conditions: Through All, Up To Next/Vertex/Surface, Mid Plane, Offset From Surface
 - [x] #30 Extrude draft angle and thin feature
-- [x] #31 Revolved Boss/Base and Revolved Cut
+- [x] #31 Revolve (boss and cut)
 - [x] #32 Fillet: constant-radius edge fillet
 - [x] #33 Chamfer
 - [x] #34 Shell
-- [x] #35 Hole Wizard: simple, counterbore, countersink and tapped holes
+- [x] #35 Hole tool: simple, counterbore, countersink and tapped holes
 - [x] #36 Linear Pattern
 - [x] #37 Circular Pattern
 - [x] #38 Mirror features and bodies
@@ -63,7 +63,7 @@ The everyday part toolbox: cut, revolve, fillet, chamfer, shell, holes, patterns
 - [x] #42 Suppress / unsuppress features
 - [x] #43 Persistent face/edge naming across rebuilds (topological naming)
 - [x] #44 Incremental rebuild: only re-evaluate dirty features
-- [x] #45 What's Wrong: rebuild error and warning panel
+- [x] #45 Rebuild error and warning panel
 - [x] #46 Draft feature
 - [x] #47 Rib feature
 - [x] #48 Measure tool
@@ -74,8 +74,8 @@ The everyday part toolbox: cut, revolve, fillet, chamfer, shell, holes, patterns
 
 Sweeps, lofts, multibody tools and threads.
 
-- [x] #51 Swept Boss/Base and Swept Cut
-- [x] #52 Lofted Boss/Base and Lofted Cut
+- [x] #51 Sweep (boss and cut)
+- [x] #52 Loft (boss and cut)
 - [x] #53 Variable-size fillet and face fillet
 - [x] #54 Multibody tools: Combine, Split, Delete/Keep Body
 - [x] #55 Thread feature (modeled threads)
@@ -103,13 +103,13 @@ Native save/load, STEP/DXF/mesh import, units and materials.
 
 Printability checks, orientation and rich 3MF for modern slicers.
 
-- [ ] #70 Overhang analysis overlay
-- [ ] #71 Thin wall and minimum feature size check
-- [ ] #72 Print orientation: place on face and preview on build plate
-- [ ] #73 Rich 3MF: plates, colours, materials and print settings metadata
-- [ ] #74 Slicer settings: custom executable paths and default slicer
-- [ ] #75 Export quality settings: chord and angle tolerance per export
-- [ ] #76 Fit/clearance presets for printed assemblies
+- [x] #70 Overhang analysis overlay
+- [x] #71 Thin wall and minimum feature size check
+- [x] #72 Print orientation: place on face and preview on build plate
+- [x] #73 Rich 3MF: plates, colours, materials and print settings metadata
+- [x] #74 Slicer settings: custom executable paths and default slicer
+- [x] #75 Export quality settings: chord and angle tolerance per export
+- [x] #76 Fit/clearance presets for printed assemblies
 
 ## [v0.7.0 – Assemblies](https://github.com/Three-Bugs-Studio/3bcad/milestone/6)
 
