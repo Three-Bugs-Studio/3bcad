@@ -1,7 +1,7 @@
 # 3BCAD architecture
 
 3BCAD is a Cargo workspace of six crates. Each one owns one of the systems that make a parametric
-CAD program, using the split common to desktop parametric CAD (kernel, 2D solver, feature tree, graphics, print tooling).
+CAD program: geometry kernel, 2D solver, feature tree, graphics, and files and print tooling.
 
 ```mermaid
 flowchart LR
@@ -69,8 +69,8 @@ sequenceDiagram
 6. **App** (`crates/3bcad-app`). `eframe` window; `ui/sketch_mode.rs` holds the interactive sketcher
    (tools, inferencing, Smart Dimension, drag), working on a copy of the sketch that is written back
    as one undo step when you exit the sketch. `ui/ribbon.rs` creates features from the current
-   selection, `ui/properties.rs` edits them, `ui/evaluate.rs` holds What's Wrong, Measure and Mass
-   Properties.
+   selection, `ui/properties.rs` edits them, `ui/evaluate.rs` holds the rebuild errors window, Measure and
+   Mass Properties, and `ui/print.rs` the 3D Print tab.
 
 ## Files
 
@@ -86,6 +86,24 @@ sequenceDiagram
 - **App** (`crates/3bcad-app/src/files.rs`). The File menu, recent files and autosave settings
   (`settings.txt` in the user's config folder) and crash recovery (one autosave file per process in
   `recovery/`, removed after a save or a normal exit).
+
+## 3D printing
+
+- **Checks** (`crates/3bcad-kernel/src/print.rs`) work on plain triangles: `overhangs` flags triangles
+  facing down past the limit (skipping those on the bed), `wall_thickness` casts a ray from each triangle
+  straight into the part through a small BVH, and `lay_flat` is the rotation that puts a face on the bed.
+  The app runs them on the display mesh and tints the flagged triangles (a per-vertex `tint` in
+  `MeshVertex`), so the colours follow every rebuild.
+- **Layout** (`crates/3bcad-app/src/print.rs`). The part's print orientation is the outward normal of the
+  face it rests on (`PartDocument::print_down`, saved in the file). While the 3D Print tab is open the
+  scene shows the part turned onto that face and centred on the bed; STL and 3MF exports use the same
+  placement, centred on the plate. STEP keeps model coordinates.
+- **Fit** (`crates/3bcad-kernel/src/fit.rs`) moves flat and cylindrical faces directly in the B-Rep:
+  flat faces slide, cylinders change radius, and each corner is re-solved as the smallest move that keeps
+  it on all its faces. Booleans cannot do this: a band cut along a face runs its walls along the part's
+  own faces, and truck gets coaxial cylinders wrong.
+- **Preferences** for printing (slicer and its location, printer and bed, overhang limit, nozzle, minimum
+  wall, export tolerances) live in `files::Settings`.
 
 ## Adding a new feature type (example: Rib)
 

@@ -7,6 +7,41 @@ saved files and workflows; patch versions (0.x.y) only fix bugs.
 
 ## [Unreleased]
 
+### Added
+
+- 3D Print studio (v0.6.0 milestone):
+  - Overhang check: faces steeper than the overhang limit (45° by default, measured from vertical) are
+    coloured for the build direction the part is laid out in; faces resting on the bed are not (#70).
+  - Thin wall check: walls thinner than the nozzle (red) or than the minimum wall (orange) are coloured,
+    with the nozzle diameter and minimum wall as settings (#71).
+  - Print layout: the 3D Print tab shows the part on the bed of a chosen printer (Bambu Lab, Prusa,
+    Creality, Voron presets or a custom build volume) and warns when it does not fit. Lay Flat puts a
+    selected face on the bed (or points an edge or axis up); the orientation is saved with the part (#72).
+  - 3MF export writes one named object per body with the part's material and colour, the part's name, and
+    the printer, nozzle and overhang limit as metadata; STL and 3MF are written as the part sits on the
+    bed (#73).
+  - Send to Slicer remembers the chosen slicer, and when a slicer is not found offers to locate its
+    program, used from then on (#74).
+  - Export quality: Coarse, Fine or Custom chord and angle tolerance, with the export's triangle count
+    shown before exporting (#75).
+  - Fit: moves the faces of a hole, pin, tab or slot into the part by a clearance, with press, slip and
+    loose presets for FDM, resin and powder printers; one click on a hole or pin takes all of it (#76).
+- Revolve can turn about the world X, Y or Z axis, so imported profiles need no centerline.
+- Smart Dimension can measure to the part origin: clicking it adds a point fixed there.
+
+### Changed
+
+- Part files are format version 2 (the Fit feature and the print orientation). 3BCAD still opens version 1
+  files; 3BCAD 0.5 refuses version 2 files with a message to update.
+
+### Fixed
+
+- Opening, recovering or starting a part could keep showing the previous part when both had been
+  rebuilt the same number of times.
+- Send to Slicer on macOS reported success when the slicer was not installed.
+- The status bar kept showing a feature's error after the error was fixed in the Properties panel.
+- The "saved by a newer 3BCAD" message had a run of spaces in the middle.
+
 ## [0.5.0] - 2026-11-04
 
 ### Added
