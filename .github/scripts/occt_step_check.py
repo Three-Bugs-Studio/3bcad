@@ -34,7 +34,8 @@ for line in (folder / "volumes.txt").read_text().splitlines():
     if bounds:
         box = Bnd_Box()
         BRepBndLib.AddOptimal_s(reader.OneShape(), box, False, False)
-        found = box.Get()
+        lo, hi = box.CornerMin(), box.CornerMax()
+        found = (lo.X(), lo.Y(), lo.Z(), hi.X(), hi.Y(), hi.Z())
         placed = all(abs(a - float(b)) < 0.05 for a, b in zip(found, bounds))
         print(f"{'ok  ' if placed else 'FAIL'} {name}: OCCT box {[round(v, 3) for v in found]}, 3BCAD {bounds}")
         ok &= placed
