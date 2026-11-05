@@ -243,6 +243,7 @@ pub fn tab(app: &mut App, ui: &mut egui::Ui) {
             let n = s.check_interference();
             app.status = match n {
                 0 => "No interference".into(),
+                1 => "1 pair of parts interferes".into(),
                 n => format!("{n} pairs of parts interfere"),
             };
         }
@@ -717,6 +718,7 @@ fn windows(app: &mut App, ctx: &egui::Context) {
     if again {
         app.status = match s.check_interference() {
             0 => "No interference".into(),
+            1 => "1 pair of parts interferes".into(),
             n => format!("{n} pairs of parts interfere"),
         };
     }
