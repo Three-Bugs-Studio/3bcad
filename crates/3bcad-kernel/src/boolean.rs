@@ -379,6 +379,20 @@ mod tests {
         assert!(intersect(&l, &notch).unwrap().is_empty());
     }
 
+    /// Enlarging a hole with a bigger cut: no intersection touches the old hole's wall, and truck
+    /// keeps it inside the result, a closed body 2πrh (its wall's area) short of the right volume
+    /// that passes the plausibility check.
+    #[test]
+    #[ignore = "truck-shapeops keeps a face that no intersection touches when it lies inside the tool"]
+    fn a_bigger_cut_over_a_hole_removes_the_old_wall() {
+        let holed = subtract(&cube(0.0, 0.0, 10.0), &cyl(2.0, -1.0, 11.0))
+            .unwrap()
+            .remove(0);
+        let r = subtract(&holed, &cyl(3.0, -1.0, 11.0)).unwrap();
+        let v = volume(&r[0]).unwrap();
+        assert!((v - (1000.0 - PI * 90.0)).abs() < 2.0, "{v}");
+    }
+
     #[test]
     fn a_tool_inside_the_body_leaves_a_void() {
         let inner = builder::translated(&cube(2.0, 2.0, 2.0), Vector3::new(0.0, 2.0, 0.0));

@@ -66,11 +66,16 @@ fn v3(p: Point3) -> P3 {
 /// A face on the same surface, facing the same way, with new (oriented) boundaries. Keeps the
 /// surface's own parametrisation, which truck meshes more reliably than an inverted copy.
 pub fn face_like(face: &Face, boundaries: Vec<Wire>) -> anyhow::Result<Face> {
+    face_on(face, boundaries, face.surface())
+}
+
+/// `face_like` on another surface parametrised like the face's own (a moved copy of it).
+pub fn face_on(face: &Face, boundaries: Vec<Wire>, surface: Surface) -> anyhow::Result<Face> {
     if face.orientation() {
-        Ok(Face::try_new(boundaries, face.surface())?)
+        Ok(Face::try_new(boundaries, surface)?)
     } else {
         let inv: Vec<Wire> = boundaries.iter().map(|w| w.inverse()).collect();
-        Ok(Face::try_new(inv, face.surface())?.inverse())
+        Ok(Face::try_new(inv, surface)?.inverse())
     }
 }
 
