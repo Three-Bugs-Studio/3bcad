@@ -107,7 +107,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
         }
     }
 
-    if app.show_mass {
+    if app.show_mass && app.print_view().is_none() {
         if let Some(c) = app.mass.as_ref().map(|(_, m)| m.center) {
             if let Some(s) = app
                 .camera
@@ -140,6 +140,10 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
 
 /// Sketches above the rollback bar that no feature has used yet (shown in the model).
 fn loose_sketches(app: &App) -> Vec<(FeatureId, &threebcad_sketch::Sketch, threebcad_kernel::Plane)> {
+    // On the print bed the part is moved; sketches stay in model space, so they are hidden.
+    if app.print_view().is_some() {
+        return Vec::new();
+    }
     let h = app.doc.history();
     // A sketch is used once a feature is built from it (an extrude, a hole, a rib...).
     let used: Vec<FeatureId> = h

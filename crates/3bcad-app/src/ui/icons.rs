@@ -1017,6 +1017,30 @@ pub fn paint(p: &Painter, r: Rect, name: &str, enabled: bool) {
             pts.push(pts[0]);
             k.sk(&pts);
         }
+        // 3D printing.
+        "fit" => {
+            k.fit(o, [1.0, 1.0, 1.0]);
+            k.prism(&rect3(0.0, 0.0, 1.0, 1.0, 0.0), [0.0, 0.0, 0.35], GOLD);
+            k.pocket(&ring([0.5, 0.5, 0.35], 0.3, 32), 0.3, GOLD);
+            k.prism(&ring([0.5, 0.5, 0.1], 0.2, 24), [0.0, 0.0, 0.9], GREY);
+        }
+        "overhang" => {
+            k.fit(o, [1.0, 1.0, 1.0]);
+            k.prism(&rect3(0.35, 0.0, 0.65, 1.0, 0.0), [0.0, 0.0, 0.6], GOLD);
+            k.prism(&rect3(0.0, 0.0, 1.0, 1.0, 0.6), [0.0, 0.0, 0.3], GOLD);
+            k.arrow(k.u(0.12, 0.5, 0.55), k.u(0.12, 0.5, 0.0), RED);
+        }
+        "thin_wall" => {
+            k.fit(o, [1.0, 1.0, 0.9]);
+            k.prism(&rect3(0.0, 0.0, 1.0, 1.0, 0.0), [0.0, 0.0, 0.3], GOLD);
+            k.prism(&rect3(0.45, 0.0, 0.55, 1.0, 0.3), [0.0, 0.0, 0.6], RED);
+        }
+        "lay_flat" => {
+            k.fit([-0.1, -0.1, 0.0], [1.1, 1.1, 1.2]);
+            k.prism(&rect3(-0.1, -0.1, 1.1, 1.1, 0.0), [0.0, 0.0, 0.08], GREY);
+            k.prism(&rect3(0.25, 0.25, 0.75, 0.75, 0.08), [0.0, 0.0, 0.45], GOLD);
+            k.arrow(k.u(0.5, 0.5, 1.2), k.u(0.5, 0.5, 0.6), GREEN);
+        }
         _ => k.bead(0.5, 0.5, 0.14, GREY),
     }
 }
@@ -1057,6 +1081,7 @@ pub fn of_feature(kind: &FeatureKind) -> &'static str {
         FeatureKind::CurvePattern { .. } => "curve_pattern",
         FeatureKind::Dome { .. } => "dome",
         FeatureKind::Wrap { .. } => "wrap",
+        FeatureKind::Fit { .. } => "fit",
         FeatureKind::Imported { .. } => "import",
         FeatureKind::ImportedMesh { .. } => "mesh",
     }
