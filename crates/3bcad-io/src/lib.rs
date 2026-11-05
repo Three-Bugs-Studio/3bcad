@@ -11,7 +11,7 @@ pub mod threemf;
 pub use dxf::{read_dxf, write_dxf};
 pub use mesh::read_mesh;
 pub use slicer::Slicer;
-pub use step::{read_step, write_step, StepImport};
+pub use step::{read_step, write_step, write_step_assembly, StepImport};
 pub use stl::write_stl;
 pub use threemf::write_3mf;
 
