@@ -141,6 +141,7 @@ mod tests {
                 pos: quad[i],
                 nor: [0.0, 0.0, 1.0],
                 id: 0,
+                tint: [0; 4],
             });
         }
         s.line(quad[1], quad[2], [0.0; 3], 1);
