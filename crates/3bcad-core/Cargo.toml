@@ -9,6 +9,7 @@ rust-version.workspace = true
 [dependencies]
 threebcad-sketch.workspace = true
 threebcad-kernel.workspace = true
+threebcad-io.workspace = true
 petgraph.workspace = true
 anyhow.workspace = true
 serde.workspace = true

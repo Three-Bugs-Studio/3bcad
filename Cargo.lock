@@ -3703,6 +3703,7 @@ dependencies = [
  "petgraph",
  "serde",
  "serde_json",
+ "threebcad-io",
  "threebcad-kernel",
  "threebcad-sketch",
 ]

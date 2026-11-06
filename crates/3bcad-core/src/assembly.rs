@@ -114,7 +114,7 @@ struct Loaded {
 
 static GENERATION: AtomicU64 = AtomicU64::new(1);
 
-fn modified(path: &Path) -> Option<SystemTime> {
+pub(crate) fn modified(path: &Path) -> Option<SystemTime> {
     std::fs::metadata(path).and_then(|m| m.modified()).ok()
 }
 
@@ -149,14 +149,14 @@ fn load(path: &Path, within: &[PathBuf]) -> Loaded {
     }
 }
 
-fn stem(path: &Path) -> String {
+pub(crate) fn stem(path: &Path) -> String {
     path.file_stem()
         .map_or_else(|| "Part".into(), |s| s.to_string_lossy().into_owned())
 }
 
 /// `path` written relative to the folder `base`, with `/` between names, so the files can move
 /// together to another folder or computer; absolute when it is on another drive.
-fn relative(path: &Path, base: &Path) -> PathBuf {
+pub(crate) fn relative(path: &Path, base: &Path) -> PathBuf {
     let (p, b): (Vec<_>, Vec<_>) = (path.components().collect(), base.components().collect());
     let same = p.iter().zip(&b).take_while(|(x, y)| x == y).count();
     if same == 0 {
