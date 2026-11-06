@@ -7,7 +7,8 @@ CAD program: geometry kernel, 2D solver, feature tree, graphics, and files and p
 flowchart LR
     app["threebcad-app<br/>egui UI, sketch mode"] --> core["threebcad-core<br/>feature history, rebuild, assemblies"]
     app --> render["threebcad-render<br/>wgpu viewport, camera, picking"]
-    app --> io["threebcad-io<br/>STL / 3MF / OBJ / STEP / DXF, slicers"]
+    app --> io["threebcad-io<br/>STL / 3MF / OBJ / STEP / DXF, PDF / SVG, slicers"]
+    core --> io
     core --> sketch["threebcad-sketch<br/>2D geometry, constraint solver"]
     core --> kernel["threebcad-kernel<br/>truck B-Rep, tessellation"]
     io --> kernel
@@ -15,7 +16,8 @@ flowchart LR
 ```
 
 Dependency rules: `core` never depends on `render` or `app`; `kernel` never depends on `sketch`
-(it takes its own `ProfileRegion` type, and `core` converts sketch regions into it).
+(it takes its own `ProfileRegion` type, and `core` converts sketch regions into it). `core` uses `io` only
+for the drawing page type (`io::drawing::Page`) it lays sheets out into; `io` never depends on `core`.
 
 ## Data flow of a rebuild
 
@@ -130,6 +132,31 @@ sequenceDiagram
   once as its own product and every component as a `NEXT_ASSEMBLY_USAGE_OCCURRENCE` with an
   `ITEM_DEFINED_TRANSFORMATION`; CI reads it with OpenCASCADE and checks the components land where they
   were. 3MF writes one object per part, laid flat on its print face and set out in rows on the bed.
+
+## Drawings
+
+- **Documents** (`crates/3bcad-core/src/drawing.rs`). A `DrawingDocument` holds sheets (size, scale,
+  first or third angle), each with views, dimensions and notes, plus one title block for all sheets. The
+  `.3bcdrw` file saves the part's file relative to itself and reads the part again when its modification
+  time changes (`refresh`), like an assembly. A view is a model view (a fixed orientation), or is made
+  from a parent on the same sheet: projected (the parent turned towards a side, by the projection angle),
+  section (projected, with a cutting plane) or detail (the parent's lines inside a circle, scaled). Views
+  are kept in order, parents first, so one pass draws them all; a child stores only the coordinate along
+  which it may move, the other is the parent's, so it stays lined up.
+- **Hidden lines** (`crates/3bcad-kernel/src/hlr.rs`) work on `Topology`: B-Rep edges (smooth seams only
+  where they are the outline), silhouettes traced as the zero line of surface normal · view direction
+  (exact normals on cylinders), and the face triangles, binned on a grid, as occluders. Each line is cut
+  every 1/300 of the part's size and each piece is seen or hidden by whether a triangle lies in front of
+  its middle. A section keeps the material behind the plane, and the triangles the plane crosses give the
+  cut outline, which also hides what lies behind the cut faces (an even-odd test). Projections are cached
+  by the part's read and the view's frame, so moving a view never projects again.
+- **Annotations** hold `Anchor`s: a `VertexRef` or circular `EdgeRef` of the part, a sketch point or
+  circle, or an extrusion's ends, so dimensions follow the part's changes; their values are measured off
+  the projected geometry. Section hatching is chosen from the material name (ANSI31/32/33/37).
+- **Pages** (`DrawingDocument::page`) lay a sheet out as marks (lines, fills, text) in paper millimetres on
+  layers. The app paints them with egui; `crates/3bcad-io/src/drawing.rs` writes them as PDF (Helvetica,
+  a millimetre-to-point matrix, one page per sheet), SVG and R12 DXF with a layer and line type per kind of
+  line.
 
 ## Adding a new feature type (example: Rib)
 

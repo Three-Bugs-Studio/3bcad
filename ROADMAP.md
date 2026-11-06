@@ -128,11 +128,11 @@ Multi-part assemblies with mates, interference checks, exploded views and BOM.
 
 2D engineering drawings with projected/section views, dimensions and PDF/DXF export.
 
-- [ ] #85 Drawing document, sheets and title blocks
-- [ ] #86 Standard views and projected views with hidden-line removal
-- [ ] #87 Section and detail views
-- [ ] #88 Dimensions and annotations in drawings
-- [ ] #89 Export drawings to PDF, SVG and DXF
+- [x] #85 Drawing document, sheets and title blocks
+- [x] #86 Standard views and projected views with hidden-line removal
+- [x] #87 Section and detail views
+- [x] #88 Dimensions and annotations in drawings
+- [x] #89 Export drawings to PDF, SVG and DXF
 
 ## [v0.9.0 – Design Intent & Configurations](https://github.com/Three-Bugs-Studio/3bcad/milestone/8)
 
