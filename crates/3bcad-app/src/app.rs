@@ -84,6 +84,8 @@ pub struct App {
     pub doc: PartDocument,
     /// The open assembly; parts are edited in their own files.
     pub asm: Option<crate::assembly::Session>,
+    /// The open drawing; its part is read from its own file.
+    pub drw: Option<crate::drawing::Session>,
     pub camera: OrbitCamera,
     /// Feature selected in the feature tree.
     pub selected: Option<FeatureId>,
@@ -134,6 +136,7 @@ impl App {
         let mut app = Self {
             doc: PartDocument::demo(),
             asm: None,
+            drw: None,
             camera: OrbitCamera::default(),
             selected: None,
             tab: RibbonTab::Features,
@@ -878,6 +881,9 @@ impl eframe::App for App {
         crate::files::properties_window(self, ctx);
         if self.asm.is_some() {
             return ui::assembly::frame(self, ctx);
+        }
+        if self.drw.is_some() {
+            return ui::drawing::frame(self, ctx);
         }
         self.shortcuts(ctx);
         if self.selected.is_some_and(|id| self.doc.history().get(id).is_none()) {

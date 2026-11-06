@@ -6,7 +6,10 @@ use std::time::{Duration, Instant};
 
 use eframe::egui::{self, Key, KeyboardShortcut, Modifiers};
 use threebcad_core::assembly::EXT as ASSEMBLY_EXT;
-use threebcad_core::{AssemblyDocument, FeatureKind, PartDocument, PlaneRef, Shared, UnitSystem, Units};
+use threebcad_core::drawing::EXT as DRAWING_EXT;
+use threebcad_core::{
+    AssemblyDocument, DrawingDocument, FeatureKind, PartDocument, PlaneRef, Shared, UnitSystem, Units,
+};
 use threebcad_io::printer::PRINTERS;
 use threebcad_io::Slicer;
 use threebcad_kernel::Plane;
@@ -173,6 +176,10 @@ fn is_assembly(path: &Path) -> bool {
     path.extension().is_some_and(|e| e.eq_ignore_ascii_case(ASSEMBLY_EXT))
 }
 
+fn is_drawing(path: &Path) -> bool {
+    path.extension().is_some_and(|e| e.eq_ignore_ascii_case(DRAWING_EXT))
+}
+
 /// The newest recovery file left behind by a run that did not close normally.
 // shortcut: a second copy of 3BCAD that is still running also leaves a file here and would be
 // offered too; lock the file if people run several copies at once.
@@ -181,7 +188,11 @@ pub fn leftover_recovery(dir: &Path, own: &[PathBuf]) -> Option<PathBuf> {
         .ok()?
         .filter_map(Result::ok)
         .map(|e| e.path())
-        .filter(|p| p.extension().is_some_and(|e| e == EXT || e == ASSEMBLY_EXT) && !own.contains(p))
+        .filter(|p| {
+            p.extension()
+                .is_some_and(|e| e == EXT || e == ASSEMBLY_EXT || e == DRAWING_EXT)
+                && !own.contains(p)
+        })
         .max_by_key(|p| std::fs::metadata(p).and_then(|m| m.modified()).ok())
 }
 
@@ -190,6 +201,7 @@ pub fn leftover_recovery(dir: &Path, own: &[PathBuf]) -> Option<PathBuf> {
 pub enum Pending {
     New,
     NewAssembly,
+    NewDrawing,
     Open(PathBuf),
     Close,
 }
@@ -216,9 +228,10 @@ pub struct Files {
 impl Files {
     pub fn new() -> Self {
         let recovery_dir = config_dir().map(|d| d.join("recovery"));
-        let offer = recovery_dir
-            .as_ref()
-            .and_then(|d| leftover_recovery(d, &[recovery_file(d, EXT), recovery_file(d, ASSEMBLY_EXT)]));
+        let offer = recovery_dir.as_ref().and_then(|d| {
+            let own = [EXT, ASSEMBLY_EXT, DRAWING_EXT].map(|e| recovery_file(d, e));
+            leftover_recovery(d, &own)
+        });
         Self {
             settings: Settings::load(),
             settings_changed: false,
@@ -239,7 +252,7 @@ impl Files {
     }
 
     pub fn clear_recovery(&self) {
-        for ext in [EXT, ASSEMBLY_EXT] {
+        for ext in [EXT, ASSEMBLY_EXT, DRAWING_EXT] {
             if let Some(p) = self.own_recovery(ext) {
                 let _ = std::fs::remove_file(p);
             }
@@ -259,22 +272,34 @@ fn stem(path: &Path) -> String {
 impl App {
     /// The open document's name: the assembly's while one is open, else the part's.
     pub fn doc_name(&self) -> String {
+        if let Some(d) = &self.drw {
+            return d.doc.name.clone();
+        }
         self.asm
             .as_ref()
             .map_or_else(|| self.doc.name.clone(), |s| s.doc.name.clone())
     }
 
     pub fn is_dirty(&self) -> bool {
+        if let Some(d) = &self.drw {
+            return d.doc.is_dirty();
+        }
         self.asm
             .as_ref()
             .map_or_else(|| self.doc.is_dirty(), |s| s.doc.is_dirty())
     }
 
     pub fn units(&self) -> Units {
+        if let Some(d) = &self.drw {
+            return d.doc.units();
+        }
         self.asm.as_ref().map_or_else(|| self.doc.units(), |s| s.doc.units())
     }
 
     fn set_units(&mut self, u: Units) {
+        if let Some(d) = &mut self.drw {
+            return d.doc.set_units(u);
+        }
         match &mut self.asm {
             Some(s) => s.doc.set_units(u),
             None => self.doc.set_units(u),
@@ -282,18 +307,29 @@ impl App {
     }
 
     pub fn can_undo(&self) -> bool {
+        if let Some(d) = &self.drw {
+            return d.doc.can_undo();
+        }
         self.asm
             .as_ref()
             .map_or_else(|| self.doc.can_undo() || self.sketch.is_some(), |s| s.doc.can_undo())
     }
 
     pub fn can_redo(&self) -> bool {
+        if let Some(d) = &self.drw {
+            return d.doc.can_redo();
+        }
         self.asm
             .as_ref()
             .map_or_else(|| self.doc.can_redo() || self.sketch.is_some(), |s| s.doc.can_redo())
     }
 
     pub fn undo(&mut self) {
+        if let Some(d) = &mut self.drw {
+            d.doc.undo();
+            self.status = "Undone".into();
+            return;
+        }
         match (&mut self.asm, &mut self.sketch) {
             (Some(s), _) => s.doc.undo(),
             (None, Some(sk)) => return sk.undo(),
@@ -303,6 +339,11 @@ impl App {
     }
 
     pub fn redo(&mut self) {
+        if let Some(d) = &mut self.drw {
+            d.doc.redo();
+            self.status = "Redone".into();
+            return;
+        }
         match (&mut self.asm, &mut self.sketch) {
             (Some(s), _) => s.doc.redo(),
             (None, Some(sk)) => return sk.redo(),
@@ -368,7 +409,11 @@ impl App {
             return;
         }
         self.files.last_autosave = Instant::now();
-        let ext = if self.asm.is_some() { ASSEMBLY_EXT } else { EXT };
+        let ext = match (&self.asm, &self.drw) {
+            (_, Some(_)) => DRAWING_EXT,
+            (Some(_), _) => ASSEMBLY_EXT,
+            _ => EXT,
+        };
         let Some(path) = self.files.own_recovery(ext) else {
             return;
         };
@@ -376,9 +421,10 @@ impl App {
             .parent()
             .map_or(Ok(()), std::fs::create_dir_all)
             .map_err(anyhow::Error::from)
-            .and_then(|()| match &self.asm {
-                Some(s) => s.doc.write_to(&path),
-                None => self.doc.write_to(&path),
+            .and_then(|()| match (&self.asm, &self.drw) {
+                (_, Some(d)) => d.doc.write_to(&path),
+                (Some(s), _) => s.doc.write_to(&path),
+                _ => self.doc.write_to(&path),
             });
         if let Err(e) = written {
             self.status = format!("Autosave failed: {e:#}");
@@ -405,6 +451,26 @@ impl App {
                 self.set_assembly(AssemblyDocument::new("Assembly1"), None);
                 self.status = "New assembly: insert a part to start".into();
             }
+            Pending::NewDrawing => {
+                self.set_drawing(DrawingDocument::new("Drawing1"), None);
+                self.status = "New drawing: choose the part it shows (Drawing tab > Model)".into();
+            }
+            Pending::Open(path) if is_drawing(&path) => match DrawingDocument::open(&path) {
+                Ok(mut doc) => {
+                    doc.name = stem(&path);
+                    self.status = match doc.part_error() {
+                        None => format!("Opened {}", path.display()),
+                        Some(why) => format!("Opened {}; its part could not be read: {why}", path.display()),
+                    };
+                    self.files.settings.add_recent(&path);
+                    self.files.settings.save();
+                    self.set_drawing(doc, Some(path));
+                }
+                Err(e) => {
+                    self.status = format!("Could not open {}: {e:#}", path.display());
+                    self.files.settings.recent.retain(|p| p != &path || p.exists());
+                }
+            },
             Pending::Open(path) if is_assembly(&path) => match AssemblyDocument::open(&path) {
                 Ok(mut doc) => {
                     doc.name = stem(&path);
@@ -447,7 +513,8 @@ impl App {
     fn set_doc(&mut self, doc: PartDocument, path: Option<PathBuf>) {
         self.doc = doc;
         self.asm = None;
-        if self.tab == RibbonTab::Assembly {
+        self.drw = None;
+        if matches!(self.tab, RibbonTab::Assembly | RibbonTab::Drawing) {
             self.tab = RibbonTab::Features;
         }
         self.files.path = path;
@@ -465,6 +532,7 @@ impl App {
     /// Opens an assembly; the part that was open stays in memory, out of sight.
     fn set_assembly(&mut self, doc: AssemblyDocument, path: Option<PathBuf>) {
         self.asm = Some(Session::new(doc));
+        self.drw = None;
         self.files.path = path;
         self.files.return_to = None;
         self.files.clear_recovery();
@@ -479,11 +547,27 @@ impl App {
         self.zoom_to_fit();
     }
 
+    /// Opens a drawing; the part that was open stays in memory, out of sight.
+    fn set_drawing(&mut self, doc: DrawingDocument, path: Option<PathBuf>) {
+        self.drw = Some(crate::drawing::Session::new(doc));
+        self.asm = None;
+        self.files.path = path;
+        self.files.return_to = None;
+        self.files.clear_recovery();
+        self.tab = RibbonTab::Drawing;
+        self.sketch = None;
+        self.sketch_on = None;
+        self.selected = None;
+        self.selection.clear();
+        self.renaming = None;
+    }
+
     pub fn open_dialog(&mut self) {
         if let Some(path) = rfd::FileDialog::new()
-            .add_filter("3BCAD part or assembly", &[EXT, ASSEMBLY_EXT])
+            .add_filter("3BCAD part, assembly or drawing", &[EXT, ASSEMBLY_EXT, DRAWING_EXT])
             .add_filter("3BCAD part", &[EXT])
             .add_filter("3BCAD assembly", &[ASSEMBLY_EXT])
+            .add_filter("3BCAD drawing", &[DRAWING_EXT])
             .pick_file()
         {
             self.request(Pending::Open(path));
@@ -499,10 +583,10 @@ impl App {
     }
 
     pub fn save_as(&mut self) -> bool {
-        let (what, ext) = if self.asm.is_some() {
-            ("3BCAD assembly", ASSEMBLY_EXT)
-        } else {
-            ("3BCAD part", EXT)
+        let (what, ext) = match (&self.asm, &self.drw) {
+            (_, Some(_)) => ("3BCAD drawing", DRAWING_EXT),
+            (Some(_), _) => ("3BCAD assembly", ASSEMBLY_EXT),
+            _ => ("3BCAD part", EXT),
         };
         let Some(path) = rfd::FileDialog::new()
             .add_filter(what, &[ext])
@@ -519,12 +603,16 @@ impl App {
         if self.sketch.is_some() {
             self.exit_sketch(true);
         }
-        let saved = match &mut self.asm {
-            Some(s) => {
+        let saved = match (&mut self.asm, &mut self.drw) {
+            (_, Some(d)) => {
+                d.doc.name = stem(path);
+                d.doc.save(path)
+            }
+            (Some(s), _) => {
                 s.doc.name = stem(path);
                 s.doc.save(path)
             }
-            None => {
+            _ => {
                 self.doc.name = stem(path);
                 self.doc.save(path)
             }
@@ -590,7 +678,13 @@ impl App {
             ui.heading("Recover your work?");
             ui.label(format!(
                 "3BCAD did not close normally last time. A copy of the {} was autosaved{when}.",
-                if is_assembly(&path) { "assembly" } else { "part" }
+                if is_assembly(&path) {
+                    "assembly"
+                } else if is_drawing(&path) {
+                    "drawing"
+                } else {
+                    "part"
+                }
             ));
             ui.add_space(8.0);
             ui.horizontal(|ui| {
@@ -610,6 +704,11 @@ impl App {
                 AssemblyDocument::open(&path).map(|mut doc| {
                     doc.mark_dirty();
                     self.set_assembly(doc, None);
+                })
+            } else if is_drawing(&path) {
+                DrawingDocument::open(&path).map(|mut doc| {
+                    doc.mark_dirty();
+                    self.set_drawing(doc, None);
                 })
             } else {
                 PartDocument::open(&path).map(|mut doc| {
@@ -729,7 +828,7 @@ impl App {
 
 /// The File menu in the title row.
 pub fn menu(app: &mut App, ui: &mut egui::Ui) {
-    let part = app.asm.is_none();
+    let part = app.asm.is_none() && app.drw.is_none();
     ui.menu_button("File", |ui| {
         if ui.add(egui::Button::new("New Part").shortcut_text("Ctrl+N")).clicked() {
             ui.close_menu();
@@ -742,6 +841,14 @@ pub fn menu(app: &mut App, ui: &mut egui::Ui) {
         {
             ui.close_menu();
             app.request(Pending::NewAssembly);
+        }
+        if ui
+            .button("New Drawing")
+            .on_hover_text("Engineering drawing of a part: views, sections, dimensions, PDF / DXF")
+            .clicked()
+        {
+            ui.close_menu();
+            app.request(Pending::NewDrawing);
         }
         if ui.add(egui::Button::new("Open…").shortcut_text("Ctrl+O")).clicked() {
             ui.close_menu();
@@ -775,9 +882,10 @@ pub fn menu(app: &mut App, ui: &mut egui::Ui) {
             .clicked()
         {
             ui.close_menu();
-            app.files.properties = Some(match &app.asm {
-                Some(s) => s.doc.properties().to_vec(),
-                None => app.doc.properties().to_vec(),
+            app.files.properties = Some(match (&app.asm, &app.drw) {
+                (_, Some(d)) => d.doc.properties().to_vec(),
+                (Some(s), _) => s.doc.properties().to_vec(),
+                _ => app.doc.properties().to_vec(),
             });
         }
         ui.separator();
@@ -879,9 +987,10 @@ pub fn properties_window(app: &mut App, ctx: &egui::Context) {
             .map(|(k, v)| (k.trim().to_string(), v.trim().to_string()))
             .filter(|(k, _)| !k.is_empty())
             .collect();
-        match &mut app.asm {
-            Some(s) => s.doc.set_properties(clean),
-            None => app.doc.set_properties(clean),
+        match (&mut app.asm, &mut app.drw) {
+            (_, Some(d)) => d.doc.set_properties(clean),
+            (Some(s), _) => s.doc.set_properties(clean),
+            _ => app.doc.set_properties(clean),
         }
         app.status = "Properties saved with the file".into();
         return;
