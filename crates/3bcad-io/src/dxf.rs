@@ -338,11 +338,11 @@ fn polyline(s: &mut String, pts: &[P2], closed: bool) {
     put(s, 0, "SEQEND");
 }
 
-fn put(s: &mut String, code: i32, value: impl Display) {
+pub(crate) fn put(s: &mut String, code: i32, value: impl Display) {
     let _ = write!(s, "{code}\n{value}\n");
 }
 
-fn xy(s: &mut String, code: i32, p: P2) {
+pub(crate) fn xy(s: &mut String, code: i32, p: P2) {
     put(s, code, p[0]);
     put(s, code + 10, p[1]);
 }
