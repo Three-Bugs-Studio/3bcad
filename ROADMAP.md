@@ -115,14 +115,14 @@ Printability checks, orientation and rich 3MF for modern slicers.
 
 Multi-part assemblies with mates, interference checks, exploded views and BOM.
 
-- [ ] #77 Assembly document and component tree
-- [ ] #78 Standard mates: coincident, concentric, distance, angle, parallel, perpendicular, tangent, lock
-- [ ] #79 3D assembly constraint solver
-- [ ] #80 Move and rotate components with the mouse
-- [ ] #81 Interference detection
-- [ ] #82 Exploded views
-- [ ] #83 Bill of materials
-- [ ] #84 Export assemblies to STEP and multi-object 3MF
+- [x] #77 Assembly document and component tree
+- [x] #78 Standard mates: coincident, concentric, distance, angle, parallel, perpendicular, tangent, lock
+- [x] #79 3D assembly constraint solver
+- [x] #80 Move and rotate components with the mouse
+- [x] #81 Interference detection
+- [x] #82 Exploded views
+- [x] #83 Bill of materials
+- [x] #84 Export assemblies to STEP and multi-object 3MF
 
 ## [v0.8.0 – Drawings](https://github.com/Three-Bugs-Studio/3bcad/milestone/7)
 

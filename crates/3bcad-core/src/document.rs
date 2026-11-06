@@ -17,11 +17,20 @@ const UNDO_LIMIT: usize = 100;
 /// Tag at the top of every part file, so other JSON is not mistaken for a part.
 const FORMAT: &str = "3bcad-part";
 /// Bump when the saved structure changes, and teach `migrate` to read the old one.
-/// 2 (v0.6): the Fit feature and the print orientation.
-pub const FORMAT_VERSION: u64 = 2;
+/// 2 (v0.6): the Fit feature and the print orientation. 3 (v0.7): custom properties.
+pub const FORMAT_VERSION: u64 = 3;
 
 /// The outward normal of the face a new part prints on: its bottom.
 pub const DEFAULT_PRINT_DOWN: P3 = [0.0, 0.0, -1.0];
+
+/// The value of a custom property, matched without regard to case.
+pub fn property<'a>(properties: &'a [(String, String)], name: &str) -> Option<&'a str> {
+    properties
+        .iter()
+        .find(|(k, _)| k.eq_ignore_ascii_case(name))
+        .map(|(_, v)| v.as_str())
+        .filter(|v| !v.is_empty())
+}
 
 /// What a `.3bcad` file holds: the feature history, not the geometry it builds.
 #[derive(Serialize, Deserialize)]
@@ -33,6 +42,9 @@ struct PartFile {
     material: Material,
     #[serde(default = "default_print_down")]
     print_down: P3,
+    /// Part number, description and the like, for the bill of materials.
+    #[serde(default)]
+    properties: Vec<(String, String)>,
     history: History,
 }
 
@@ -44,20 +56,20 @@ fn default_print_down() -> P3 {
 fn migrate(file: serde_json::Value, version: u64) -> anyhow::Result<serde_json::Value> {
     match version {
         FORMAT_VERSION => Ok(file),
-        // Version 2 only added things: a version 1 file reads as it is.
-        1 => migrate(file, 2),
+        // Versions 2 and 3 only added things: older files read as they are.
+        1 | 2 => migrate(file, version + 1),
         v => bail!("this part was saved in format version {v}, which this 3BCAD cannot read"),
     }
 }
 
 /// A part: its feature history, the bodies it builds, and undo/redo.
-// shortcut: assemblies are not modelled yet.
 pub struct PartDocument {
     pub name: String,
     units: Units,
     material: Material,
     /// Outward normal of the face that rests on the printer bed.
     print_down: P3,
+    properties: Vec<(String, String)>,
     /// Changed since it was last saved or opened.
     dirty: bool,
     history: History,
@@ -76,6 +88,7 @@ impl PartDocument {
             units: Units::default(),
             material: Material::default(),
             print_down: DEFAULT_PRINT_DOWN,
+            properties: Vec::new(),
             dirty: false,
             history: History::default(),
             undo: Vec::new(),
@@ -114,6 +127,7 @@ impl PartDocument {
             units: self.units,
             material: self.material.clone(),
             print_down: self.print_down,
+            properties: self.properties.clone(),
             history: self.history.clone(),
         };
         serde_json::to_string_pretty(&file).expect("a part always serialises")
@@ -142,6 +156,7 @@ impl PartDocument {
         doc.units = file.units;
         doc.material = file.material;
         doc.print_down = file.print_down;
+        doc.properties = file.properties;
         doc.history = history;
         doc.rebuild();
         Ok(doc)
@@ -201,6 +216,20 @@ impl PartDocument {
     pub fn set_print_down(&mut self, down: P3) {
         self.dirty |= down != self.print_down;
         self.print_down = down;
+    }
+
+    /// Custom properties (name, value), in the order the user gave them.
+    pub fn properties(&self) -> &[(String, String)] {
+        &self.properties
+    }
+
+    pub fn set_properties(&mut self, properties: Vec<(String, String)>) {
+        self.dirty |= properties != self.properties;
+        self.properties = properties;
+    }
+
+    pub fn property(&self, name: &str) -> Option<&str> {
+        property(&self.properties, name)
     }
 
     pub fn history(&self) -> &History {
@@ -375,6 +404,7 @@ mod tests {
             decimals: 3,
         });
         d.set_print_down([1.0, 0.0, 0.0]);
+        d.set_properties(vec![("Part number".into(), "BRK-001".into())]);
         assert!(d.is_dirty());
         let path = std::env::temp_dir().join(format!("3bcad-doc-{}.3bcad", std::process::id()));
         d.save(&path).unwrap();
@@ -382,6 +412,7 @@ mod tests {
         let back = PartDocument::open(&path).unwrap();
         assert_eq!(back.units(), d.units());
         assert_eq!(back.print_down(), [1.0, 0.0, 0.0]);
+        assert_eq!(back.property("part NUMBER"), Some("BRK-001"));
         assert_eq!(back.history().len(), d.history().len());
         std::fs::remove_file(path).ok();
     }

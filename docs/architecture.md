@@ -5,7 +5,7 @@ CAD program: geometry kernel, 2D solver, feature tree, graphics, and files and p
 
 ```mermaid
 flowchart LR
-    app["threebcad-app<br/>egui UI, sketch mode"] --> core["threebcad-core<br/>feature history, rebuild"]
+    app["threebcad-app<br/>egui UI, sketch mode"] --> core["threebcad-core<br/>feature history, rebuild, assemblies"]
     app --> render["threebcad-render<br/>wgpu viewport, camera, picking"]
     app --> io["threebcad-io<br/>STL / 3MF / OBJ / STEP / DXF, slicers"]
     core --> sketch["threebcad-sketch<br/>2D geometry, constraint solver"]
@@ -104,6 +104,32 @@ sequenceDiagram
   own faces, and truck gets coaxial cylinders wrong.
 - **Preferences** for printing (slicer and its location, printer and bed, overhang limit, nozzle, minimum
   wall, export tolerances) live in `files::Settings`.
+
+## Assemblies
+
+- **Documents** (`crates/3bcad-core/src/assembly.rs`). An `AssemblyDocument` holds components (a file, a
+  pose and whether it is fixed, under an id that stays put when others are removed), mates and explode
+  steps. The `.3bcasm` file saves component files relative to itself; the parts are read from their own
+  files and read again when their modification time changes (`refresh`), so the assembly always shows
+  the saved part. Sub-assemblies are read the same way and placed as one rigid component; `leaves`
+  flattens everything into placed parts. A mate holds a `FaceRef` of a part, so it survives the part's
+  rebuilds like a fillet does.
+- **Solver** (`crates/3bcad-kernel/src/mate.rs`). Each free component has six unknowns (a translation
+  and a rotation vector about its origin) and each mate a few residuals, directions weighed by the size
+  of the assembly. Components joined by mates solve together with Levenberg–Marquardt, other groups on
+  their own. When a group cannot hold all its mates, the mates are added back one at a time and each one
+  that breaks the ones before it is reported as over-defined and left out. A mouse drag is a weak extra
+  residual pulling the component towards the mouse, followed by a solve without it, so the mates always
+  win.
+- **Interference** (`crates/3bcad-kernel/src/interference.rs`) works on triangle meshes, since truck's
+  booleans fail on the coincident faces mated parts have. The shared volume is bounded by the pieces of
+  each surface inside the other part; triangles are split across their longest edge where the inside
+  test changes, and each piece is tested just inside and just outside its surface, so faces that only
+  touch, or lie on each other, are counted right.
+- **Export** (`crates/3bcad-io/src/step.rs`, `crates/3bcad-app/src/assembly.rs`). STEP writes each part
+  once as its own product and every component as a `NEXT_ASSEMBLY_USAGE_OCCURRENCE` with an
+  `ITEM_DEFINED_TRANSFORMATION`; CI reads it with OpenCASCADE and checks the components land where they
+  were. 3MF writes one object per part, laid flat on its print face and set out in rows on the bed.
 
 ## Adding a new feature type (example: Rib)
 

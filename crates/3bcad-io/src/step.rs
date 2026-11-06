@@ -2,6 +2,7 @@ use std::f64::consts::{FRAC_PI_2, PI};
 use std::io;
 use std::path::Path;
 
+use threebcad_kernel::mate::Pose;
 use threebcad_kernel::{extract_solid, CompressedSolid, Solid};
 use truck_modeling::*;
 use truck_stepio::out::{CompleteStepDisplay, StepHeaderDescriptor, StepModels};
@@ -15,6 +16,11 @@ type Result<T, E = String> = std::result::Result<T, E>;
 /// Exact B-Rep export (truck writes the AP203/AP214-compatible `ISO-10303-042` schema) in
 /// millimetres, with `product` as the product name.
 pub fn write_step<'a>(path: &Path, product: &str, solids: impl IntoIterator<Item = &'a Solid>) -> io::Result<()> {
+    std::fs::write(path, name_products(&part_text(path, solids), &[product]))
+}
+
+/// A whole STEP file holding one unnamed product with these solids.
+fn part_text<'a>(path: &Path, solids: impl IntoIterator<Item = &'a Solid>) -> String {
     let mut compressed: Vec<_> = solids.into_iter().map(Solid::compress).collect();
     // Boolean results have intersection curves, which few STEP readers (truck's own included)
     // understand. Their leader is the sampled curve truck itself works with, and reads everywhere.
@@ -42,10 +48,157 @@ pub fn write_step<'a>(path: &Path, product: &str, solids: impl IntoIterator<Item
         organization_system: "3BCAD".into(),
         ..Default::default()
     };
-    let text = CompleteStepDisplay::new(models, header).to_string();
-    let name = product.replace('\'', "''");
-    let text = text.replace("PRODUCT('','',", &format!("PRODUCT('{name}','{name}',"));
-    std::fs::write(path, text)
+    CompleteStepDisplay::new(models, header).to_string()
+}
+
+/// Gives the unnamed products truck wrote their names, in order.
+fn name_products(text: &str, names: &[&str]) -> String {
+    let mut out = text.to_string();
+    for name in names {
+        let name = name.replace('\'', "''");
+        out = out.replacen("PRODUCT('','',", &format!("PRODUCT('{name}','{name}',"), 1);
+    }
+    out
+}
+
+/// `text` with every entity number raised by `by`, and the largest number in it.
+fn renumber(text: &str, by: usize) -> (String, usize) {
+    let mut out = String::with_capacity(text.len() + text.len() / 8);
+    let mut max = 0;
+    let mut rest = text;
+    while let Some(at) = rest.find('#') {
+        out += &rest[..=at];
+        rest = &rest[at + 1..];
+        let digits = rest.find(|c: char| !c.is_ascii_digit()).unwrap_or(rest.len());
+        if let Ok(n) = rest[..digits].parse::<usize>() {
+            max = max.max(n + by);
+            out += &(n + by).to_string();
+            rest = &rest[digits..];
+        }
+    }
+    out += rest;
+    (out, max)
+}
+
+fn real(v: f64) -> String {
+    format!("{v:.15E}")
+}
+
+/// An `AXIS2_PLACEMENT_3D` numbered `id` (with its point and directions as the next three
+/// numbers) at where `pose` puts a part's origin.
+fn placement(id: usize, pose: &Pose) -> String {
+    let col = |j: usize| (0..3).map(|i| real(pose.r[i][j])).collect::<Vec<_>>().join(",");
+    let t = pose.t.map(real).join(",");
+    let (pt, z, x) = (id + 1, id + 2, id + 3);
+    format!(
+        "#{id} = AXIS2_PLACEMENT_3D('', #{pt}, #{z}, #{x});\n#{pt} = CARTESIAN_POINT('', ({t}));\n#{z} = DIRECTION('', ({}));\n#{x} = DIRECTION('', ({}));\n",
+        col(2),
+        col(0),
+    )
+}
+
+/// Exports an assembly: each different part once, as a product of its own with its exact
+/// geometry, and one placed instance of it per component (`instances`: name, index into `parts`,
+/// pose), so readers get the component names and transforms the way AP214 lays them out.
+// shortcut: sub-assemblies are written as their parts, one level under the top assembly; nest
+// NEXT_ASSEMBLY_USAGE_OCCURRENCEs if other tools need the sub-assembly structure.
+pub fn write_step_assembly(
+    path: &Path,
+    name: &str,
+    parts: &[(&str, Vec<&Solid>)],
+    instances: &[(&str, usize, Pose)],
+) -> io::Result<()> {
+    if parts.is_empty() || instances.is_empty() || instances.iter().any(|&(_, k, _)| k >= parts.len()) {
+        return Err(io::Error::other("the assembly has no parts to export"));
+    }
+    struct Part {
+        definition: usize,
+        shape: usize,
+        origin: usize,
+    }
+    let mut data = String::new();
+    let mut placed = Vec::new();
+    let mut last = 0;
+    for (_, solids) in parts {
+        let text = part_text(path, solids.iter().copied());
+        let body = text
+            .split_once("DATA;\n")
+            .and_then(|(_, rest)| rest.rsplit_once("ENDSEC;"))
+            .map_or("", |(body, _)| body);
+        let by = last;
+        let (body, max) = renumber(body, by);
+        // The part's origin: the anchor its instances are placed by.
+        let origin = max + 1;
+        data += &body.replacen(
+            "ADVANCED_BREP_SHAPE_REPRESENTATION('', (",
+            &format!("ADVANCED_BREP_SHAPE_REPRESENTATION('', (#{origin}, "),
+            1,
+        );
+        data += &placement(origin, &Pose::IDENTITY);
+        // truck numbers a product's definition #5 and its shape #10.
+        placed.push(Part {
+            definition: 5 + by,
+            shape: 10 + by,
+            origin,
+        });
+        last = origin + 3;
+    }
+    let mut id = last;
+    let mut next = || {
+        id += 1;
+        id
+    };
+    let [ac, pc, p, pdf, pdc, pd, pds, sr, sdr] = std::array::from_fn(|_| next());
+    let origin = next();
+    let mut rest = placement(origin, &Pose::IDENTITY);
+    let mut axes = vec![origin];
+    let skip = |next: &mut dyn FnMut() -> usize| {
+        for _ in 0..3 {
+            next();
+        }
+    };
+    skip(&mut next);
+    for (k, &(inst, part, pose)) in instances.iter().enumerate() {
+        let ax = next();
+        skip(&mut next);
+        let [nauo, ipds, idt, rr, cdsr] = std::array::from_fn(|_| next());
+        axes.push(ax);
+        let inst = inst.replace('\'', "''");
+        let Part {
+            definition,
+            shape,
+            origin: anchor,
+        } = placed[part];
+        rest += &placement(ax, &pose);
+        rest += &format!(
+            "#{nauo} = NEXT_ASSEMBLY_USAGE_OCCURRENCE('{}','{inst}','',#{pd},#{definition},$);\n\
+             #{ipds} = PRODUCT_DEFINITION_SHAPE('','',#{nauo});\n\
+             #{idt} = ITEM_DEFINED_TRANSFORMATION('','',#{anchor},#{ax});\n\
+             #{rr} = ( REPRESENTATION_RELATIONSHIP('','',#{shape},#{sr}) REPRESENTATION_RELATIONSHIP_WITH_TRANSFORMATION(#{idt}) SHAPE_REPRESENTATION_RELATIONSHIP() );\n\
+             #{cdsr} = CONTEXT_DEPENDENT_SHAPE_REPRESENTATION(#{rr},#{ipds});\n",
+            k + 1
+        );
+    }
+    let items = axes.iter().map(|a| format!("#{a}")).collect::<Vec<_>>().join(",");
+    let name = name.replace('\'', "''");
+    // The first part's representation context (#11, millimetres) serves the assembly too.
+    data += &format!(
+        "#{ac} = APPLICATION_CONTEXT('core data for automotive mechanical design processes');\n\
+         #{pc} = PRODUCT_CONTEXT('',#{ac},'mechanical');\n\
+         #{p} = PRODUCT('{name}','{name}','',(#{pc}));\n\
+         #{pdf} = PRODUCT_DEFINITION_FORMATION('','',#{p});\n\
+         #{pdc} = PRODUCT_DEFINITION_CONTEXT('part definition',#{ac},'design');\n\
+         #{pd} = PRODUCT_DEFINITION('design','',#{pdf},#{pdc});\n\
+         #{pds} = PRODUCT_DEFINITION_SHAPE('','',#{pd});\n\
+         #{sr} = SHAPE_REPRESENTATION('',({items}),#11);\n\
+         #{sdr} = SHAPE_DEFINITION_REPRESENTATION(#{pds},#{sr});\n"
+    );
+    data += &rest;
+    let header = part_text(path, std::iter::empty());
+    let header = header.split_once("DATA;\n").map_or("", |(h, _)| h);
+    let names: Vec<&str> = parts.iter().map(|(n, _)| *n).collect();
+    let text = format!("{header}DATA;\n{data}ENDSEC;\nEND-ISO-10303-21;\n");
+    std::fs::write(path, name_products(&text, &names))
 }
 
 /// What a STEP file gave: its solids in millimetres, and why any other shells were left out.

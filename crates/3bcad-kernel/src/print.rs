@@ -123,8 +123,8 @@ fn ray_box(o: P3, d: P3, lo: P3, hi: P3, tmax: f64) -> bool {
     true
 }
 
-/// A bounding volume tree over triangles, for short rays.
-struct Bvh {
+/// A bounding volume tree over triangles, for ray queries.
+pub(crate) struct Bvh {
     nodes: Vec<Node>,
     /// Triangle indices, grouped by leaf.
     order: Vec<usize>,
@@ -140,7 +140,7 @@ struct Node {
 }
 
 impl Bvh {
-    fn new(tris: &[Tri]) -> Self {
+    pub(crate) fn new(tris: &[Tri]) -> Self {
         let mut bvh = Bvh {
             nodes: Vec::new(),
             order: (0..tris.len()).collect(),
@@ -210,6 +210,50 @@ impl Bvh {
             }
         }
         (best < max).then_some(best)
+    }
+
+    /// How many triangles the ray from `o` along `d` passes through, or `None` when it grazes an
+    /// edge or runs along a face (a crossing that cannot be counted reliably: try another ray).
+    pub(crate) fn crossings(&self, tris: &[Tri], o: P3, d: P3) -> Option<usize> {
+        let mut count = 0;
+        let mut stack = if self.nodes.is_empty() { vec![] } else { vec![0] };
+        while let Some(k) = stack.pop() {
+            let n = &self.nodes[k];
+            if !ray_box(o, d, n.lo, n.hi, f64::INFINITY) {
+                continue;
+            }
+            if n.count == 0 {
+                stack.extend([k + 1, n.first]);
+                continue;
+            }
+            for &i in &self.order[n.first..n.first + n.count] {
+                let [a, b, c] = tris[i];
+                let (e1, e2) = (sub(b, a), sub(c, a));
+                let p = cross(d, e2);
+                let det = dot(e1, p);
+                let scale = norm(e1) * norm(e2);
+                if det.abs() <= 1e-12 * scale {
+                    // In the triangle's plane: harmless unless it actually runs across it.
+                    if dot(cross(e1, e2), sub(o, a)).abs() <= 1e-12 * scale {
+                        return None;
+                    }
+                    continue;
+                }
+                let s = sub(o, a);
+                let u = dot(s, p) / det;
+                let q = cross(s, e1);
+                let v = dot(d, q) / det;
+                let t = dot(e2, q) / det;
+                if t <= 0.0 || u < -1e-9 || v < -1e-9 || u + v > 1.0 + 1e-9 {
+                    continue;
+                }
+                if u < 1e-9 || v < 1e-9 || u + v > 1.0 - 1e-9 {
+                    return None;
+                }
+                count += 1;
+            }
+        }
+        Some(count)
     }
 }
 

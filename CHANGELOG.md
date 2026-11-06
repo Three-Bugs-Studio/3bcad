@@ -7,6 +7,36 @@ saved files and workflows; patch versions (0.x.y) only fix bugs.
 
 ## [Unreleased]
 
+### Added
+
+- Assemblies (v0.7.0 milestone):
+  - Assembly documents (`.3bcasm`): insert parts and other assemblies from a file or the recent list; the
+    first component is fixed at the origin. Components are read from their own files, and the assembly
+    shows a part as it is now whenever its file changes (#77).
+  - Mates between flat and cylindrical faces: coincident, concentric, distance, angle, parallel,
+    perpendicular, tangent and lock, each with Flip. New mates keep the distance or angle the faces have
+    and the alignment closest to how they sit. Mates are listed in the tree and edited in the Properties
+    panel (#78).
+  - An assembly solver that moves the free components until their mates hold, and names the mates that
+    contradict the ones before them (over-defined) instead of moving anything for them (#79).
+  - Drag a component to move it and Shift+drag to turn it; mated components move only as their mates
+    allow (#80).
+  - Interference check: pairs of parts that overlap, with the shared volume, shown in red; parts that
+    only touch do not count (#81).
+  - Exploded views: steps that move components along a direction, played as an animation or scrubbed
+    with a slider (#82).
+  - Bill of materials, top-level or indented by sub-assembly, with part number, description, material
+    and any other custom property, exported as CSV. Parts and assemblies have custom properties under
+    File > Properties (#83).
+  - Assembly export: STEP with each part once and every component as a named, placed instance; 3MF with
+    one object per part, each on its print face and laid out on the bed for the slicer (#84).
+- File > New Assembly, and Edit Part from an assembly with a button back to it.
+
+### Changed
+
+- Part files are format version 3 (custom properties). 3BCAD still opens version 1 and 2 files; 3BCAD 0.6
+  refuses version 3 files with a message to update.
+
 ## [0.6.0] - 2026-11-05
 
 ### Added

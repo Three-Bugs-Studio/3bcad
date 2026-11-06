@@ -5,12 +5,15 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use eframe::egui::{self, Key, KeyboardShortcut, Modifiers};
-use threebcad_core::{FeatureKind, PartDocument, PlaneRef, Shared, UnitSystem, Units};
+use threebcad_core::assembly::EXT as ASSEMBLY_EXT;
+use threebcad_core::{AssemblyDocument, FeatureKind, PartDocument, PlaneRef, Shared, UnitSystem, Units};
 use threebcad_io::printer::PRINTERS;
 use threebcad_io::Slicer;
 use threebcad_kernel::Plane;
 
 use crate::app::{App, VERSION};
+use crate::assembly::Session;
+use crate::ui::ribbon::RibbonTab;
 
 const MAX_RECENT: usize = 8;
 pub const EXT: &str = "3bcad";
@@ -160,20 +163,25 @@ pub fn config_dir() -> Option<PathBuf> {
     }
 }
 
-/// Where this run autosaves: one file per process, so two open copies of 3BCAD do not collide.
-pub fn recovery_file(dir: &Path) -> PathBuf {
-    dir.join(format!("recovery-{}.{EXT}", std::process::id()))
+/// Where this run autosaves a part (or, with `ASSEMBLY_EXT`, an assembly): one file per process,
+/// so two open copies of 3BCAD do not collide.
+pub fn recovery_file(dir: &Path, ext: &str) -> PathBuf {
+    dir.join(format!("recovery-{}.{ext}", std::process::id()))
+}
+
+fn is_assembly(path: &Path) -> bool {
+    path.extension().is_some_and(|e| e.eq_ignore_ascii_case(ASSEMBLY_EXT))
 }
 
 /// The newest recovery file left behind by a run that did not close normally.
 // shortcut: a second copy of 3BCAD that is still running also leaves a file here and would be
 // offered too; lock the file if people run several copies at once.
-pub fn leftover_recovery(dir: &Path, own: &Path) -> Option<PathBuf> {
+pub fn leftover_recovery(dir: &Path, own: &[PathBuf]) -> Option<PathBuf> {
     std::fs::read_dir(dir)
         .ok()?
         .filter_map(Result::ok)
         .map(|e| e.path())
-        .filter(|p| p.extension().is_some_and(|e| e == EXT) && p != own)
+        .filter(|p| p.extension().is_some_and(|e| e == EXT || e == ASSEMBLY_EXT) && !own.contains(p))
         .max_by_key(|p| std::fs::metadata(p).and_then(|m| m.modified()).ok())
 }
 
@@ -181,6 +189,7 @@ pub fn leftover_recovery(dir: &Path, own: &Path) -> Option<PathBuf> {
 #[derive(Clone, Debug, PartialEq)]
 pub enum Pending {
     New,
+    NewAssembly,
     Open(PathBuf),
     Close,
 }
@@ -194,6 +203,10 @@ pub struct Files {
     pub pending: Option<Pending>,
     /// A recovery file to offer on startup.
     pub offer: Option<PathBuf>,
+    /// The assembly a part was opened from with Edit Part, to go back to.
+    pub return_to: Option<PathBuf>,
+    /// The File > Properties window, and the rows being edited in it.
+    pub properties: Option<Vec<(String, String)>>,
     recovery_dir: Option<PathBuf>,
     last_autosave: Instant,
     close_ok: bool,
@@ -205,13 +218,15 @@ impl Files {
         let recovery_dir = config_dir().map(|d| d.join("recovery"));
         let offer = recovery_dir
             .as_ref()
-            .and_then(|d| leftover_recovery(d, &recovery_file(d)));
+            .and_then(|d| leftover_recovery(d, &[recovery_file(d, EXT), recovery_file(d, ASSEMBLY_EXT)]));
         Self {
             settings: Settings::load(),
             settings_changed: false,
             path: None,
             pending: None,
             offer,
+            return_to: None,
+            properties: None,
             recovery_dir,
             last_autosave: Instant::now(),
             close_ok: false,
@@ -219,23 +234,21 @@ impl Files {
         }
     }
 
-    fn own_recovery(&self) -> Option<PathBuf> {
-        self.recovery_dir.as_deref().map(recovery_file)
+    fn own_recovery(&self, ext: &str) -> Option<PathBuf> {
+        self.recovery_dir.as_deref().map(|d| recovery_file(d, ext))
     }
 
     pub fn clear_recovery(&self) {
-        if let Some(p) = self.own_recovery() {
-            let _ = std::fs::remove_file(p);
+        for ext in [EXT, ASSEMBLY_EXT] {
+            if let Some(p) = self.own_recovery(ext) {
+                let _ = std::fs::remove_file(p);
+            }
         }
     }
 }
 
-pub fn title(doc: &PartDocument) -> String {
-    format!(
-        "{}{} - 3BCAD {VERSION}",
-        doc.name,
-        if doc.is_dirty() { " *" } else { "" }
-    )
+pub fn title(name: &str, dirty: bool) -> String {
+    format!("{name}{} - 3BCAD {VERSION}", if dirty { " *" } else { "" })
 }
 
 fn stem(path: &Path) -> String {
@@ -244,9 +257,63 @@ fn stem(path: &Path) -> String {
 }
 
 impl App {
+    /// The open document's name: the assembly's while one is open, else the part's.
+    pub fn doc_name(&self) -> String {
+        self.asm
+            .as_ref()
+            .map_or_else(|| self.doc.name.clone(), |s| s.doc.name.clone())
+    }
+
+    pub fn is_dirty(&self) -> bool {
+        self.asm
+            .as_ref()
+            .map_or_else(|| self.doc.is_dirty(), |s| s.doc.is_dirty())
+    }
+
+    pub fn units(&self) -> Units {
+        self.asm.as_ref().map_or_else(|| self.doc.units(), |s| s.doc.units())
+    }
+
+    fn set_units(&mut self, u: Units) {
+        match &mut self.asm {
+            Some(s) => s.doc.set_units(u),
+            None => self.doc.set_units(u),
+        }
+    }
+
+    pub fn can_undo(&self) -> bool {
+        self.asm
+            .as_ref()
+            .map_or_else(|| self.doc.can_undo() || self.sketch.is_some(), |s| s.doc.can_undo())
+    }
+
+    pub fn can_redo(&self) -> bool {
+        self.asm
+            .as_ref()
+            .map_or_else(|| self.doc.can_redo() || self.sketch.is_some(), |s| s.doc.can_redo())
+    }
+
+    pub fn undo(&mut self) {
+        match (&mut self.asm, &mut self.sketch) {
+            (Some(s), _) => s.doc.undo(),
+            (None, Some(sk)) => return sk.undo(),
+            (None, None) => self.doc.undo(),
+        }
+        self.status = "Undone".into();
+    }
+
+    pub fn redo(&mut self) {
+        match (&mut self.asm, &mut self.sketch) {
+            (Some(s), _) => s.doc.redo(),
+            (None, Some(sk)) => return sk.redo(),
+            (None, None) => self.doc.redo(),
+        }
+        self.status = "Redone".into();
+    }
+
     /// Shortcuts, title, autosave, the close button and the file dialogs; once per frame.
     pub fn files_frame(&mut self, ctx: &egui::Context) {
-        crate::ui::properties::set_units(self.doc.units());
+        crate::ui::properties::set_units(self.units());
         // Ctrl+Shift+S first: the Ctrl+S shortcut would also match it.
         let (new, open, save_as, save) = ctx.input_mut(|i| {
             (
@@ -267,7 +334,7 @@ impl App {
         } else if save {
             self.save();
         }
-        if ctx.input(|i| i.viewport().close_requested()) && !self.files.close_ok && self.doc.is_dirty() {
+        if ctx.input(|i| i.viewport().close_requested()) && !self.files.close_ok && self.is_dirty() {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
             self.files.pending = Some(Pending::Close);
         }
@@ -276,7 +343,7 @@ impl App {
             self.files.settings.save();
             self.files.settings_changed = false;
         }
-        let title = title(&self.doc);
+        let title = title(&self.doc_name(), self.is_dirty());
         if title != self.files.title {
             ctx.send_viewport_cmd(egui::ViewportCommand::Title(title.clone()));
             self.files.title = title;
@@ -287,7 +354,7 @@ impl App {
 
     fn autosave(&mut self, ctx: &egui::Context) {
         let every = self.files.settings.autosave_minutes;
-        if every == 0 || !self.doc.is_dirty() {
+        if every == 0 || !self.is_dirty() {
             self.files.last_autosave = Instant::now();
             return;
         }
@@ -301,12 +368,18 @@ impl App {
             return;
         }
         self.files.last_autosave = Instant::now();
-        let Some(path) = self.files.own_recovery() else { return };
+        let ext = if self.asm.is_some() { ASSEMBLY_EXT } else { EXT };
+        let Some(path) = self.files.own_recovery(ext) else {
+            return;
+        };
         let written = path
             .parent()
             .map_or(Ok(()), std::fs::create_dir_all)
             .map_err(anyhow::Error::from)
-            .and_then(|()| self.doc.write_to(&path));
+            .and_then(|()| match &self.asm {
+                Some(s) => s.doc.write_to(&path),
+                None => self.doc.write_to(&path),
+            });
         if let Err(e) = written {
             self.status = format!("Autosave failed: {e:#}");
         }
@@ -314,7 +387,7 @@ impl App {
 
     /// Runs `p` now, or after asking about unsaved changes.
     pub fn request(&mut self, p: Pending) {
-        if self.doc.is_dirty() {
+        if self.is_dirty() {
             self.files.pending = Some(p);
         } else {
             self.perform(p);
@@ -324,9 +397,36 @@ impl App {
     fn perform(&mut self, p: Pending) {
         match p {
             Pending::New => {
+                self.files.return_to = None;
                 self.set_doc(PartDocument::new("Part1"), None);
                 self.status = "New part".into();
             }
+            Pending::NewAssembly => {
+                self.set_assembly(AssemblyDocument::new("Assembly1"), None);
+                self.status = "New assembly: insert a part to start".into();
+            }
+            Pending::Open(path) if is_assembly(&path) => match AssemblyDocument::open(&path) {
+                Ok(mut doc) => {
+                    doc.name = stem(&path);
+                    let missing = doc
+                        .contents()
+                        .components
+                        .iter()
+                        .filter(|c| doc.file_error(c.id).is_some())
+                        .count();
+                    self.status = match missing {
+                        0 => format!("Opened {}", path.display()),
+                        n => format!("Opened {}; {n} components could not be read", path.display()),
+                    };
+                    self.files.settings.add_recent(&path);
+                    self.files.settings.save();
+                    self.set_assembly(doc, Some(path));
+                }
+                Err(e) => {
+                    self.status = format!("Could not open {}: {e:#}", path.display());
+                    self.files.settings.recent.retain(|p| p != &path || p.exists());
+                }
+            },
             Pending::Open(path) => match PartDocument::open(&path) {
                 Ok(mut doc) => {
                     doc.name = stem(&path);
@@ -346,6 +446,10 @@ impl App {
 
     fn set_doc(&mut self, doc: PartDocument, path: Option<PathBuf>) {
         self.doc = doc;
+        self.asm = None;
+        if self.tab == RibbonTab::Assembly {
+            self.tab = RibbonTab::Features;
+        }
         self.files.path = path;
         self.files.clear_recovery();
         self.sketch = None;
@@ -358,8 +462,30 @@ impl App {
         self.zoom_to_fit();
     }
 
+    /// Opens an assembly; the part that was open stays in memory, out of sight.
+    fn set_assembly(&mut self, doc: AssemblyDocument, path: Option<PathBuf>) {
+        self.asm = Some(Session::new(doc));
+        self.files.path = path;
+        self.files.return_to = None;
+        self.files.clear_recovery();
+        self.tab = RibbonTab::Assembly;
+        self.sketch = None;
+        self.sketch_on = None;
+        self.selected = None;
+        self.selection.clear();
+        self.renaming = None;
+        self.forget_caches();
+        self.sync_geometry();
+        self.zoom_to_fit();
+    }
+
     pub fn open_dialog(&mut self) {
-        if let Some(path) = rfd::FileDialog::new().add_filter("3BCAD part", &[EXT]).pick_file() {
+        if let Some(path) = rfd::FileDialog::new()
+            .add_filter("3BCAD part or assembly", &[EXT, ASSEMBLY_EXT])
+            .add_filter("3BCAD part", &[EXT])
+            .add_filter("3BCAD assembly", &[ASSEMBLY_EXT])
+            .pick_file()
+        {
             self.request(Pending::Open(path));
         }
     }
@@ -373,9 +499,14 @@ impl App {
     }
 
     pub fn save_as(&mut self) -> bool {
+        let (what, ext) = if self.asm.is_some() {
+            ("3BCAD assembly", ASSEMBLY_EXT)
+        } else {
+            ("3BCAD part", EXT)
+        };
         let Some(path) = rfd::FileDialog::new()
-            .add_filter("3BCAD part", &[EXT])
-            .set_file_name(format!("{}.{EXT}", self.doc.name))
+            .add_filter(what, &[ext])
+            .set_file_name(format!("{}.{ext}", self.doc_name()))
             .save_file()
         else {
             return false;
@@ -388,8 +519,17 @@ impl App {
         if self.sketch.is_some() {
             self.exit_sketch(true);
         }
-        self.doc.name = stem(path);
-        match self.doc.save(path) {
+        let saved = match &mut self.asm {
+            Some(s) => {
+                s.doc.name = stem(path);
+                s.doc.save(path)
+            }
+            None => {
+                self.doc.name = stem(path);
+                self.doc.save(path)
+            }
+        };
+        match saved {
             Ok(()) => {
                 self.files.path = Some(path.to_path_buf());
                 self.files.settings.add_recent(path);
@@ -411,7 +551,7 @@ impl App {
         egui::Modal::new(egui::Id::new("unsaved")).show(ctx, |ui| {
             ui.set_width(340.0);
             ui.heading("Save changes?");
-            ui.label(format!("{} has changes that are not saved.", self.doc.name));
+            ui.label(format!("{} has changes that are not saved.", self.doc_name()));
             ui.add_space(8.0);
             ui.horizontal(|ui| {
                 if ui.button("Save").clicked() {
@@ -449,7 +589,8 @@ impl App {
             ui.set_width(380.0);
             ui.heading("Recover your work?");
             ui.label(format!(
-                "3BCAD did not close normally last time. A copy of the part was autosaved{when}."
+                "3BCAD did not close normally last time. A copy of the {} was autosaved{when}.",
+                if is_assembly(&path) { "assembly" } else { "part" }
             ));
             ui.add_space(8.0);
             ui.horizontal(|ui| {
@@ -464,15 +605,22 @@ impl App {
         let Some(recover) = answer else { return };
         self.files.offer = None;
         if recover {
-            match PartDocument::open(&path) {
-                Ok(mut doc) => {
-                    // Unsaved until the user saves it somewhere.
+            // Unsaved until the user saves it somewhere.
+            let recovered = if is_assembly(&path) {
+                AssemblyDocument::open(&path).map(|mut doc| {
+                    doc.mark_dirty();
+                    self.set_assembly(doc, None);
+                })
+            } else {
+                PartDocument::open(&path).map(|mut doc| {
                     doc.mark_dirty();
                     self.set_doc(doc, None);
-                    self.status = "Recovered the autosaved part: save it to keep it".into();
-                }
-                Err(e) => self.status = format!("Could not recover: {e:#}"),
-            }
+                })
+            };
+            self.status = match recovered {
+                Ok(()) => "Recovered the autosaved file: save it to keep it".into(),
+                Err(e) => format!("Could not recover: {e:#}"),
+            };
         }
         let _ = std::fs::remove_file(path);
     }
@@ -581,10 +729,19 @@ impl App {
 
 /// The File menu in the title row.
 pub fn menu(app: &mut App, ui: &mut egui::Ui) {
+    let part = app.asm.is_none();
     ui.menu_button("File", |ui| {
-        if ui.add(egui::Button::new("New").shortcut_text("Ctrl+N")).clicked() {
+        if ui.add(egui::Button::new("New Part").shortcut_text("Ctrl+N")).clicked() {
             ui.close_menu();
             app.request(Pending::New);
+        }
+        if ui
+            .button("New Assembly")
+            .on_hover_text("Put parts together with mates")
+            .clicked()
+        {
+            ui.close_menu();
+            app.request(Pending::NewAssembly);
         }
         if ui.add(egui::Button::new("Open…").shortcut_text("Ctrl+O")).clicked() {
             ui.close_menu();
@@ -612,9 +769,20 @@ pub fn menu(app: &mut App, ui: &mut egui::Ui) {
             ui.close_menu();
             app.save_as();
         }
+        if ui
+            .button("Properties…")
+            .on_hover_text("Part number, description and other properties, for the bill of materials")
+            .clicked()
+        {
+            ui.close_menu();
+            app.files.properties = Some(match &app.asm {
+                Some(s) => s.doc.properties().to_vec(),
+                None => app.doc.properties().to_vec(),
+            });
+        }
         ui.separator();
         if ui
-            .button("Import…")
+            .add_enabled(part, egui::Button::new("Import…"))
             .on_hover_text("STEP solids, STL / 3MF / OBJ meshes, DXF sketches")
             .clicked()
         {
@@ -622,7 +790,7 @@ pub fn menu(app: &mut App, ui: &mut egui::Ui) {
             app.import_dialog();
         }
         if ui
-            .button("Export DXF…")
+            .add_enabled(part, egui::Button::new("Export DXF…"))
             .on_hover_text("The selected sketch or planar face")
             .clicked()
         {
@@ -631,7 +799,9 @@ pub fn menu(app: &mut App, ui: &mut egui::Ui) {
         }
         ui.separator();
         ui.menu_button("Units", |ui| units_ui(app, ui));
-        ui.menu_button("Material", |ui| crate::ui::evaluate::material_editor(app, ui));
+        if part {
+            ui.menu_button("Material", |ui| crate::ui::evaluate::material_editor(app, ui));
+        }
         ui.horizontal(|ui| {
             ui.label("Autosave every");
             let mut m = app.files.settings.autosave_minutes;
@@ -649,7 +819,7 @@ pub fn menu(app: &mut App, ui: &mut egui::Ui) {
 
 /// Unit system and precision of the open part.
 pub fn units_ui(app: &mut App, ui: &mut egui::Ui) {
-    let mut u: Units = app.doc.units();
+    let mut u: Units = app.units();
     for s in UnitSystem::ALL {
         ui.radio_value(&mut u.system, s, s.name());
     }
@@ -657,7 +827,68 @@ pub fn units_ui(app: &mut App, ui: &mut egui::Ui) {
         ui.label("Decimals");
         ui.add(egui::DragValue::new(&mut u.decimals).range(0..=6));
     });
-    app.doc.set_units(u);
+    app.set_units(u);
+}
+
+/// File > Properties: name and value rows for the open part or assembly.
+pub fn properties_window(app: &mut App, ctx: &egui::Context) {
+    let Some(mut rows) = app.files.properties.take() else {
+        return;
+    };
+    let mut open = true;
+    let mut apply = false;
+    egui::Window::new(format!("Properties of {}", app.doc_name()))
+        .open(&mut open)
+        .default_width(360.0)
+        .show(ctx, |ui| {
+            ui.weak("Part number and Description go into the bill of materials; other rows become extra columns.");
+            egui::Grid::new("custom_properties").num_columns(3).show(ui, |ui| {
+                ui.strong("Name");
+                ui.strong("Value");
+                ui.end_row();
+                let mut gone = None;
+                for (i, (k, v)) in rows.iter_mut().enumerate() {
+                    ui.add(egui::TextEdit::singleline(k).desired_width(120.0));
+                    ui.add(egui::TextEdit::singleline(v).desired_width(180.0));
+                    if ui.small_button("✖").on_hover_text("Remove").clicked() {
+                        gone = Some(i);
+                    }
+                    ui.end_row();
+                }
+                if let Some(i) = gone {
+                    rows.remove(i);
+                }
+            });
+            ui.horizontal(|ui| {
+                for name in ["Part number", "Description"] {
+                    let missing = !rows.iter().any(|(k, _)| k.eq_ignore_ascii_case(name));
+                    if missing && ui.button(format!("+ {name}")).clicked() {
+                        rows.push((name.into(), String::new()));
+                    }
+                }
+                if ui.button("+ Other").clicked() {
+                    rows.push((String::new(), String::new()));
+                }
+            });
+            ui.separator();
+            apply = ui.button("Apply").clicked();
+        });
+    if apply {
+        let clean: Vec<(String, String)> = rows
+            .iter()
+            .map(|(k, v)| (k.trim().to_string(), v.trim().to_string()))
+            .filter(|(k, _)| !k.is_empty())
+            .collect();
+        match &mut app.asm {
+            Some(s) => s.doc.set_properties(clean),
+            None => app.doc.set_properties(clean),
+        }
+        app.status = "Properties saved with the file".into();
+        return;
+    }
+    if open {
+        app.files.properties = Some(rows);
+    }
 }
 
 #[cfg(test)]
@@ -690,10 +921,11 @@ mod tests {
     fn leftover_recovery_skips_this_run() {
         let dir = std::env::temp_dir().join(format!("3bcad-recovery-test-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
-        let own = recovery_file(&dir);
-        std::fs::write(&own, "{}").unwrap();
+        let own = [recovery_file(&dir, EXT), recovery_file(&dir, ASSEMBLY_EXT)];
+        std::fs::write(&own[0], "{}").unwrap();
+        std::fs::write(&own[1], "{}").unwrap();
         assert_eq!(leftover_recovery(&dir, &own), None);
-        let old = dir.join("recovery-1.3bcad");
+        let old = dir.join("recovery-1.3bcasm");
         std::fs::write(&old, "{}").unwrap();
         std::fs::write(dir.join("notes.txt"), "").unwrap();
         assert_eq!(leftover_recovery(&dir, &own), Some(old));
@@ -703,8 +935,8 @@ mod tests {
     #[test]
     fn title_marks_unsaved_changes() {
         let mut doc = PartDocument::demo();
-        assert_eq!(title(&doc), format!("Part1 - 3BCAD {VERSION}"));
+        assert_eq!(title(&doc.name, doc.is_dirty()), format!("Part1 - 3BCAD {VERSION}"));
         doc.edit(|_| ());
-        assert!(title(&doc).starts_with("Part1 * - "));
+        assert!(title(&doc.name, doc.is_dirty()).starts_with("Part1 * - "));
     }
 }

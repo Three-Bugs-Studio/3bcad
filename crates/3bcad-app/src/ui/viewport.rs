@@ -31,6 +31,10 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
         consumed = session.interact(&view, &resp, &ctx);
     }
 
+    // In an assembly, dragging a component moves it instead of the camera.
+    if app.asm.is_some() && !consumed {
+        consumed = app.drag_component(&resp, rect);
+    }
     let d = resp.drag_delta();
     if resp.dragged_by(PointerButton::Secondary) || (resp.dragged_by(PointerButton::Middle) && ctrl) {
         app.camera.pan(d.x, d.y, rect.height());
@@ -129,10 +133,15 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
         }
     }
     draw_triad(&painter, rect, &app.camera);
+    let hint = if app.asm.is_some() {
+        "LMB select · drag a part to move it, Shift+drag to turn it · drag empty space to orbit · RMB pan · wheel zoom"
+    } else {
+        "LMB orbit / select · RMB pan · wheel zoom · F fit"
+    };
     painter.text(
         rect.right_bottom() - egui::vec2(10.0, 10.0),
         egui::Align2::RIGHT_BOTTOM,
-        "LMB orbit / select · RMB pan · wheel zoom · F fit",
+        hint,
         egui::FontId::proportional(12.0),
         Color32::from_gray(90),
     );
@@ -140,8 +149,9 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
 
 /// Sketches above the rollback bar that no feature has used yet (shown in the model).
 fn loose_sketches(app: &App) -> Vec<(FeatureId, &threebcad_sketch::Sketch, threebcad_kernel::Plane)> {
-    // On the print bed the part is moved; sketches stay in model space, so they are hidden.
-    if app.print_view().is_some() {
+    // On the print bed the part is moved; sketches stay in model space, so they are hidden. An
+    // assembly shows its parts, not the part kept aside.
+    if app.print_view().is_some() || app.asm.is_some() {
         return Vec::new();
     }
     let h = app.doc.history();

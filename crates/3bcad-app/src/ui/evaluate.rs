@@ -81,7 +81,7 @@ fn whats_wrong(app: &mut App, ctx: &egui::Context) {
                         }
                         ui.label(msg);
                     });
-                    ui.weak(format!("    → {}", suggestion(msg)));
+                    ui.weak(format!("    – {}", suggestion(msg)));
                 }
                 ui.separator();
             }
@@ -216,7 +216,7 @@ pub fn measurements(app: &App) -> Vec<String> {
             }
         }
         [a, b, ..] => {
-            out.push(format!("{} → {}", app.describe(*a), app.describe(*b)));
+            out.push(format!("{} to {}", app.describe(*a), app.describe(*b)));
             if let (Some(ga), Some(gb)) = (geometry(app, *a), geometry(app, *b)) {
                 let center = norm(sub(gb.2, ga.2));
                 out.push(format!("Center distance {}", len(center)));

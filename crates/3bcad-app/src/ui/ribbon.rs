@@ -16,6 +16,7 @@ pub enum RibbonTab {
     Sketch,
     Evaluate,
     Print,
+    Assembly,
 }
 
 pub fn show(app: &mut App, ctx: &egui::Context) {
@@ -33,11 +34,19 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                 ui.separator();
                 crate::files::menu(app, ui);
                 ui.separator();
-                ui.label(format!(
-                    "{}{}",
-                    app.doc.name,
-                    if app.doc.is_dirty() { " *" } else { "" }
-                ));
+                ui.label(format!("{}{}", app.doc_name(), if app.is_dirty() { " *" } else { "" }));
+                if let (None, Some(back)) = (&app.asm, app.files.return_to.clone()) {
+                    let name = back
+                        .file_stem()
+                        .map_or_else(String::new, |n| n.to_string_lossy().into_owned());
+                    if ui
+                        .button(format!("◀ Back to {name}"))
+                        .on_hover_text("Save the part and open the assembly again, which shows the change")
+                        .clicked()
+                    {
+                        app.request(crate::files::Pending::Open(back));
+                    }
+                }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if icons::small(ui, "help", "Shortcuts", true, app.show_shortcuts)
                         .on_hover_text("Keyboard shortcuts (F1)")
@@ -45,35 +54,20 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                     {
                         app.show_shortcuts = !app.show_shortcuts;
                     }
-                    let (can_undo, can_redo) = (
-                        app.doc.can_undo() || app.sketch.is_some(),
-                        app.doc.can_redo() || app.sketch.is_some(),
-                    );
+                    let (can_undo, can_redo) = (app.can_undo(), app.can_redo());
                     if ui
                         .add_enabled(can_redo, egui::Button::new("Redo"))
                         .on_hover_text("Ctrl+Y")
                         .clicked()
                     {
-                        match &mut app.sketch {
-                            Some(s) => s.redo(),
-                            None => {
-                                app.doc.redo();
-                                app.status = "Redone".into();
-                            }
-                        }
+                        app.redo();
                     }
                     if ui
                         .add_enabled(can_undo, egui::Button::new("Undo"))
                         .on_hover_text("Ctrl+Z")
                         .clicked()
                     {
-                        match &mut app.sketch {
-                            Some(s) => s.undo(),
-                            None => {
-                                app.doc.undo();
-                                app.status = "Undone".into();
-                            }
-                        }
+                        app.undo();
                     }
                 });
             });
@@ -90,16 +84,22 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                         RibbonTab::Sketch => sketch(app, ui),
                         RibbonTab::Evaluate => evaluate(app, ui),
                         RibbonTab::Print => crate::ui::print::tab(app, ui),
+                        RibbonTab::Assembly => crate::ui::assembly::tab(app, ui),
                     });
                 });
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = 0.0;
-                for (t, label) in [
-                    (RibbonTab::Features, "Features"),
-                    (RibbonTab::Sketch, "Sketch"),
-                    (RibbonTab::Evaluate, "Evaluate"),
-                    (RibbonTab::Print, "3D Print"),
-                ] {
+                let tabs: &[(RibbonTab, &str)] = if app.asm.is_some() {
+                    &[(RibbonTab::Assembly, "Assembly")]
+                } else {
+                    &[
+                        (RibbonTab::Features, "Features"),
+                        (RibbonTab::Sketch, "Sketch"),
+                        (RibbonTab::Evaluate, "Evaluate"),
+                        (RibbonTab::Print, "3D Print"),
+                    ]
+                };
+                for &(t, label) in tabs {
                     if icons::tab(ui, label, app.tab == t).clicked() {
                         app.tab = t;
                     }
