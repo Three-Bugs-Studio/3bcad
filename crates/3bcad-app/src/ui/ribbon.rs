@@ -32,6 +32,15 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                 ui.strong("3BCAD");
                 ui.hyperlink_to(format!("v{VERSION}"), RELEASE_NOTES_URL)
                     .on_hover_text("What's new in this version");
+                if let Some(v) = app.update.available().map(str::to_string) {
+                    if ui
+                        .button(format!("⬆ Update to v{v}"))
+                        .on_hover_text("What's new in it, and install it")
+                        .clicked()
+                    {
+                        app.update.open = true;
+                    }
+                }
                 ui.separator();
                 crate::files::menu(app, ui);
                 ui.separator();

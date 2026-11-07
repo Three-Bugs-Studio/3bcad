@@ -10,4 +10,5 @@ pub mod ribbon;
 pub mod sketch_mode;
 pub mod theme;
 pub mod tree_view;
+pub mod update;
 pub mod viewport;

@@ -41,6 +41,10 @@ pub struct Settings {
     /// Export meshing: chord (mm) and angle (degrees) tolerance.
     pub chord: f64,
     pub angle_deg: f64,
+    /// Ask GitHub for a newer release at start.
+    pub check_updates: bool,
+    /// A release the user chose to skip: not offered at start.
+    pub skip_update: String,
 }
 
 impl Default for Settings {
@@ -57,6 +61,8 @@ impl Default for Settings {
             min_wall: 0.8,
             chord: 0.01,
             angle_deg: 10.0,
+            check_updates: true,
+            skip_update: String::new(),
         }
     }
 }
@@ -93,6 +99,8 @@ impl Settings {
                 "min_wall" => s.min_wall = num(s.min_wall),
                 "chord" => s.chord = num(s.chord),
                 "angle_deg" => s.angle_deg = num(s.angle_deg).min(90.0),
+                "check_updates" => s.check_updates = v.trim() != "false",
+                "skip_update" => s.skip_update = v.trim().into(),
                 _ => {
                     if let Some(sl) = k.strip_prefix("slicer_path.").and_then(Slicer::from_name) {
                         s.slicer_paths[sl as usize] = Some(PathBuf::from(v));
@@ -116,6 +124,10 @@ impl Settings {
             self.chord,
             self.angle_deg
         );
+        out += &format!("check_updates={}\n", self.check_updates);
+        if !self.skip_update.is_empty() {
+            out += &format!("skip_update={}\n", self.skip_update);
+        }
         for s in Slicer::ALL {
             if let Some(p) = &self.slicer_paths[s as usize] {
                 out += &format!("slicer_path.{}={}\n", s.name(), p.display());
@@ -219,6 +231,8 @@ pub struct Files {
     pub return_to: Option<PathBuf>,
     /// The File > Properties window, and the rows being edited in it.
     pub properties: Option<Vec<(String, String)>>,
+    /// The program to start once this one has closed (an update was installed).
+    pub restart: Option<PathBuf>,
     recovery_dir: Option<PathBuf>,
     last_autosave: Instant,
     close_ok: bool,
@@ -240,6 +254,7 @@ impl Files {
             offer,
             return_to: None,
             properties: None,
+            restart: None,
             recovery_dir,
             last_autosave: Instant::now(),
             close_ok: false,
@@ -428,6 +443,17 @@ impl App {
             });
         if let Err(e) = written {
             self.status = format!("Autosave failed: {e:#}");
+        }
+    }
+
+    /// Closes 3BCAD (asking about unsaved changes) and starts the program again: an update that was
+    /// just installed.
+    pub fn restart(&mut self, ctx: &egui::Context) {
+        self.files.restart = std::env::current_exe().ok();
+        if self.is_dirty() {
+            self.files.pending = Some(Pending::Close);
+        } else {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
         }
     }
 
@@ -650,6 +676,7 @@ impl App {
                 }
                 if ui.button("Cancel").clicked() || ui.input(|i| i.key_pressed(Key::Escape)) {
                     self.files.pending = None;
+                    self.files.restart = None;
                 }
             });
         });
@@ -910,6 +937,24 @@ pub fn menu(app: &mut App, ui: &mut egui::Ui) {
         if part {
             ui.menu_button("Material", |ui| crate::ui::evaluate::material_editor(app, ui));
         }
+        ui.separator();
+        let mut check = app.files.settings.check_updates;
+        if ui
+            .checkbox(&mut check, "Check for updates at start")
+            .on_hover_text("Asks GitHub for a newer release when 3BCAD starts; nothing else is sent")
+            .changed()
+        {
+            app.files.settings.check_updates = check;
+            app.files.settings.save();
+        }
+        if ui
+            .add_enabled(!app.update.busy(), egui::Button::new("Check for Updates…"))
+            .clicked()
+        {
+            ui.close_menu();
+            app.update.check(true);
+            app.status = "Checking for updates…".into();
+        }
         ui.horizontal(|ui| {
             ui.label("Autosave every");
             let mut m = app.files.settings.autosave_minutes;
@@ -1021,6 +1066,8 @@ mod tests {
         s.bed = [300.0, 250.5, 400.0];
         s.min_wall = 1.2;
         s.angle_deg = 5.0;
+        s.check_updates = false;
+        s.skip_update = "0.9.0".into();
         assert_eq!(Settings::parse(&s.to_text()), s);
         let junk = Settings::parse("junk\nautosave_minutes=x\nbed=1,2\nnozzle=-1\nchord=NaN\nslicer=Cura");
         assert_eq!(junk, Settings::default());

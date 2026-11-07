@@ -7,6 +7,7 @@ mod drawing;
 mod files;
 mod print;
 mod ui;
+mod update;
 
 use eframe::egui;
 
