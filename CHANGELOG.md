@@ -28,6 +28,11 @@ saved files and workflows; patch versions (0.x.y) only fix bugs.
     layer and line type for visible, hidden and centre lines, hatching, dimensions, notes and the sheet
     format (#89).
 - File > New Drawing, and Edit Part from a drawing with a button back to it.
+- Updates from inside the app: 3BCAD asks GitHub for a newer release when it starts (File > Check for
+  updates at start turns it off; File > Check for Updates asks at any time) and shows what's new in it.
+  **Update now** downloads the release for your computer, checks it against the release's checksums,
+  installs it in place and restarts. Nothing is sent but the request to GitHub. 3BCAD 0.7.0 and older
+  cannot do this: download 0.8.0 once by hand, and it updates itself from then on (#104).
 
 ## [0.7.0] - 2026-11-06
 

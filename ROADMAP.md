@@ -157,7 +157,7 @@ Polished UX, installers, signing, performance, docs and accessibility.
 - [ ] #101 Code signing: Windows Authenticode and macOS Developer ID + notarization
 - [ ] #102 macOS DMG and Linux AppImage/Flatpak with desktop entry
 - [ ] #103 App icon and branding
-- [ ] #104 Update check: notify when a new release is available
+- [x] #104 Update check: notify when a new release is available
 - [ ] #105 Log file and crash reports for release builds
 - [ ] #106 Performance: tessellate off the UI thread, LOD and large models
 - [ ] #107 User guide and tutorials (mdBook)

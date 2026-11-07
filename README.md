@@ -205,6 +205,11 @@ Builds are not code-signed yet, so Windows SmartScreen and macOS Gatekeeper warn
 The version you are running is shown in the title bar; see [CHANGELOG.md](CHANGELOG.md) for what changed in
 each release.
 
+From 0.8.0 on, 3BCAD checks for a newer release when it starts and offers **Update now**: it downloads the
+release for your computer, checks it against the release's `SHA256SUMS.txt`, installs it in place and restarts.
+Turn the check off with **File → Check for updates at start**, or check at any time with **File → Check for
+Updates…**. It needs `curl` and `tar`, which Windows 10 and later, macOS and Linux include.
+
 ## Build from source
 
 You need Rust **1.87+** ([rustup.rs](https://rustup.rs)) and a GPU with Vulkan, DirectX 12 or Metal.

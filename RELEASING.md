@@ -59,6 +59,14 @@ Add user-facing changes to `## [Unreleased]` in `CHANGELOG.md` as part of each f
   merging, or add the missing `feat`/`fix` changes to `[Unreleased]` on `main`.
 - Never delete or reuse a version tag that users may have downloaded; release a new patch version instead.
 
+## In-app updates
+
+From 0.8.0 on, the app updates itself from these releases (`crates/3bcad-app/src/update.rs`): it reads
+`releases/latest` from the GitHub API, picks the asset whose name ends with `-windows-x64.zip`,
+`-macos-universal.zip` or `-linux-x64.tar.gz`, checks it against `SHA256SUMS.txt` and swaps it in. Keep those
+asset names, the folder inside each archive (`3bcad.exe`, `3BCAD.app`, `3bcad`) and `SHA256SUMS.txt`, or older
+copies of the app can no longer update. Pre-releases are not offered (`releases/latest` skips them).
+
 ## Known limitations
 
 The builds are not code-signed yet. On first launch Windows SmartScreen shows "Windows protected your PC"
