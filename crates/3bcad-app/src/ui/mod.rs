@@ -1,5 +1,6 @@
 pub mod advanced;
 pub mod assembly;
+pub mod drawing;
 pub mod evaluate;
 pub mod help;
 pub mod icons;
@@ -9,4 +10,5 @@ pub mod ribbon;
 pub mod sketch_mode;
 pub mod theme;
 pub mod tree_view;
+pub mod update;
 pub mod viewport;

@@ -84,6 +84,8 @@ pub struct App {
     pub doc: PartDocument,
     /// The open assembly; parts are edited in their own files.
     pub asm: Option<crate::assembly::Session>,
+    /// The open drawing; its part is read from its own file.
+    pub drw: Option<crate::drawing::Session>,
     pub camera: OrbitCamera,
     /// Feature selected in the feature tree.
     pub selected: Option<FeatureId>,
@@ -119,6 +121,8 @@ pub struct App {
     /// Feature being renamed in the tree and the text typed so far.
     pub renaming: Option<(FeatureId, String)>,
     pub files: crate::files::Files,
+    /// Checking for, and installing, a newer release.
+    pub update: crate::update::Updater,
     known_problems: usize,
     built_for: Option<(u64, Vec<bool>, Option<PrintView>)>,
 }
@@ -134,6 +138,7 @@ impl App {
         let mut app = Self {
             doc: PartDocument::demo(),
             asm: None,
+            drw: None,
             camera: OrbitCamera::default(),
             selected: None,
             tab: RibbonTab::Features,
@@ -161,11 +166,16 @@ impl App {
             measured: None,
             renaming: None,
             files: crate::files::Files::new(),
+            update: crate::update::Updater::new(),
             known_problems: 0,
             built_for: None,
         };
         app.sync_geometry();
         app.zoom_to_fit();
+        crate::update::cleanup();
+        if app.files.settings.check_updates {
+            app.update.check(false);
+        }
         Ok(app)
     }
 
@@ -876,8 +886,12 @@ impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.files_frame(ctx);
         crate::files::properties_window(self, ctx);
+        ui::update::window(self, ctx);
         if self.asm.is_some() {
             return ui::assembly::frame(self, ctx);
+        }
+        if self.drw.is_some() {
+            return ui::drawing::frame(self, ctx);
         }
         self.shortcuts(ctx);
         if self.selected.is_some_and(|id| self.doc.history().get(id).is_none()) {
@@ -945,6 +959,12 @@ impl eframe::App for App {
     /// A normal exit (saved, or the user chose not to save) leaves nothing to recover.
     fn on_exit(&mut self) {
         self.files.clear_recovery();
+        // Restart into an update that was just installed.
+        if let Some(exe) = self.files.restart.take() {
+            if let Err(e) = std::process::Command::new(&exe).spawn() {
+                log::error!("could not start {}: {e}", exe.display());
+            }
+        }
     }
 }
 

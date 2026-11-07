@@ -4,6 +4,7 @@ pub mod boolean;
 pub mod dome;
 pub mod edge_ops;
 pub mod fit;
+pub mod hlr;
 pub mod interference;
 pub mod loft;
 pub mod mass;

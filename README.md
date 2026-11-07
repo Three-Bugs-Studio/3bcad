@@ -26,8 +26,8 @@ the 2D constraint solver, the feature history, the GPU viewport and the file for
 toolchain to install, and one `cargo run` builds the whole application on Windows, macOS and Linux.
 
 > **Status: early preview (v0.x).** You can sketch, model, save and reopen parametric parts, put them
-> together in assemblies, import STEP, meshes and DXF, check and orient them for printing, and export
-> STL / 3MF / STEP / DXF. Drawings are on the [roadmap](#roadmap). Expect breaking changes before 1.0.
+> together in assemblies, make engineering drawings of them, import STEP, meshes and DXF, check and orient
+> them for printing, and export STL / 3MF / STEP / DXF / PDF / SVG. Expect breaking changes before 1.0.
 
 ## Contents
 
@@ -35,6 +35,7 @@ toolchain to install, and one `cargo run` builds the whole application on Window
 - [Your first part](#your-first-part)
 - [Printing a part](#printing-a-part)
 - [Your first assembly](#your-first-assembly)
+- [Your first drawing](#your-first-drawing)
 - [Download](#download) and [build from source](#build-from-source)
 - [Controls](#controls)
 - [Files](#files)
@@ -105,6 +106,18 @@ toolchain to install, and one `cargo run` builds the whole application on Window
 - Export the assembly as STEP (each part once, every component named and placed) or as a 3MF with one
   object per part, laid out on the bed for the slicer.
 
+### Drawings
+
+- Drawing sheets in ISO A4 to A0 or ANSI A to E, as many as you need, each with its own scale and first- or
+  third-angle projection, and a title block whose cells fill in from the part's and the drawing's
+  properties (part number, material, scale, sheet 1 of 2...).
+- Standard views and projected views with hidden lines removed or dashed, lined up with the view they come
+  from. The drawing reads the part from its file, so the views follow every change to the part.
+- Section views (A-A) hatched for the part's material, and detail views of a circle at a larger scale.
+- Dimensions brought in from the part's sketches and extrusions, reference dimensions measured off a view
+  (lengths, diameters, radii), notes with leaders, centre marks and centrelines.
+- Export every sheet as one true-scale vector PDF, or an SVG or a layered DXF per sheet.
+
 ### Files and interop
 
 - The native `.3bcad` format stores the whole feature history as versioned, diff-friendly JSON. Saves are
@@ -164,6 +177,20 @@ toolchain to install, and one `cargo run` builds the whole application on Window
 6. To change a part, select it and click **Edit Part**; save it and click **Back to** the assembly.
 7. Export the assembly as **STEP**, or as **3MF** to print every part in one go.
 
+## Your first drawing
+
+1. Save the part (for example a bracket with a hole). **File → New Drawing**, then **Model** on the
+   **Drawing** tab and pick the part: the front view and two projected views appear on an A3 sheet.
+2. Click the sheet in the tree to set its size, scale and projection angle, and its title block cells.
+   Cells like `{Part number}` fill in from **File → Properties…** of the part or the drawing.
+3. Click **Section**, then click a view where the cut goes: the section view lands beside it, hatched.
+   **Detail**, then a click on a view, shows that area twice as large.
+4. **Model Items** brings in the part's dimensions; **Smart Dimension** measures an edge, a circle or two
+   vertices; **Note** adds a note with a leader to what you click. Drag views, dimensions and notes to
+   tidy the sheet.
+5. Change the part (**Edit Part**, save, **Back to** the drawing): the views and dimensions follow.
+6. Export **PDF** (every sheet, print at 100 %), **SVG** or **DXF**.
+
 ## Download
 
 Get the desktop app from the [Releases page](https://github.com/Three-Bugs-Studio/3bcad/releases/latest):
@@ -177,6 +204,11 @@ Get the desktop app from the [Releases page](https://github.com/Three-Bugs-Studi
 Builds are not code-signed yet, so Windows SmartScreen and macOS Gatekeeper warn on first launch.
 The version you are running is shown in the title bar; see [CHANGELOG.md](CHANGELOG.md) for what changed in
 each release.
+
+From 0.8.0 on, 3BCAD checks for a newer release when it starts and offers **Update now**: it downloads the
+release for your computer, checks it against the release's `SHA256SUMS.txt`, installs it in place and restarts.
+Turn the check off with **File → Check for updates at start**, or check at any time with **File → Check for
+Updates…**. It needs `curl` and `tar`, which Windows 10 and later, macOS and Linux include.
 
 ## Build from source
 
@@ -235,6 +267,7 @@ cargo test --workspace
 | --- | --- |
 | `.3bcad` | A part: its feature history, units, material, print orientation and custom properties as pretty-printed JSON. Geometry is rebuilt on open. |
 | `.3bcasm` | An assembly: the files it uses (relative to the assembly, so they can move together), where each component sits, its mates and exploded view. |
+| `.3bcdrw` | A drawing: the part it shows (relative to the drawing), its sheets, views, dimensions, notes and title block. Views are projected again on open. |
 | `settings.txt` | Preferences (recent files, autosave, slicer and its location, printer, check and export settings) in `%APPDATA%\3BCAD`, `~/Library/Application Support/3BCAD` or `~/.config/3bcad`. |
 | `recovery/` | Autosaves next to `settings.txt`, removed after a save or a normal exit. |
 
@@ -244,11 +277,11 @@ cargo test --workspace
 
 | Crate (folder) | Package | Role |
 | --- | --- | --- |
-| `crates/3bcad-core` | `threebcad-core` | Feature history graph (`petgraph`), rebuild with persistent face naming and caching, part and assembly documents, bill of materials, undo/redo |
+| `crates/3bcad-core` | `threebcad-core` | Feature history graph (`petgraph`), rebuild with persistent face naming and caching, part, assembly and drawing documents, bill of materials, undo/redo |
 | `crates/3bcad-sketch` | `threebcad-sketch` | 2D entities, relations, the Levenberg-Marquardt solver, profiles and sketch tools |
-| `crates/3bcad-kernel` | `threebcad-kernel` | `truck` B-Rep bridge: feature tools, booleans, fillets, threads, tessellation, mass properties, print checks, the mate solver and interference |
+| `crates/3bcad-kernel` | `threebcad-kernel` | `truck` B-Rep bridge: feature tools, booleans, fillets, threads, tessellation, mass properties, print checks, the mate solver, interference and hidden-line removal |
 | `crates/3bcad-render` | `threebcad-render` | wgpu pipelines, orbit camera, scene buffers and picking |
-| `crates/3bcad-io` | `threebcad-io` | STL, 3MF, OBJ, STEP and DXF import/export, printer presets, slicer launcher |
+| `crates/3bcad-io` | `threebcad-io` | STL, 3MF, OBJ, STEP and DXF import/export, drawing PDF / SVG / DXF, printer presets, slicer launcher |
 | `crates/3bcad-app` | `threebcad-app` | Desktop app (`eframe` = winit + egui + egui-wgpu), binary `3bcad` |
 
 Cargo package names cannot start with a digit, so packages are named `threebcad-*`.
@@ -267,8 +300,8 @@ adding a feature type or a sketch relation. Every importer has a fuzz target in 
 | v0.4.0 | Advanced modeling: sweep, loft, multibody, threads (done) |
 | v0.5.0 | Files: native save/load, STEP/DXF/mesh import, units, materials (done) |
 | v0.6.0 | 3D Print studio: overhang and thin-wall checks, orientation, fits, rich 3MF (done) |
-| v0.7.0 | Assemblies: mates, interference, exploded views, BOM (done, unreleased) |
-| v0.8.0 | Drawings: views, sections, dimensions, PDF/DXF |
+| v0.7.0 | Assemblies: mates, interference, exploded views, BOM (done) |
+| v0.8.0 | Drawings: views, sections, dimensions, PDF/DXF (done, unreleased) |
 | v0.9.0 | Design intent: equations, configurations, appearances |
 | v1.0.0 | Production ready: installers, signing, performance, docs, accessibility |
 

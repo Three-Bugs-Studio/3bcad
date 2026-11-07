@@ -128,11 +128,11 @@ Multi-part assemblies with mates, interference checks, exploded views and BOM.
 
 2D engineering drawings with projected/section views, dimensions and PDF/DXF export.
 
-- [ ] #85 Drawing document, sheets and title blocks
-- [ ] #86 Standard views and projected views with hidden-line removal
-- [ ] #87 Section and detail views
-- [ ] #88 Dimensions and annotations in drawings
-- [ ] #89 Export drawings to PDF, SVG and DXF
+- [x] #85 Drawing document, sheets and title blocks
+- [x] #86 Standard views and projected views with hidden-line removal
+- [x] #87 Section and detail views
+- [x] #88 Dimensions and annotations in drawings
+- [x] #89 Export drawings to PDF, SVG and DXF
 
 ## [v0.9.0 – Design Intent & Configurations](https://github.com/Three-Bugs-Studio/3bcad/milestone/8)
 
@@ -157,7 +157,7 @@ Polished UX, installers, signing, performance, docs and accessibility.
 - [ ] #101 Code signing: Windows Authenticode and macOS Developer ID + notarization
 - [ ] #102 macOS DMG and Linux AppImage/Flatpak with desktop entry
 - [ ] #103 App icon and branding
-- [ ] #104 Update check: notify when a new release is available
+- [x] #104 Update check: notify when a new release is available
 - [ ] #105 Log file and crash reports for release builds
 - [ ] #106 Performance: tessellate off the UI thread, LOD and large models
 - [ ] #107 User guide and tutorials (mdBook)

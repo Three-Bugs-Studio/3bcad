@@ -7,6 +7,33 @@ saved files and workflows; patch versions (0.x.y) only fix bugs.
 
 ## [Unreleased]
 
+### Added
+
+- Drawings (v0.8.0 milestone):
+  - Drawing documents (`.3bcdrw`) of a part, with sheets in ISO A4 to A0 and ANSI A to E sizes, as many
+    as you need, each with its own scale and first- or third-angle projection. The title block's cells
+    fill in from the part's and the drawing's properties (`{Part number}`, `{Material}`, `{Scale}`,
+    `{Sheet}` as "1 of 2", ...) and can be changed, added and removed (#85).
+  - Standard views (the front view with the top and side views projected from it), model views from any
+    side or isometric, and projected views that stay lined up with the view they come from. Hidden lines
+    are dashed or removed. The drawing reads the part from its file, so the views follow every change
+    saved to the part (#86).
+  - Section views along a vertical or horizontal line, labelled A-A on the view they cut and hatched for
+    the part's material (ANSI31/32/33/37), and detail views of a circle of a view, twice as large by
+    default, labelled with their scale (#87).
+  - Dimensions brought in from the part's sketches and extrusions (Model Items), reference dimensions
+    measured off a view (an edge, two vertices, a circle's diameter or an arc's radius) that follow the
+    part when it changes, notes with leaders, and centre marks and centrelines (#88).
+  - Export every sheet as one vector PDF at true scale, or an SVG or an R12 DXF per sheet, the DXF with a
+    layer and line type for visible, hidden and centre lines, hatching, dimensions, notes and the sheet
+    format (#89).
+- File > New Drawing, and Edit Part from a drawing with a button back to it.
+- Updates from inside the app: 3BCAD asks GitHub for a newer release when it starts (File > Check for
+  updates at start turns it off; File > Check for Updates asks at any time) and shows what's new in it.
+  **Update now** downloads the release for your computer, checks it against the release's checksums,
+  installs it in place and restarts. Nothing is sent but the request to GitHub. 3BCAD 0.7.0 and older
+  cannot do this: download 0.8.0 once by hand, and it updates itself from then on (#104).
+
 ## [0.7.0] - 2026-11-06
 
 ### Added

@@ -17,6 +17,7 @@ pub enum RibbonTab {
     Evaluate,
     Print,
     Assembly,
+    Drawing,
 }
 
 pub fn show(app: &mut App, ctx: &egui::Context) {
@@ -31,17 +32,26 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                 ui.strong("3BCAD");
                 ui.hyperlink_to(format!("v{VERSION}"), RELEASE_NOTES_URL)
                     .on_hover_text("What's new in this version");
+                if let Some(v) = app.update.available().map(str::to_string) {
+                    if ui
+                        .button(format!("⬆ Update to v{v}"))
+                        .on_hover_text("What's new in it, and install it")
+                        .clicked()
+                    {
+                        app.update.open = true;
+                    }
+                }
                 ui.separator();
                 crate::files::menu(app, ui);
                 ui.separator();
                 ui.label(format!("{}{}", app.doc_name(), if app.is_dirty() { " *" } else { "" }));
-                if let (None, Some(back)) = (&app.asm, app.files.return_to.clone()) {
+                if let (None, None, Some(back)) = (&app.asm, &app.drw, app.files.return_to.clone()) {
                     let name = back
                         .file_stem()
                         .map_or_else(String::new, |n| n.to_string_lossy().into_owned());
                     if ui
                         .button(format!("◀ Back to {name}"))
-                        .on_hover_text("Save the part and open the assembly again, which shows the change")
+                        .on_hover_text("Save the part and go back, to see the change there")
                         .clicked()
                     {
                         app.request(crate::files::Pending::Open(back));
@@ -85,12 +95,15 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                         RibbonTab::Evaluate => evaluate(app, ui),
                         RibbonTab::Print => crate::ui::print::tab(app, ui),
                         RibbonTab::Assembly => crate::ui::assembly::tab(app, ui),
+                        RibbonTab::Drawing => crate::ui::drawing::tab(app, ui),
                     });
                 });
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = 0.0;
                 let tabs: &[(RibbonTab, &str)] = if app.asm.is_some() {
                     &[(RibbonTab::Assembly, "Assembly")]
+                } else if app.drw.is_some() {
+                    &[(RibbonTab::Drawing, "Drawing")]
                 } else {
                     &[
                         (RibbonTab::Features, "Features"),

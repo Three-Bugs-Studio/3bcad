@@ -3687,6 +3687,7 @@ dependencies = [
  "glam",
  "log",
  "rfd",
+ "serde_json",
  "threebcad-core",
  "threebcad-io",
  "threebcad-kernel",
@@ -3703,6 +3704,7 @@ dependencies = [
  "petgraph",
  "serde",
  "serde_json",
+ "threebcad-io",
  "threebcad-kernel",
  "threebcad-sketch",
 ]

@@ -60,6 +60,19 @@ const SHORTCUTS: &[(&str, &[(&str, &str)])] = &[
             ("Delete", "Delete the selected component, mate or explode step"),
         ],
     ),
+    (
+        "Drawings",
+        &[
+            ("Mouse wheel, middle or right drag", "Zoom, pan the sheet"),
+            ("F, or double-click empty sheet", "Fit the sheet"),
+            (
+                "Drag a view, dimension or note",
+                "Move it (projected views stay lined up)",
+            ),
+            ("Esc", "Stop the tool, then clear the selection"),
+            ("Delete", "Delete the selected view, dimension or note"),
+        ],
+    ),
 ];
 
 pub fn window(app: &mut App, ctx: &egui::Context) {

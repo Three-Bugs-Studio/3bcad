@@ -1,5 +1,7 @@
-//! Import (STL, OBJ, 3MF, DXF), export (STL, 3MF, STEP, DXF) and the bridge to desktop slicers.
+//! Import (STL, OBJ, 3MF, DXF), export (STL, 3MF, STEP, DXF, drawings as PDF / SVG / DXF) and the
+//! bridge to desktop slicers.
 
+pub mod drawing;
 pub mod dxf;
 pub mod mesh;
 pub mod printer;
