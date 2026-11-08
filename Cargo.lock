@@ -3679,7 +3679,7 @@ dependencies = [
 
 [[package]]
 name = "threebcad-app"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "anyhow",
  "eframe",
@@ -3697,7 +3697,7 @@ dependencies = [
 
 [[package]]
 name = "threebcad-core"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "anyhow",
  "criterion",
@@ -3711,7 +3711,7 @@ dependencies = [
 
 [[package]]
 name = "threebcad-io"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "threebcad-kernel",
  "threebcad-sketch",
@@ -3723,7 +3723,7 @@ dependencies = [
 
 [[package]]
 name = "threebcad-kernel"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "anyhow",
  "nalgebra",
@@ -3736,7 +3736,7 @@ dependencies = [
 
 [[package]]
 name = "threebcad-render"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "bytemuck",
  "egui",
@@ -3746,7 +3746,7 @@ dependencies = [
 
 [[package]]
 name = "threebcad-sketch"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "anyhow",
  "nalgebra",
