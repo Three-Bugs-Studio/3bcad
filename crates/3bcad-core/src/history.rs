@@ -7,18 +7,54 @@ use threebcad_kernel::Plane;
 use threebcad_sketch::Sketch;
 
 use crate::feature::{CurveRef, Extrude, HelixDef, PlaneRef, SplitTool, Sweep, SweepProfile};
-use crate::{Feature, FeatureKind};
+use crate::{Equation, FaceRef, Feature, FeatureKind};
 
 pub type FeatureId = NodeIndex;
 
+/// A variant of the part: its own equations (over the part's) and suppressed features.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct Configuration {
+    pub name: String,
+    /// Replace the part's equations of the same name, or add to them.
+    pub equations: Vec<Equation>,
+    /// Written down when another configuration is activated.
+    suppressed: Vec<FeatureId>,
+}
+
+/// What an appearance colours.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub enum Paint {
+    Face(FaceRef),
+    /// The body this face belongs to.
+    Body(FaceRef),
+    /// The faces a feature made.
+    Feature(FeatureId),
+}
+
 /// The feature tree: features in build order, a dependency DAG
-/// (edge = "is built from") and a rollback bar.
+/// (edge = "is built from") and a rollback bar, plus the equations, configurations and
+/// appearances that refer to its features.
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct History {
     graph: StableDiGraph<Feature, ()>,
     order: Vec<FeatureId>,
     /// Number of features above the rollback bar (the ones that get built).
     rollback: usize,
+    /// Global variables and equations of every configuration.
+    #[serde(default)]
+    equations: Vec<Equation>,
+    /// Empty while the part has only its default configuration.
+    #[serde(default)]
+    configs: Vec<Configuration>,
+    #[serde(default)]
+    active: usize,
+    /// Dimensions an equation of the active configuration sets, with the value to put back when
+    /// it no longer does.
+    #[serde(default)]
+    pub(crate) held: Vec<(String, f64)>,
+    /// sRGB colours; a face takes its own, else its body's, else its feature's, else the material's.
+    #[serde(default)]
+    appearances: Vec<(Paint, [u8; 3])>,
 }
 
 impl History {
@@ -263,6 +299,12 @@ impl History {
             }
             self.graph.remove_node(n);
         }
+        // The graph hands deleted ids to new features: forget them.
+        for c in &mut self.configs {
+            c.suppressed.retain(|f| !doomed.contains(f));
+        }
+        self.appearances
+            .retain(|(p, _)| !matches!(p, Paint::Feature(f) if doomed.contains(f)));
         doomed.len()
     }
 
@@ -323,6 +365,111 @@ impl History {
             .iter()
             .filter(|&&o| self.graph[o].suppressed)
             .any(|&o| self.descendants(o).contains(&id))
+    }
+
+    /// The part's global variables and equations (every configuration).
+    pub fn equations(&self) -> &[Equation] {
+        &self.equations
+    }
+
+    pub fn set_equations(&mut self, equations: Vec<Equation>) {
+        self.equations = equations;
+    }
+
+    /// The part's equations with the active configuration's in place of those of the same name.
+    pub fn active_equations(&self) -> Vec<Equation> {
+        let mut out = self.equations.clone();
+        for e in self.configs.get(self.active).map_or(&[][..], |c| &c.equations) {
+            match out.iter_mut().find(|o| o.target() == e.target()) {
+                Some(o) => *o = e.clone(),
+                None => out.push(e.clone()),
+            }
+        }
+        out
+    }
+
+    /// The configurations; empty while there is only the default one.
+    pub fn configurations(&self) -> &[Configuration] {
+        &self.configs
+    }
+
+    pub fn configuration_mut(&mut self, i: usize) -> Option<&mut Configuration> {
+        self.configs.get_mut(i)
+    }
+
+    pub fn active_configuration(&self) -> usize {
+        self.active
+    }
+
+    pub fn configuration_name(&self) -> &str {
+        self.configs.get(self.active).map_or("Default", |c| &c.name)
+    }
+
+    fn suppressed_now(&self) -> Vec<FeatureId> {
+        self.order
+            .iter()
+            .copied()
+            .filter(|&id| self.graph[id].suppressed)
+            .collect()
+    }
+
+    /// Adds a configuration like the active one (its equations and suppressed features) and
+    /// returns its index. The first one added also writes down the default configuration.
+    pub fn add_configuration(&mut self, name: &str) -> usize {
+        let suppressed = self.suppressed_now();
+        if self.configs.is_empty() {
+            self.configs.push(Configuration {
+                name: "Default".into(),
+                equations: Vec::new(),
+                suppressed: suppressed.clone(),
+            });
+            self.active = 0;
+        }
+        let equations = self.configs[self.active].equations.clone();
+        self.configs.push(Configuration {
+            name: name.into(),
+            equations,
+            suppressed,
+        });
+        self.configs.len() - 1
+    }
+
+    /// Makes configuration `i` the active one: its features are suppressed, the rest not.
+    pub fn activate(&mut self, i: usize) {
+        if i >= self.configs.len() {
+            return;
+        }
+        let now = self.suppressed_now();
+        if let Some(c) = self.configs.get_mut(self.active) {
+            c.suppressed = now;
+        }
+        self.active = i;
+        let suppressed = self.configs[i].suppressed.clone();
+        for &id in &self.order {
+            self.graph[id].suppressed = suppressed.contains(&id);
+        }
+    }
+
+    /// Deletes configuration `i`; the last one cannot go.
+    pub fn remove_configuration(&mut self, i: usize) {
+        if self.configs.len() < 2 || i >= self.configs.len() {
+            return;
+        }
+        if i == self.active {
+            self.activate(if i == 0 { 1 } else { 0 });
+        }
+        self.configs.remove(i);
+        if self.active > i {
+            self.active -= 1;
+        }
+    }
+
+    pub fn appearances(&self) -> &[(Paint, [u8; 3])] {
+        &self.appearances
+    }
+
+    pub fn appearances_mut(&mut self) -> &mut Vec<(Paint, [u8; 3])> {
+        &mut self.appearances
     }
 }
 

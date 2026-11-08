@@ -72,6 +72,11 @@ toolchain to install, and one `cargo run` builds the whole application on Window
 - A feature tree with a draggable rollback bar, rename, reorder, suppress, edit and delete, persistent face
   and edge names (features keep pointing at the right geometry when dimensions change), incremental
   rebuilds, and undo/redo for every change.
+- Global variables and equations with units (`wall = 2`, `D1@Boss-Extrude1 = wall * 10 + 1in`), solved
+  in dependency order, with circular references shown on the equation that has them.
+- Configurations: variants of a part with their own dimensions and suppressed features, switched from the
+  feature tree and exported one at a time.
+- Appearances: a colour per face, body or feature, shown in the viewport and written to 3MF and STEP.
 
 ### 3D Print studio
 
@@ -258,6 +263,8 @@ cargo test --workspace
 | Move or turn a component | Drag it, or Shift+drag it (assemblies) |
 | Delete a component, mate or explode step | Select it and press `Delete` |
 | Rename a feature | Select it and press `F2` |
+| Variables, equations and configurations | **Evaluate → Equations**, or the **Configuration** box at the top of the tree |
+| Colour a face, body or feature | Pick it and **Evaluate → Appearance**, or right-click a feature or body in the tree |
 | Rebuild everything | `Ctrl+Q` |
 | Keyboard shortcuts | `F1` or the Shortcuts button (top right) |
 
@@ -265,7 +272,7 @@ cargo test --workspace
 
 | File | What it is |
 | --- | --- |
-| `.3bcad` | A part: its feature history, units, material, print orientation and custom properties as pretty-printed JSON. Geometry is rebuilt on open. |
+| `.3bcad` | A part: its feature history, equations, configurations, colours, units, material, print orientation and custom properties as pretty-printed JSON. Geometry is rebuilt on open. |
 | `.3bcasm` | An assembly: the files it uses (relative to the assembly, so they can move together), where each component sits, its mates and exploded view. |
 | `.3bcdrw` | A drawing: the part it shows (relative to the drawing), its sheets, views, dimensions, notes and title block. Views are projected again on open. |
 | `settings.txt` | Preferences (recent files, autosave, slicer and its location, printer, check and export settings) in `%APPDATA%\3BCAD`, `~/Library/Application Support/3BCAD` or `~/.config/3bcad`. |
@@ -301,8 +308,8 @@ adding a feature type or a sketch relation. Every importer has a fuzz target in 
 | v0.5.0 | Files: native save/load, STEP/DXF/mesh import, units, materials (done) |
 | v0.6.0 | 3D Print studio: overhang and thin-wall checks, orientation, fits, rich 3MF (done) |
 | v0.7.0 | Assemblies: mates, interference, exploded views, BOM (done) |
-| v0.8.0 | Drawings: views, sections, dimensions, PDF/DXF (done, unreleased) |
-| v0.9.0 | Design intent: equations, configurations, appearances |
+| v0.8.0 | Drawings: views, sections, dimensions, PDF/DXF (done) |
+| v0.9.0 | Design intent: equations, configurations, appearances (done, unreleased) |
 | v1.0.0 | Production ready: installers, signing, performance, docs, accessibility |
 
 ## Contributing
@@ -322,6 +329,11 @@ at your option.
 
 Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in the work by you,
 as defined in the Apache-2.0 license, shall be dual licensed as above, without any additional terms or conditions.
+
+3BCAD was created by Duong Phu Dong at Three Bugs Studio. If you share or build on it, keep the license files and
+[NOTICE](NOTICE), and say your version is based on 3BCAD by Three Bugs Studio. The names and logos are covered by
+the [trademark policy](TRADEMARKS.md): a modified version needs its own name. To cite 3BCAD, use **Cite this
+repository** on GitHub ([CITATION.cff](CITATION.cff)).
 
 3BCAD is an independent open-source project and is not affiliated with, endorsed by or sponsored by any CAD
 vendor. Product names and trademarks belong to their owners.

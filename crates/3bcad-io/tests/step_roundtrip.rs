@@ -54,7 +54,7 @@ fn exported_step_reads_back_with_name_units_and_volume() {
     std::fs::create_dir_all(&dir).unwrap();
     for (name, solid) in parts() {
         let path = dir.join(format!("{name}.step"));
-        write_step(&path, name, [&solid]).unwrap();
+        write_step(&path, name, [&solid], &[]).unwrap();
         let text = std::fs::read_to_string(&path).unwrap();
         assert!(
             text.contains(&format!("PRODUCT('{name}','{name}'")),
@@ -142,11 +142,29 @@ fn write_parts_for_occt() {
     std::fs::create_dir_all(&dir).unwrap();
     let mut list = String::new();
     for (name, solid) in parts() {
-        write_step(&dir.join(format!("{name}.step")), name, [&solid]).unwrap();
+        write_step(&dir.join(format!("{name}.step")), name, [&solid], &[]).unwrap();
         list += &format!("{name} {:.4}\n", volume(&solid));
     }
     // The assembly: OpenCASCADE must find its components where they were placed.
     let (_, v, b) = write_fixture(&dir.join("fixture.step"));
     list += &format!("fixture {v:.4} {}\n", b.map(|x| x.to_string()).join(" "));
     std::fs::write(dir.join("volumes.txt"), list).unwrap();
+    // Face colours: the plate's bottom red and its top blue, each found by where its centre is.
+    let plate = &parts()[0].1;
+    let faces = threebcad_kernel::mesher::render_mesh(plate, 0.01).faces;
+    let facing = |z: f64| {
+        faces
+            .iter()
+            .position(|f| f.is_some_and(|p| p.normal()[2] * z > 0.5))
+            .unwrap()
+    };
+    let mut colors = vec![None; faces.len()];
+    colors[facing(-1.0)] = Some([255, 0, 0]);
+    colors[facing(1.0)] = Some([0, 0, 255]);
+    write_step(&dir.join("colored_plate.step"), "colored_plate", [plate], &colors).unwrap();
+    std::fs::write(
+        dir.join("colors.txt"),
+        "colored_plate 255 0 0 20 12.5 0\ncolored_plate 0 0 255 20 12.5 8\n",
+    )
+    .unwrap();
 }

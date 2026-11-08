@@ -31,7 +31,7 @@ impl Default for Units {
 }
 
 /// Length units that can be typed after a number, with their size in mm.
-const LENGTHS: [(&str, f64); 8] = [
+pub(crate) const LENGTHS: [(&str, f64); 8] = [
     ("mm", 1.0),
     ("cm", 10.0),
     ("m", 1000.0),
@@ -132,21 +132,11 @@ impl Units {
     }
 
     /// Reads a typed length into mm: a plain number is in document units, a number with a unit
-    /// (`1in`, `2.5 cm`, `3"`) is converted. Simple arithmetic between terms is not supported.
+    /// (`1in`, `2.5 cm`, `3"`) is converted, and arithmetic works (`10 + 2in`, `(4 - 1) * 2`).
     pub fn parse_length(&self, text: &str) -> Option<f64> {
-        let t = text.trim();
-        let end = t
-            .find(|c: char| !(c.is_ascii_digit() || matches!(c, '.' | '-' | '+' | 'e' | 'E')))
-            .unwrap_or(t.len());
-        let (num, unit) = t.split_at(end);
-        let value: f64 = num.trim().parse().ok()?;
-        let unit = unit.trim().to_ascii_lowercase();
-        let scale = if unit.is_empty() {
-            self.system.mm_per_unit()
-        } else {
-            LENGTHS.iter().find(|(u, _)| *u == unit)?.1
-        };
-        Some(value * scale).filter(|v| v.is_finite())
+        crate::equations::evaluate(text, *self)
+            .ok()
+            .map(|v| v * self.system.mm_per_unit())
     }
 }
 
@@ -166,9 +156,10 @@ mod tests {
         assert_eq!(mm.parse_length(" 2.5 cm "), Some(25.0));
         assert!((mm.parse_length("3\"").unwrap() - 76.2).abs() < 1e-9);
         assert_eq!(ips.parse_length("2"), Some(50.8));
-        assert_eq!(ips.parse_length("12.7mm"), Some(12.7));
+        assert!((ips.parse_length("12.7mm").unwrap() - 12.7).abs() < 1e-12);
         assert_eq!(mm.parse_length("1 parsec"), None);
         assert_eq!(mm.parse_length("abc"), None);
+        assert_eq!(mm.parse_length("10 + 2 cm"), Some(30.0));
         assert_eq!(ips.length(25.4), "1.000 in");
         assert_eq!(mm.length(25.4), "25.40 mm");
         // A 1 in cube: 16387.064 mm³ is 1 in³.

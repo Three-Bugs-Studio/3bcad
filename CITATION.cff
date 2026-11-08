@@ -1,0 +1,19 @@
+cff-version: 1.2.0
+message: "If you use 3BCAD or build on it, please cite it as below."
+title: "3BCAD"
+abstract: "Open-source parametric CAD for parts, assemblies, drawings and 3D printing, written in Rust."
+type: software
+authors:
+  - name: "Three Bugs Studio"
+  - family-names: "Duong"
+    given-names: "Phu Dong"
+repository-code: "https://github.com/Three-Bugs-Studio/3bcad"
+url: "https://github.com/Three-Bugs-Studio/3bcad"
+license:
+  - MIT
+  - Apache-2.0
+keywords:
+  - CAD
+  - parametric modeling
+  - 3D printing
+  - Rust

@@ -113,7 +113,7 @@ pub fn lay_out(g: &mut SceneGeometry, v: &PrintView) -> PrintReport {
             }
         }
     }
-    for (t, c) in g.triangles.chunks_exact_mut(3).zip(&tint) {
+    for (t, c) in g.triangles.chunks_exact_mut(3).zip(&tint).filter(|(_, c)| c[3] > 0) {
         t.iter_mut().for_each(|v| v.tint = *c);
     }
 
@@ -198,6 +198,7 @@ pub fn on_bed(objects: &Objects, down: P3, bed: [f64; 3]) -> Objects {
             let mesh = PrintMesh {
                 vertices,
                 triangles: m.triangles.clone(),
+                face_of: m.face_of.clone(),
             };
             (name.clone(), mesh)
         })

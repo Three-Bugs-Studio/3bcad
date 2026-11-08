@@ -237,14 +237,20 @@ impl App {
             });
             meshes.insert(l.generation, m.clone());
             let tint = if clashing.contains(&li) {
-                CLASH
+                Some(CLASH)
             } else if tinted == Some(l.component) {
-                SELECTED
+                Some(SELECTED)
             } else {
-                let [r, g, b] = l.part.material().color;
-                [r, g, b, 255]
+                None
             };
+            let material = l.part.material().color;
             for (bi, m) in m.iter().enumerate() {
+                // The part's face colours, else its material's.
+                let colors = l.part.face_colors(bi);
+                let face_tint = |f: u32| {
+                    let [r, g, b] = colors.get(f as usize).copied().flatten().unwrap_or(material);
+                    [r, g, b, 255]
+                };
                 let body = bodies.len();
                 bodies.push((li, bi));
                 let base = refs.len() as u32;
@@ -258,7 +264,7 @@ impl App {
                             pos: f32x3(pose.apply(f64x3(p))),
                             nor: f32x3(pose.turn(f64x3(n))),
                             id: base + f,
-                            tint,
+                            tint: tint.unwrap_or_else(|| face_tint(f)),
                         }),
                 );
                 for poly in &m.edges {
@@ -418,10 +424,7 @@ impl App {
         let objects: Vec<(String, PrintMesh, P3)> = leaves
             .iter()
             .map(|l| {
-                let mut mesh = PrintMesh {
-                    vertices: Vec::new(),
-                    triangles: Vec::new(),
-                };
+                let mut mesh = PrintMesh::default();
                 for b in l.part.bodies() {
                     let m = mesher::print_mesh_within(&b.solid, st.chord, st.angle_deg.to_radians());
                     let base = mesh.vertices.len();
@@ -441,6 +444,7 @@ impl App {
             title: s.doc.name.clone(),
             material: first.name.clone(),
             color: first.color,
+            colors: Vec::new(),
             settings: vec![
                 ("Printer".into(), st.printer.clone()),
                 ("NozzleDiameter".into(), format!("{}", st.nozzle)),
@@ -559,6 +563,7 @@ pub fn bed_layout(objects: Vec<(String, PrintMesh, P3)>, bed: [f64; 3]) -> Objec
             PrintMesh {
                 vertices,
                 triangles: mesh.triangles,
+                face_of: mesh.face_of,
             },
         ));
     }

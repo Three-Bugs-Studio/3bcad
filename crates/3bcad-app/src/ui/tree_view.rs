@@ -41,6 +41,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
             ui.heading("Feature Tree");
             ui.separator();
             ui.label(RichText::new(&app.doc.name).strong());
+            crate::ui::design::configuration_picker(app, ui);
             for rp in RefPlane::ALL {
                 ui.horizontal(|ui| {
                     let visible = app.plane_visible.get_mut(&rp).unwrap();
@@ -203,6 +204,10 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                         ));
                         ui.close_menu();
                     }
+                    if ui.button("Appearance…").clicked() {
+                        app.appearance = crate::ui::design::Appearance::of(app, None, Some(id), false);
+                        ui.close_menu();
+                    }
                     let label = if row.own_suppressed { "Unsuppress" } else { "Suppress" };
                     if ui.button(label).clicked() {
                         action = Some(Action::Suppress(id, !row.own_suppressed));
@@ -308,6 +313,12 @@ fn solid_bodies(app: &mut App, ui: &mut egui::Ui) {
                     })
                     .inner
                     .on_hover_text("Click to select the body, Ctrl+click to add it");
+                resp.context_menu(|ui| {
+                    if ui.button("Appearance…").clicked() {
+                        app.appearance = crate::ui::design::Appearance::of(app, Some((body, 0)), None, true);
+                        ui.close_menu();
+                    }
+                });
                 if resp.clicked() {
                     if ui.input(|i| i.modifiers.command) {
                         if picked {

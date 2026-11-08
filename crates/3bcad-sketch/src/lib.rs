@@ -29,6 +29,10 @@ pub struct Sketch {
     constraints: Vec<Constraint>,
     /// Where each dimension's label sits; parallel to `constraints`.
     labels: Vec<Option<P2>>,
+    /// Each dimension's number for equations (`D3@Sketch1`), kept when others are deleted; 0 for
+    /// relations. Parallel to `constraints`, or empty in sketches saved before v0.9.
+    #[serde(default)]
+    numbers: Vec<u32>,
 }
 
 /// How well the sketch is defined, as shown in the status bar.
@@ -118,6 +122,7 @@ impl Sketch {
         self.points.iter().all(|&i| i + 1 < self.params.len())
             && self.params.iter().all(|v| v.is_finite())
             && self.labels.len() == self.constraints.len()
+            && (self.numbers.is_empty() || self.numbers.len() == self.constraints.len())
             && self.entities.iter().all(|e| {
                 e.points().iter().all(|p| p.0 < np)
                     && match &e.geom {
@@ -199,9 +204,35 @@ impl Sketch {
     /// Adds a relation or dimension and returns its index. Panics on invalid input; check with [`Self::accepts`].
     pub fn constrain(&mut self, c: Constraint) -> usize {
         assert!(c.is_valid(self), "invalid constraint {c:?}");
+        self.number_dimensions();
+        let n = if c.dimension().is_some() {
+            self.numbers.iter().max().map_or(1, |m| m + 1)
+        } else {
+            0
+        };
         self.constraints.push(c);
         self.labels.push(None);
+        self.numbers.push(n);
         self.constraints.len() - 1
+    }
+
+    /// Numbers the dimensions of a sketch saved before v0.9 in order.
+    fn number_dimensions(&mut self) {
+        if self.numbers.len() != self.constraints.len() {
+            self.numbers = (0..self.constraints.len()).map(|i| self.number(i)).collect();
+        }
+    }
+
+    /// Constraint `i`'s dimension number (`3` for `D3`), 0 for a relation.
+    pub fn number(&self, i: usize) -> u32 {
+        match self.numbers.get(i) {
+            Some(&n) if self.numbers.len() == self.constraints.len() => n,
+            _ if self.constraints[i].dimension().is_none() => 0,
+            _ => self.constraints[..=i]
+                .iter()
+                .filter(|c| c.dimension().is_some())
+                .count() as u32,
+        }
     }
 
     /// Changes a dimension; for pattern relations every instance of the pattern follows.
@@ -241,6 +272,7 @@ impl Sketch {
     /// Deletes points, entities and relations. Entities using a deleted point go too, as do points
     /// only used by deleted entities and relations that referenced anything deleted.
     pub fn remove(&mut self, points: &[PointId], entities: &[EntityId], constraints: &[usize]) {
+        self.number_dimensions();
         let (np, ne) = (self.points.len(), self.entities.len());
         let mut del_p = vec![false; np];
         points.iter().for_each(|p| del_p[p.0] = true);
@@ -310,6 +342,7 @@ impl Sketch {
         let fe = |e: EntityId| entity_map[e.0];
         let mut new_constraints = Vec::new();
         let mut new_labels = Vec::new();
+        let mut new_numbers = Vec::new();
         for (i, c) in self.constraints.iter().enumerate() {
             if constraints.contains(&i) {
                 continue;
@@ -317,6 +350,7 @@ impl Sketch {
             if let Some(c) = c.remap(&fp, &fe) {
                 new_constraints.push(c);
                 new_labels.push(self.labels[i]);
+                new_numbers.push(self.numbers[i]);
             }
         }
         *self = Sketch {
@@ -325,6 +359,7 @@ impl Sketch {
             entities: new_entities,
             constraints: new_constraints,
             labels: new_labels,
+            numbers: new_numbers,
         };
     }
 
@@ -342,15 +377,18 @@ impl Sketch {
     /// Drags points: they follow the cursor exactly when the relations allow it; otherwise the
     /// relations win and pull them back (fully-defined geometry does not move).
     pub fn drag(&mut self, moves: &[(PointId, P2)]) -> SolveReport {
+        self.number_dimensions();
         let n = self.constraints.len();
         for &(p, to) in moves {
             self.set_point(p, to);
             self.constraints.push(Constraint::Fix(p, to));
             self.labels.push(None);
+            self.numbers.push(0);
         }
         let pinned = self.solve();
         self.constraints.truncate(n);
         self.labels.truncate(n);
+        self.numbers.truncate(n);
         if pinned.converged {
             pinned
         } else {
@@ -797,5 +835,25 @@ mod tests {
         }
         assert!(s.solve().converged);
         assert!(close(s.point(prev), [199.0, 0.0]), "{:?}", s.point(prev));
+    }
+
+    #[test]
+    fn dimension_numbers_survive_deleting_others() {
+        // Rectangle: relations 0-3, Fix 4, width 5 (D1), height 6 (D2).
+        let mut s = Sketch::rectangle(40.0, 30.0);
+        let dims: Vec<u32> = (0..s.constraints().len()).map(|i| s.number(i)).collect();
+        assert_eq!(dims[4..], [0, 1, 2]);
+        s.remove_constraint(5);
+        assert_eq!(s.number(5), 2, "the height stays D2");
+        let c = s.add_point(5.0, 5.0);
+        let e = s.add_circle(c, 2.0);
+        let r = s.constrain(Constraint::Radius(e, 2.0));
+        assert_eq!(s.number(r), 3, "a new dimension never takes a deleted one's number");
+        // A sketch saved before numbers existed numbers its dimensions in order.
+        let mut v = serde_json::to_value(Sketch::rectangle(40.0, 30.0)).unwrap();
+        v.as_object_mut().unwrap().remove("numbers");
+        let old: Sketch = serde_json::from_value(v).unwrap();
+        assert!(old.is_consistent());
+        assert_eq!((old.number(5), old.number(6)), (1, 2));
     }
 }

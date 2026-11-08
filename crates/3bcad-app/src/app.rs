@@ -115,6 +115,13 @@ pub struct App {
     pub show_measure: bool,
     pub show_mass: bool,
     pub show_shortcuts: bool,
+    pub show_about: bool,
+    /// The Equations window (and configurations), while open.
+    pub equations: Option<crate::ui::design::Equations>,
+    /// The Appearance window, while open.
+    pub appearance: Option<crate::ui::design::Appearance>,
+    /// The configuration exports are made in (`None`: the active one).
+    pub export_config: Option<usize>,
     pub mass: Option<(u64, MassProperties)>,
     /// The Measure window's lines, and the model revision and selection they are for.
     pub measured: Option<(u64, Vec<ModelRef>, Vec<String>)>,
@@ -162,6 +169,10 @@ impl App {
             show_measure: false,
             show_mass: false,
             show_shortcuts: false,
+            show_about: false,
+            equations: None,
+            appearance: None,
+            export_config: None,
             mass: None,
             measured: None,
             renaming: None,
@@ -226,6 +237,7 @@ impl App {
         let mut refs = Vec::new();
         for (body, b) in self.doc.bodies().iter().enumerate() {
             let m = mesher::render_mesh(&b.solid, DISPLAY_TOL);
+            let colors = self.doc.face_colors(body);
             let base = refs.len() as u32;
             refs.extend((0..m.faces.len()).map(|face| ModelRef::Face { body, face }));
             g.triangles.extend(
@@ -237,7 +249,10 @@ impl App {
                         pos,
                         nor,
                         id: base + f,
-                        tint: [0; 4],
+                        tint: match colors.get(f as usize) {
+                            Some(&Some([r, g, b])) => [r, g, b, 255],
+                            _ => [0; 4],
+                        },
                     }),
             );
             for (edge, poly) in m.edges.iter().enumerate() {
@@ -666,23 +681,46 @@ impl App {
     /// Drops everything cached for the open part: another part's revisions count from the start
     /// again, so they could match.
     pub(crate) fn forget_caches(&mut self) {
+        self.equations = None;
+        self.appearance = None;
+        self.export_config = None;
         self.built_for = None;
         self.export_cache = None;
         self.mass = None;
         self.measured = None;
     }
 
-    /// STL and 3MF are written as the part sits on the printer's bed; STEP in model space.
+    /// STL and 3MF are written as the part sits on the printer's bed; STEP in model space. A part
+    /// is written in its export configuration.
     pub fn write(&mut self, format: ExportFormat, path: &Path) -> io::Result<()> {
         if self.asm.is_some() {
             return self.write_assembly(format, path);
         }
+        let h = self.doc.history();
+        let active = h.active_configuration();
+        let n = h.configurations().len();
+        let Some(i) = self.export_config.filter(|&i| i != active && i < n) else {
+            return self.write_part(format, path);
+        };
+        // A copy of the part built in that configuration stands in for the open one meanwhile.
+        let other = self.doc.in_configuration(i).map_err(io::Error::other)?;
+        let open = std::mem::replace(&mut self.doc, other);
+        self.export_cache = None;
+        let written = self.write_part(format, path);
+        self.doc = open;
+        self.export_cache = None;
+        written
+    }
+
+    fn write_part(&mut self, format: ExportFormat, path: &Path) -> io::Result<()> {
         let bodies = self.doc.bodies();
         if bodies.is_empty() && (self.doc.built().meshes.is_empty() || format == ExportFormat::Step) {
             return Err(io::Error::other("the part has no bodies"));
         }
+        let colors: Vec<Vec<Option<[u8; 3]>>> = (0..bodies.len()).map(|b| self.doc.face_colors(b)).collect();
         if format == ExportFormat::Step {
-            return threebcad_io::write_step(path, &self.doc.name, bodies.iter().map(|b| &b.solid));
+            let solids = bodies.iter().map(|b| &b.solid);
+            return threebcad_io::write_step(path, &self.doc.name, solids, &colors.concat());
         }
         let (down, bed) = (self.doc.print_down(), self.files.settings.bed);
         let objects = crate::print::on_bed(&self.export_objects(), down, bed);
@@ -696,6 +734,7 @@ impl App {
             title: self.doc.name.clone(),
             material: material.name.clone(),
             color: material.color,
+            colors,
             settings: vec![
                 ("Printer".into(), s.printer.clone()),
                 ("NozzleDiameter".into(), format!("{}", s.nozzle)),
@@ -887,6 +926,7 @@ impl eframe::App for App {
         self.files_frame(ctx);
         crate::files::properties_window(self, ctx);
         ui::update::window(self, ctx);
+        ui::help::about(self, ctx);
         if self.asm.is_some() {
             return ui::assembly::frame(self, ctx);
         }
@@ -945,6 +985,8 @@ impl eframe::App for App {
         ui::properties::show(self, ctx);
         self.sync_geometry();
         ui::evaluate::windows(self, ctx);
+        ui::design::equations_window(self, ctx);
+        ui::design::appearance_window(self, ctx);
         ui::help::window(self, ctx);
         ui::print::slicer_prompt(self, ctx);
         egui::CentralPanel::default()

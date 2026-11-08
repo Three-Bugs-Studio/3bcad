@@ -77,7 +77,7 @@ jobs:
         run: |
           cargo build --release --locked
           mkdir -p "dist/$PKG"
-          cp target/release/3bcad.exe README.md CHANGELOG.md LICENSE-MIT LICENSE-APACHE "dist/$PKG/"
+          cp target/release/3bcad.exe README.md CHANGELOG.md LICENSE-MIT LICENSE-APACHE NOTICE "dist/$PKG/"
           cd dist && 7z a "$PKG.zip" "$PKG"
 
       - name: Package (macOS)
@@ -94,7 +94,7 @@ jobs:
           plutil -lint "$app/Contents/Info.plist"
           # Ad-hoc signature: required for Apple Silicon to launch it (not a Developer ID signature).
           codesign --force --deep --sign - "$app"
-          cp README.md CHANGELOG.md LICENSE-MIT LICENSE-APACHE "dist/$PKG/"
+          cp README.md CHANGELOG.md LICENSE-MIT LICENSE-APACHE NOTICE "dist/$PKG/"
           cd dist && ditto -c -k --keepParent "$PKG" "$PKG.zip"
 
       - name: Package (Linux)
@@ -102,7 +102,7 @@ jobs:
         run: |
           cargo build --release --locked
           mkdir -p "dist/$PKG"
-          cp target/release/3bcad README.md CHANGELOG.md LICENSE-MIT LICENSE-APACHE "dist/$PKG/"
+          cp target/release/3bcad README.md CHANGELOG.md LICENSE-MIT LICENSE-APACHE NOTICE "dist/$PKG/"
           tar -C dist -czf "dist/$PKG.tar.gz" "$PKG"
 
       - uses: actions/upload-artifact@v4

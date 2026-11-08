@@ -955,6 +955,10 @@ pub fn menu(app: &mut App, ui: &mut egui::Ui) {
             app.update.check(true);
             app.status = "Checking for updates…".into();
         }
+        if ui.button("About 3BCAD…").clicked() {
+            ui.close_menu();
+            app.show_about = true;
+        }
         ui.horizontal(|ui| {
             ui.label("Autosave every");
             let mut m = app.files.settings.autosave_minutes;
@@ -992,17 +996,22 @@ pub fn properties_window(app: &mut App, ctx: &egui::Context) {
     let mut apply = false;
     egui::Window::new(format!("Properties of {}", app.doc_name()))
         .open(&mut open)
-        .default_width(360.0)
+        .default_width(460.0)
         .show(ctx, |ui| {
-            ui.weak("Part number and Description go into the bill of materials; other rows become extra columns.");
+            ui.weak(
+                "Part number and Description go into the bill of materials; other rows become extra columns. \
+                 Drawings fill in {Name} in title blocks and notes.",
+            );
             egui::Grid::new("custom_properties").num_columns(3).show(ui, |ui| {
                 ui.strong("Name");
                 ui.strong("Value");
                 ui.end_row();
                 let mut gone = None;
                 for (i, (k, v)) in rows.iter_mut().enumerate() {
-                    ui.add(egui::TextEdit::singleline(k).desired_width(120.0));
-                    ui.add(egui::TextEdit::singleline(v).desired_width(180.0));
+                    // A grid cell is only as wide as its column was: size the fields outright.
+                    let h = ui.spacing().interact_size.y;
+                    ui.add_sized([150.0, h], egui::TextEdit::singleline(k));
+                    ui.add_sized([260.0, h], egui::TextEdit::singleline(v));
                     if ui.small_button("✖").on_hover_text("Remove").clicked() {
                         gone = Some(i);
                     }
@@ -1013,7 +1022,7 @@ pub fn properties_window(app: &mut App, ctx: &egui::Context) {
                 }
             });
             ui.horizontal(|ui| {
-                for name in ["Part number", "Description"] {
+                for name in ["Part number", "Description", "Author"] {
                     let missing = !rows.iter().any(|(k, _)| k.eq_ignore_ascii_case(name));
                     if missing && ui.button(format!("+ {name}")).clicked() {
                         rows.push((name.into(), String::new()));

@@ -29,7 +29,13 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
         )
         .show(ctx, |ui| {
             ui.horizontal(|ui| {
-                ui.strong("3BCAD");
+                if ui
+                    .add(egui::Label::new(egui::RichText::new("3BCAD").strong()).sense(egui::Sense::click()))
+                    .on_hover_text("About 3BCAD")
+                    .clicked()
+                {
+                    app.show_about = true;
+                }
                 ui.hyperlink_to(format!("v{VERSION}"), RELEASE_NOTES_URL)
                     .on_hover_text("What's new in this version");
                 if let Some(v) = app.update.available().map(str::to_string) {
@@ -794,6 +800,28 @@ fn evaluate(app: &mut App, ui: &mut egui::Ui) {
     }
     if tile(ui, "whatswrong", "What's Wrong", true, "Rebuild errors and warnings") {
         app.show_whats_wrong = true;
+    }
+    ui.separator();
+    if tile(
+        ui,
+        "equations",
+        "Equations",
+        true,
+        "Global variables, equations that drive dimensions, and configurations",
+    ) {
+        app.equations = Some(crate::ui::design::Equations::of(app.doc.history()));
+    }
+    if tile(
+        ui,
+        "appearance",
+        "Appearance",
+        true,
+        "Colour the picked face, its body or its feature, or the feature selected in the tree",
+    ) {
+        app.appearance = crate::ui::design::Appearance::of_selection(app);
+        if app.appearance.is_none() {
+            app.status = "Pick a face, or select a feature in the tree, to colour it".into();
+        }
     }
     ui.separator();
     if tile(
