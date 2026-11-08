@@ -74,11 +74,31 @@ sequenceDiagram
    selection, `ui/properties.rs` edits them, `ui/evaluate.rs` holds the rebuild errors window, Measure and
    Mass Properties, and `ui/print.rs` the 3D Print tab.
 
+## Equations, configurations and appearances
+
+- **Equations** (`crates/3bcad-core/src/equations.rs`) are name = expression rows kept in the `History`, so
+  undo covers them. Before every rebuild `History::apply_equations` parses each expression (units turn
+  into document units or degrees), evaluates them depth-first so dependencies come first whatever the
+  order (a name met again while it is being evaluated is a cycle), and writes the values into the
+  dimensions they name. A dimension is `D<n>@<feature>`: a sketch dimension's number is stored with it
+  (`Sketch::number`, kept when others are deleted), a feature's sizes have fixed numbers per kind
+  (`FeatureKind::dimensions_mut`).
+- **Configurations** (`history.rs`) hold the features they suppress and equations that replace the part's
+  of the same name. The features' own `suppressed` flags are the active configuration's; activating
+  another writes them down first. A dimension a configuration's equation sets remembers the value it
+  replaced (`History::held`) and gets it back when another configuration is active, so configurations
+  never leak into each other. Export builds a copy of the part in the chosen configuration.
+- **Appearances** are colours for a `FaceRef` (a face, or its whole body) or a feature (the faces tagged
+  with it), so they follow the faces through rebuilds like fillets do. `PartDocument::face_colors`
+  resolves them per face; the viewport puts them in the vertex tint, `PrintMesh::face_of` maps export
+  triangles to faces for 3MF, and the STEP writer appends AP214 styled items for the faces its shells
+  list in the same order.
+
 ## Files
 
 - **Part files** (`crates/3bcad-core/src/document.rs`). A `.3bcad` file is pretty-printed JSON of the
   feature history (the `History` graph with its node ids), units and material, tagged with a format
-  name and `FORMAT_VERSION`. Geometry is never saved: opening a file rebuilds it. Changing a saved type
+  name and `FORMAT_VERSION` (4 since v0.9). Geometry is never saved: opening a file rebuilds it. Changing a saved type
   (`FeatureKind`, `Sketch`, ...) changes the format: bump `FORMAT_VERSION` and teach `migrate` to rewrite
   the old JSON, and keep the corpus round-trip test (`tests/parts.rs`) passing. Files from a newer version
   and damaged files (checked by `History::validate` and `Sketch::is_consistent`) are refused.

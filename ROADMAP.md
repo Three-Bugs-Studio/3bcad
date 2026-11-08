@@ -138,10 +138,10 @@ Multi-part assemblies with mates, interference checks, exploded views and BOM.
 
 Equations, global variables, configurations and appearances.
 
-- [ ] #90 Global variables and equations
-- [ ] #91 Configurations
-- [ ] #92 Appearances: colour per body, face and feature
-- [ ] #93 Custom document properties
+- [x] #90 Global variables and equations
+- [x] #91 Configurations
+- [x] #92 Appearances: colour per body, face and feature
+- [x] #93 Custom document properties
 
 ## [v1.0.0 – Production Ready](https://github.com/Three-Bugs-Studio/3bcad/milestone/9)
 

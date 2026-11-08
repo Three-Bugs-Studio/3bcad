@@ -7,6 +7,36 @@ saved files and workflows; patch versions (0.x.y) only fix bugs.
 
 ## [Unreleased]
 
+### Added
+
+- Design intent and configurations (v0.9.0 milestone):
+  - Global variables and equations: **Evaluate → Equations** sets variables (`wall = 2`) and drives any
+    dimension from an expression (`D1@Boss-Extrude1 = wall * 10`). Expressions take units (`5 mm`, `1in`,
+    `3"`, `30deg`), `+ - * / ^`, brackets, `pi` and `sin cos tan asin acos atan sqrt abs min max round
+    floor ceil` (angles in degrees). Equations are solved in dependency order whatever order they are
+    listed in; a circular reference, an unknown name or a typing mistake is shown on the equation that has
+    it, and the others still apply. Sketch dimensions are named `D1@Sketch1` and keep their number when
+    others are deleted (the sketch's dimension box shows it); **+ Dimension** lists every dimension of
+    the part with its name and value. Length fields and the sketch dimension box take arithmetic too
+    (`10 + 2in`) (#90).
+  - Configurations: variants of one part, each with its own suppressed features and its own equations
+    over the part's (tick **This configuration only**), so a configuration can change any dimension.
+    Switch from the **Configuration** box at the top of the feature tree; add, rename and delete
+    configurations in the Equations window. The 3D Print tab picks the configuration STL, 3MF and STEP
+    exports and Send to Slicer are made in (#91).
+  - Appearances: colour a face, a whole body or the faces a feature made (**Evaluate → Appearance**, or
+    right-click a feature or a body in the tree). A face shows its own colour, else its body's, else its
+    feature's, else the material's. Colours follow their faces through rebuilds, show in parts and in
+    assemblies, and are written to 3MF (a base material per colour, set per triangle) and STEP (AP214
+    face styles, read by FreeCAD and other OpenCASCADE-based CAD) (#92).
+  - Custom properties: drawing notes fill in `{Part number}`, `{Material}` and every other property the
+    way title blocks do, and File → Properties has an **Author** row button and wider fields (#93).
+
+### Changed
+
+- Part files are now format version 4 (equations, configurations, appearances and sketch dimension
+  numbers). Older parts open as before; 3BCAD 0.8 and older refuse parts saved by this version.
+
 ## [0.8.0] - 2026-11-07
 
 ### Added
