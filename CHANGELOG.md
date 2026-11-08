@@ -34,6 +34,8 @@ saved files and workflows; patch versions (0.x.y) only fix bugs.
 
 ### Changed
 
+- Command and tree icons use 3BCAD's own teal and orange palette: teal solids, orange add and move
+  arrows, the logo's blues for sketches; green is kept for OK and the Y axis.
 - Part files are now format version 4 (equations, configurations, appearances and sketch dimension
   numbers). Older parts open as before; 3BCAD 0.8 and older refuse parts saved by this version.
 

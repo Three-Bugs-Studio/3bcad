@@ -1,6 +1,6 @@
-//! Command and tree icons, painted as small shaded 3D icons: gold solids lit
-//! from the upper left, blue sketches and translucent planes, green "add" and red "remove" arrows,
-//! dark outlines. Solids are built in 3D (z up) and drawn in isometric view; flat marks are placed in
+//! Command and tree icons, painted as small shaded 3D icons: teal solids lit
+//! from the upper left, blue sketches and translucent planes, orange "add" and red "remove" arrows,
+//! dark outlines (green only where it means OK, or the Y axis). Solids are built in 3D (z up) and drawn in isometric view; flat marks are placed in
 //! a unit square.
 
 use std::f32::consts::{FRAC_PI_2, PI, TAU};
@@ -31,15 +31,19 @@ const fn mat(dark: (u8, u8, u8), base: (u8, u8, u8), light: (u8, u8, u8), ink: (
     }
 }
 
-const GOLD: Mat = mat((178, 118, 10), (240, 188, 46), (255, 242, 168), (104, 70, 8));
+const TEAL: Mat = mat((14, 110, 106), (31, 169, 160), (168, 230, 223), (8, 71, 68));
 const GREY: Mat = mat((96, 100, 110), (166, 171, 181), (232, 235, 240), (58, 61, 70));
 const DARK: Mat = mat((34, 35, 40), (76, 79, 87), (150, 155, 166), (20, 20, 25));
 const WHITE: Mat = mat((178, 183, 193), (232, 235, 240), (255, 255, 255), (80, 85, 96));
-const BLUE: Mat = mat((18, 66, 158), (46, 118, 214), (160, 205, 252), (14, 48, 118));
+// The logo's blues: #1B5AA8, #2F86E0, #6CC4FF.
+const BLUE: Mat = mat((27, 90, 168), (47, 134, 224), (108, 196, 255), (14, 52, 104));
+/// OK and accept (a check mark, a green light) and the Y axis; "add" is orange.
 const GREEN: Mat = mat((22, 112, 32), (64, 178, 72), (178, 238, 166), (16, 80, 24));
-const RED: Mat = mat((150, 22, 16), (222, 62, 46), (255, 176, 156), (108, 16, 10));
+// The logo's orange, #FB8500: add, move and other accents, warnings.
+const ORANGE: Mat = mat((184, 92, 0), (251, 133, 0), (255, 204, 140), (112, 56, 0));
+const RED: Mat = mat((150, 26, 34), (214, 47, 58), (250, 172, 170), (104, 16, 22));
 const WOOD: Mat = mat((168, 118, 70), (226, 182, 132), (250, 226, 192), (104, 70, 8));
-const SKETCH: Color32 = Color32::from_rgb(28, 88, 196);
+const SKETCH: Color32 = Color32::from_rgb(27, 90, 168);
 const INK: Color32 = Color32::from_rgb(50, 52, 62);
 
 type V3 = [f32; 3];
@@ -334,7 +338,7 @@ impl Pen<'_> {
     /// Sketch end points.
     fn ends(&self, pts: &[(f32, f32)]) {
         for &(x, y) in pts {
-            self.bead(x, y, 0.06, GOLD);
+            self.bead(x, y, 0.06, TEAL);
         }
     }
 
@@ -475,7 +479,7 @@ impl Pen<'_> {
         self.flat(&[at(0.0, 0.0), at(0.09, w * 0.4), at(0.09, -w * 0.4)], DARK, dark);
         self.flat(
             &[at(0.22, w), at(len - 0.14, w), at(len - 0.14, -w), at(0.22, -w)],
-            GOLD,
+            TEAL,
             dark,
         );
         self.flat(
@@ -506,23 +510,23 @@ pub fn paint(p: &Painter, r: Rect, name: &str, enabled: bool) {
     match name {
         "extrude" => {
             k.fit(o, [1.0, 1.0, 1.3]);
-            k.prism(&rect3(0.0, 0.0, 1.0, 1.0, 0.0), [0.0, 0.0, 0.55], GOLD);
-            k.arrow(k.u(0.5, 0.5, 0.5), k.u(0.5, 0.5, 1.3), GREEN);
+            k.prism(&rect3(0.0, 0.0, 1.0, 1.0, 0.0), [0.0, 0.0, 0.55], TEAL);
+            k.arrow(k.u(0.5, 0.5, 0.5), k.u(0.5, 0.5, 1.3), ORANGE);
         }
         "cut" => {
             k.fit(o, [1.0, 1.0, 1.3]);
-            k.prism(&rect3(0.0, 0.0, 1.0, 1.0, 0.0), [0.0, 0.0, 0.55], GOLD);
-            k.pocket(&rect3(0.25, 0.25, 0.75, 0.75, 0.55), 0.28, GOLD);
+            k.prism(&rect3(0.0, 0.0, 1.0, 1.0, 0.0), [0.0, 0.0, 0.55], TEAL);
+            k.pocket(&rect3(0.25, 0.25, 0.75, 0.75, 0.55), 0.28, TEAL);
             k.arrow(k.u(0.5, 0.5, 1.3), k.u(0.5, 0.5, 0.5), RED);
         }
         "revolve" | "revolve_cut" => {
             k.fit([-0.1, -0.1, -0.2], [1.1, 1.1, 1.0]);
             k.dashed(k.u(0.5, 0.5, -0.2), k.u(0.5, 0.5, 0.4), INK);
-            k.prism(&ring([0.5, 0.5, 0.0], 0.5, 32), [0.0, 0.0, 0.4], GOLD);
+            k.prism(&ring([0.5, 0.5, 0.0], 0.5, 32), [0.0, 0.0, 0.4], TEAL);
             let m = if name == "revolve" {
-                GREEN
+                ORANGE
             } else {
-                k.pocket(&ring([0.5, 0.5, 0.4], 0.26, 24), 0.14, GOLD);
+                k.pocket(&ring([0.5, 0.5, 0.4], 0.26, 24), 0.14, TEAL);
                 RED
             };
             k.dashed(k.u(0.5, 0.5, 0.4), k.u(0.5, 0.5, 1.0), INK);
@@ -542,23 +546,23 @@ pub fn paint(p: &Painter, r: Rect, name: &str, enabled: bool) {
                 prof.push([0.0, 0.55, 0.9]);
             }
             prof.push([0.0, 0.0, 0.9]);
-            k.prism(&prof, [1.0, 0.0, 0.0], GOLD);
+            k.prism(&prof, [1.0, 0.0, 0.0], TEAL);
         }
         "shell" => {
             k.fit(o, [1.0, 1.0, 0.7]);
-            k.prism(&rect3(0.0, 0.0, 1.0, 1.0, 0.0), [0.0, 0.0, 0.7], GOLD);
-            k.pocket(&rect3(0.14, 0.14, 0.86, 0.86, 0.7), 0.48, GOLD);
+            k.prism(&rect3(0.0, 0.0, 1.0, 1.0, 0.0), [0.0, 0.0, 0.7], TEAL);
+            k.pocket(&rect3(0.14, 0.14, 0.86, 0.86, 0.7), 0.48, TEAL);
         }
         "hole" => {
             k.fit(o, [1.0, 1.0, 0.45]);
-            k.prism(&rect3(0.0, 0.0, 1.0, 1.0, 0.0), [0.0, 0.0, 0.45], GOLD);
-            k.pocket(&ring([0.5, 0.5, 0.45], 0.33, 32), 0.08, GOLD);
-            k.pocket(&ring([0.5, 0.5, 0.37], 0.2, 24), 0.22, GOLD);
+            k.prism(&rect3(0.0, 0.0, 1.0, 1.0, 0.0), [0.0, 0.0, 0.45], TEAL);
+            k.pocket(&ring([0.5, 0.5, 0.45], 0.33, 32), 0.08, TEAL);
+            k.pocket(&ring([0.5, 0.5, 0.37], 0.2, 24), 0.22, TEAL);
         }
         "draft" => {
             k.fit(o, [1.0, 1.0, 0.9]);
             let prof = [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.72, 0.0, 0.9], [0.0, 0.0, 0.9]];
-            k.prism(&prof, [0.0, 1.0, 0.0], GOLD);
+            k.prism(&prof, [0.0, 1.0, 0.0], TEAL);
             k.dashed(k.u(1.0, 1.0, 0.0), k.u(1.0, 1.0, 0.95), SKETCH);
         }
         "rib" => {
@@ -566,13 +570,13 @@ pub fn paint(p: &Painter, r: Rect, name: &str, enabled: bool) {
             k.prism(&rect3(0.0, 0.0, 1.0, 1.0, 0.0), [0.0, 0.0, 0.2], GREY);
             k.prism(&rect3(0.0, 0.0, 0.2, 1.0, 0.2), [0.0, 0.0, 0.8], GREY);
             let web = [[0.2, 0.42, 0.2], [0.85, 0.42, 0.2], [0.2, 0.42, 0.85]];
-            k.prism(&web, [0.0, 0.16, 0.0], GOLD);
+            k.prism(&web, [0.0, 0.16, 0.0], TEAL);
         }
         "lpattern" => {
             k.fit(o, [1.15, 0.75, 0.3]);
             for i in 0..3 {
                 let x = i as f32 * 0.42;
-                k.prism(&rect3(x, 0.0, x + 0.3, 0.3, 0.0), [0.0, 0.0, 0.3], GOLD);
+                k.prism(&rect3(x, 0.0, x + 0.3, 0.3, 0.0), [0.0, 0.0, 0.3], TEAL);
             }
             k.arrow(k.u(0.0, 0.62, 0.0), k.u(1.15, 0.62, 0.0), BLUE);
         }
@@ -581,7 +585,7 @@ pub fn paint(p: &Painter, r: Rect, name: &str, enabled: bool) {
             let mut at: Vec<V3> = ring(o, 0.44, 6);
             at.sort_by(|a, b| dot(*a, VIEW).total_cmp(&dot(*b, VIEW)));
             for c in at {
-                k.prism(&ring(c, 0.14, 16), [0.0, 0.0, 0.3], GOLD);
+                k.prism(&ring(c, 0.14, 16), [0.0, 0.0, 0.3], TEAL);
             }
             k.dashed(k.u(0.0, 0.0, -0.2), k.u(0.0, 0.0, 0.6), SKETCH);
         }
@@ -589,14 +593,14 @@ pub fn paint(p: &Painter, r: Rect, name: &str, enabled: bool) {
             k.fit([0.0, -0.15, -0.1], [1.0, 0.75, 0.95]);
             let wedge =
                 |x0: f32, x1: f32, h0: f32, h1: f32| vec![[x0, 0.0, 0.0], [x1, 0.0, 0.0], [x1, 0.0, h1], [x0, 0.0, h0]];
-            k.prism(&wedge(0.0, 0.36, 0.35, 0.8), [0.0, 0.6, 0.0], GOLD);
+            k.prism(&wedge(0.0, 0.36, 0.35, 0.8), [0.0, 0.6, 0.0], TEAL);
             k.plane3(&[
                 [0.5, -0.15, -0.1],
                 [0.5, 0.75, -0.1],
                 [0.5, 0.75, 0.95],
                 [0.5, -0.15, 0.95],
             ]);
-            k.prism(&wedge(0.64, 1.0, 0.8, 0.35), [0.0, 0.6, 0.0], GOLD);
+            k.prism(&wedge(0.64, 1.0, 0.8, 0.35), [0.0, 0.6, 0.0], TEAL);
         }
         "plane" => {
             k.fit(o, [1.0, 0.8, 0.0]);
@@ -625,11 +629,11 @@ pub fn paint(p: &Painter, r: Rect, name: &str, enabled: bool) {
         }
         "box" => {
             k.fit(o, [1.0, 1.0, 0.8]);
-            k.prism(&rect3(0.0, 0.0, 1.0, 1.0, 0.0), [0.0, 0.0, 0.8], GOLD);
+            k.prism(&rect3(0.0, 0.0, 1.0, 1.0, 0.0), [0.0, 0.0, 0.8], TEAL);
         }
         "cylinder" => {
             k.fit(o, [1.0, 1.0, 0.9]);
-            k.prism(&ring([0.5, 0.5, 0.0], 0.5, 32), [0.0, 0.0, 0.9], GOLD);
+            k.prism(&ring([0.5, 0.5, 0.0], 0.5, 32), [0.0, 0.0, 0.9], TEAL);
         }
         "sketch" => {
             k.sketch_sheet();
@@ -641,7 +645,7 @@ pub fn paint(p: &Painter, r: Rect, name: &str, enabled: bool) {
         }
         "convert" => {
             k.fit([-0.15, -0.15, 0.0], [1.15, 1.15, 1.05]);
-            k.prism(&rect3(0.0, 0.0, 1.0, 1.0, 0.0), [0.0, 0.0, 0.4], GOLD);
+            k.prism(&rect3(0.0, 0.0, 1.0, 1.0, 0.0), [0.0, 0.0, 0.4], TEAL);
             k.outline3(&rect3(0.0, 0.0, 1.0, 1.0, 0.4), SKETCH);
             for (x, y) in [(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)] {
                 k.dashed(k.u(x, y, 0.4), k.u(x, y, 1.05), SKETCH);
@@ -651,11 +655,11 @@ pub fn paint(p: &Painter, r: Rect, name: &str, enabled: bool) {
         }
         "measure" => {
             k.fit(o, [1.6, 0.35, 0.65]);
-            k.prism(&rect3(0.0, 0.0, 1.6, 0.35, 0.0), [0.0, 0.0, 0.1], GOLD);
+            k.prism(&rect3(0.0, 0.0, 1.6, 0.35, 0.0), [0.0, 0.0, 0.1], TEAL);
             for i in 1..8 {
                 let x = i as f32 * 0.2;
                 let l = if i % 2 == 0 { 0.16 } else { 0.09 };
-                k.seg([x, 0.35, 0.1], [x, 0.35 - l, 0.1], GOLD);
+                k.seg([x, 0.35, 0.1], [x, 0.35 - l, 0.1], TEAL);
             }
             let mid = k.u(0.8, 0.15, 0.55);
             k.arrow(mid, k.u(0.05, 0.15, 0.55), BLUE);
@@ -674,7 +678,7 @@ pub fn paint(p: &Painter, r: Rect, name: &str, enabled: bool) {
             k.prism(&prof, [0.0, 0.7, 0.0], DARK);
         }
         "whatswrong" => {
-            k.badge(&[(0.5, 0.06), (0.94, 0.86), (0.06, 0.86)], GOLD);
+            k.badge(&[(0.5, 0.06), (0.94, 0.86), (0.06, 0.86)], ORANGE);
             k.line(&[(0.5, 0.34), (0.5, 0.6)], INK, 2.8);
             k.p.circle_filled(k.at(0.5, 0.72), k.w(1.6), k.c(INK));
         }
@@ -687,13 +691,13 @@ pub fn paint(p: &Painter, r: Rect, name: &str, enabled: bool) {
         }
         "appearance" => {
             k.bead(0.5, 0.28, 0.2, RED);
-            k.bead(0.3, 0.66, 0.2, GREEN);
+            k.bead(0.3, 0.66, 0.2, ORANGE);
             k.bead(0.7, 0.66, 0.2, BLUE);
         }
         "rebuild" => {
             k.badge(&[(0.3, 0.04), (0.68, 0.04), (0.68, 0.92), (0.3, 0.92)], DARK);
             k.bead(0.49, 0.2, 0.11, RED);
-            k.bead(0.49, 0.48, 0.11, GOLD);
+            k.bead(0.49, 0.48, 0.11, ORANGE);
             k.bead(0.49, 0.76, 0.11, GREEN);
         }
         "export" => {
@@ -702,7 +706,7 @@ pub fn paint(p: &Painter, r: Rect, name: &str, enabled: bool) {
                 WHITE,
             );
             k.flat(&[(0.48, 0.3), (0.62, 0.44), (0.48, 0.44)], GREY, vec2(0.6, 0.8));
-            k.arrow((0.34, 0.7), (0.94, 0.1), GREEN);
+            k.arrow((0.34, 0.7), (0.94, 0.1), ORANGE);
         }
         "import" => {
             k.badge(
@@ -719,7 +723,7 @@ pub fn paint(p: &Painter, r: Rect, name: &str, enabled: bool) {
         "slicer" => {
             k.fit([-0.05, 0.0, 0.0], [1.05, 1.0, 0.95]);
             k.prism(&rect3(0.0, 0.0, 1.0, 1.0, 0.0), [0.0, 0.0, 0.08], GREY);
-            k.prism(&rect3(0.3, 0.3, 0.7, 0.7, 0.08), [0.0, 0.0, 0.3], GOLD);
+            k.prism(&rect3(0.3, 0.3, 0.7, 0.7, 0.08), [0.0, 0.0, 0.3], TEAL);
             let (nx, ny) = k.u(0.5, 0.5, 0.48);
             let (hx, hy) = k.u(0.5, 0.5, 0.66);
             k.flat(&[(nx, ny), (hx + 0.07, hy), (hx - 0.07, hy)], DARK, vec2(1.0, 0.0));
@@ -825,7 +829,7 @@ pub fn paint(p: &Painter, r: Rect, name: &str, enabled: bool) {
             k.sk(&pts);
             k.ends(&[(0.5, 0.5)]);
         }
-        "sketch_point" => k.bead(0.5, 0.5, 0.14, GOLD),
+        "sketch_point" => k.bead(0.5, 0.5, 0.14, TEAL),
         "sketch_fillet" | "sketch_chamfer" => {
             k.dashed((0.15, 0.5), (0.15, 0.15), INK);
             k.dashed((0.15, 0.15), (0.5, 0.15), INK);
@@ -848,12 +852,12 @@ pub fn paint(p: &Painter, r: Rect, name: &str, enabled: bool) {
         "extend" => {
             k.sk(&[(0.86, 0.1), (0.86, 0.9)]);
             k.sk(&[(0.08, 0.5), (0.4, 0.5)]);
-            k.arrow((0.38, 0.5), (0.84, 0.5), GREEN);
+            k.arrow((0.38, 0.5), (0.84, 0.5), ORANGE);
         }
         "offset" => {
             k.line(&[(0.1, 0.1), (0.6, 0.1), (0.6, 0.6), (0.1, 0.6), (0.1, 0.1)], INK, 1.0);
             k.sk_rect(0.26, 0.26, 0.9, 0.9);
-            k.arrow((0.6, 0.6), (0.86, 0.86), GREEN);
+            k.arrow((0.6, 0.6), (0.86, 0.86), ORANGE);
         }
         "sketch_mirror" => {
             k.dashed((0.5, 0.04), (0.5, 0.96), INK);
@@ -865,7 +869,7 @@ pub fn paint(p: &Painter, r: Rect, name: &str, enabled: bool) {
             for i in 0..3 {
                 k.sk_circle(0.18 + 0.32 * i as f32, 0.42, 0.12);
             }
-            k.arrow((0.06, 0.8), (0.94, 0.8), GREEN);
+            k.arrow((0.06, 0.8), (0.94, 0.8), ORANGE);
         }
         "sketch_cpattern" => {
             for i in 0..5 {
@@ -883,7 +887,7 @@ pub fn paint(p: &Painter, r: Rect, name: &str, enabled: bool) {
                     k.u(0.15 + 0.7 * (1.0 - a.cos()), 0.5, 0.15 + 0.7 * a.sin())
                 })
                 .collect();
-            k.tube(&path, 6.0, GOLD);
+            k.tube(&path, 6.0, TEAL);
             k.sk3(&ring([0.15, 0.5, 0.0], 0.16, 16));
         }
         "loft" => {
@@ -898,9 +902,9 @@ pub fn paint(p: &Painter, r: Rect, name: &str, enabled: bool) {
                 .collect();
             let top = ring([0.5, 0.5, 1.0], 0.24, n);
             let (_, normals) = edge_normals(&base);
-            k.walls(&base, &top, &normals, 1.0, GOLD);
-            k.face3(&top, &vec![shade([0.0, 0.0, 1.0]); n], GOLD);
-            k.outline3(&top, GOLD.ink);
+            k.walls(&base, &top, &normals, 1.0, TEAL);
+            k.face3(&top, &vec![shade([0.0, 0.0, 1.0]); n], TEAL);
+            k.outline3(&top, TEAL.ink);
         }
         "helix" => {
             k.fit([0.0, 0.0, 0.0], [1.0, 1.0, 1.1]);
@@ -915,7 +919,7 @@ pub fn paint(p: &Painter, r: Rect, name: &str, enabled: bool) {
         }
         "thread" => {
             k.fit([0.0, 0.0, 0.0], [1.0, 1.0, 1.1]);
-            k.prism(&ring([0.5, 0.5, 0.0], 0.4, 24), [0.0, 0.0, 1.1], GOLD);
+            k.prism(&ring([0.5, 0.5, 0.0], 0.4, 24), [0.0, 0.0, 1.1], TEAL);
             for i in 0..5 {
                 let z = 0.12 + 0.2 * i as f32;
                 let pts: Vec<(f32, f32)> = (0..=12)
@@ -924,7 +928,7 @@ pub fn paint(p: &Painter, r: Rect, name: &str, enabled: bool) {
                         k.u(0.5 + 0.4 * a.cos(), 0.5 + 0.4 * a.sin(), z + 0.12 * j as f32 / 12.0)
                     })
                     .collect();
-                k.line(&pts, GOLD.ink, 1.3);
+                k.line(&pts, TEAL.ink, 1.3);
             }
         }
         "variable_fillet" | "face_fillet" => {
@@ -935,7 +939,7 @@ pub fn paint(p: &Painter, r: Rect, name: &str, enabled: bool) {
                 [0.0, 0.55 + 0.45 * a.cos(), 0.45 + 0.45 * a.sin()]
             }));
             prof.push([0.0, 0.0, 0.9]);
-            k.prism(&prof, [1.0, 0.0, 0.0], GOLD);
+            k.prism(&prof, [1.0, 0.0, 0.0], TEAL);
             if name == "variable_fillet" {
                 let (a, b) = (k.u(0.05, 0.86, 0.75), k.u(0.95, 0.86, 0.75));
                 k.bead(a.0, a.1, 0.06, BLUE);
@@ -946,15 +950,15 @@ pub fn paint(p: &Painter, r: Rect, name: &str, enabled: bool) {
         }
         "combine" => {
             k.fit(o, [1.3, 1.0, 0.7]);
-            k.prism(&rect3(0.0, 0.0, 0.8, 0.8, 0.0), [0.0, 0.0, 0.5], GOLD);
+            k.prism(&rect3(0.0, 0.0, 0.8, 0.8, 0.0), [0.0, 0.0, 0.5], TEAL);
             k.prism(&rect3(0.5, 0.3, 1.3, 1.0, 0.2), [0.0, 0.0, 0.5], GREY);
-            k.bead(0.8, 0.22, 0.13, GREEN);
+            k.bead(0.8, 0.22, 0.13, ORANGE);
         }
         "split" => {
             k.fit([0.0, -0.1, -0.1], [1.2, 1.0, 0.8]);
-            k.prism(&rect3(0.0, 0.0, 0.5, 0.9, 0.0), [0.0, 0.0, 0.6], GOLD);
+            k.prism(&rect3(0.0, 0.0, 0.5, 0.9, 0.0), [0.0, 0.0, 0.6], TEAL);
             k.plane3(&[[0.6, -0.1, -0.1], [0.6, 1.0, -0.1], [0.6, 1.0, 0.8], [0.6, -0.1, 0.8]]);
-            k.prism(&rect3(0.7, 0.0, 1.2, 0.9, 0.0), [0.0, 0.0, 0.6], GOLD);
+            k.prism(&rect3(0.7, 0.0, 1.2, 0.9, 0.0), [0.0, 0.0, 0.6], TEAL);
         }
         "delete_body" => {
             k.fit(o, [1.0, 1.0, 0.8]);
@@ -964,21 +968,21 @@ pub fn paint(p: &Painter, r: Rect, name: &str, enabled: bool) {
         }
         "move_body" => {
             k.fit(o, [1.0, 1.0, 0.8]);
-            k.prism(&rect3(0.0, 0.0, 0.7, 0.7, 0.0), [0.0, 0.0, 0.5], GOLD);
-            k.arrow((0.5, 0.5), (0.96, 0.5), GREEN);
-            k.arrow((0.5, 0.5), (0.5, 0.04), GREEN);
+            k.prism(&rect3(0.0, 0.0, 0.7, 0.7, 0.0), [0.0, 0.0, 0.5], TEAL);
+            k.arrow((0.5, 0.5), (0.96, 0.5), ORANGE);
+            k.arrow((0.5, 0.5), (0.5, 0.04), ORANGE);
         }
         "scale" => {
             k.fit(o, [1.0, 1.0, 1.0]);
             k.outline3(&rect3(0.0, 0.0, 1.0, 1.0, 1.0), INK);
-            k.prism(&rect3(0.0, 0.0, 0.55, 0.55, 0.0), [0.0, 0.0, 0.55], GOLD);
-            k.arrow(k.u(0.55, 0.55, 0.55), k.u(1.0, 1.0, 1.0), GREEN);
+            k.prism(&rect3(0.0, 0.0, 0.55, 0.55, 0.0), [0.0, 0.0, 0.55], TEAL);
+            k.arrow(k.u(0.55, 0.55, 0.55), k.u(1.0, 1.0, 1.0), ORANGE);
         }
         "sketch_pattern" => {
             k.fit(o, [1.0, 1.0, 0.3]);
             k.plane3(&rect3(0.0, 0.0, 1.0, 1.0, 0.0));
             for c in [[0.2, 0.25, 0.0], [0.75, 0.2, 0.0], [0.45, 0.75, 0.0]] {
-                k.prism(&ring(c, 0.13, 16), [0.0, 0.0, 0.3], GOLD);
+                k.prism(&ring(c, 0.13, 16), [0.0, 0.0, 0.3], TEAL);
             }
         }
         "curve_pattern" => {
@@ -995,13 +999,13 @@ pub fn paint(p: &Painter, r: Rect, name: &str, enabled: bool) {
                 k.prism(
                     &ring([t, 0.3 + 0.4 * (t * PI).sin(), 0.0], 0.11, 14),
                     [0.0, 0.0, 0.3],
-                    GOLD,
+                    TEAL,
                 );
             }
         }
         "dome" => {
             k.fit([0.0, 0.0, 0.0], [1.0, 1.0, 1.0]);
-            k.prism(&ring([0.5, 0.5, 0.0], 0.5, 32), [0.0, 0.0, 0.5], GOLD);
+            k.prism(&ring([0.5, 0.5, 0.0], 0.5, 32), [0.0, 0.0, 0.5], TEAL);
             let rings: Vec<Vec<V3>> = (0..=6)
                 .map(|i| {
                     let a = FRAC_PI_2 * 0.96 * i as f32 / 6.0;
@@ -1010,12 +1014,12 @@ pub fn paint(p: &Painter, r: Rect, name: &str, enabled: bool) {
                 .collect();
             for w in rings.windows(2) {
                 let (_, normals) = edge_normals(&w[0]);
-                k.walls(&w[0], &w[1], &normals, 1.0, GOLD);
+                k.walls(&w[0], &w[1], &normals, 1.0, TEAL);
             }
         }
         "wrap" => {
             k.fit([0.0, 0.0, 0.0], [1.0, 1.0, 1.1]);
-            k.prism(&ring([0.5, 0.5, 0.0], 0.45, 32), [0.0, 0.0, 1.1], GOLD);
+            k.prism(&ring([0.5, 0.5, 0.0], 0.45, 32), [0.0, 0.0, 1.1], TEAL);
             let band = |z: f32| -> Vec<(f32, f32)> {
                 (0..=10)
                     .map(|j| {
@@ -1032,60 +1036,60 @@ pub fn paint(p: &Painter, r: Rect, name: &str, enabled: bool) {
         // 3D printing.
         "fit" => {
             k.fit(o, [1.0, 1.0, 1.0]);
-            k.prism(&rect3(0.0, 0.0, 1.0, 1.0, 0.0), [0.0, 0.0, 0.35], GOLD);
-            k.pocket(&ring([0.5, 0.5, 0.35], 0.3, 32), 0.3, GOLD);
+            k.prism(&rect3(0.0, 0.0, 1.0, 1.0, 0.0), [0.0, 0.0, 0.35], TEAL);
+            k.pocket(&ring([0.5, 0.5, 0.35], 0.3, 32), 0.3, TEAL);
             k.prism(&ring([0.5, 0.5, 0.1], 0.2, 24), [0.0, 0.0, 0.9], GREY);
         }
         "overhang" => {
             k.fit(o, [1.0, 1.0, 1.0]);
-            k.prism(&rect3(0.35, 0.0, 0.65, 1.0, 0.0), [0.0, 0.0, 0.6], GOLD);
-            k.prism(&rect3(0.0, 0.0, 1.0, 1.0, 0.6), [0.0, 0.0, 0.3], GOLD);
+            k.prism(&rect3(0.35, 0.0, 0.65, 1.0, 0.0), [0.0, 0.0, 0.6], TEAL);
+            k.prism(&rect3(0.0, 0.0, 1.0, 1.0, 0.6), [0.0, 0.0, 0.3], TEAL);
             k.arrow(k.u(0.12, 0.5, 0.55), k.u(0.12, 0.5, 0.0), RED);
         }
         "thin_wall" => {
             k.fit(o, [1.0, 1.0, 0.9]);
-            k.prism(&rect3(0.0, 0.0, 1.0, 1.0, 0.0), [0.0, 0.0, 0.3], GOLD);
+            k.prism(&rect3(0.0, 0.0, 1.0, 1.0, 0.0), [0.0, 0.0, 0.3], TEAL);
             k.prism(&rect3(0.45, 0.0, 0.55, 1.0, 0.3), [0.0, 0.0, 0.6], RED);
         }
         "lay_flat" => {
             k.fit([-0.1, -0.1, 0.0], [1.1, 1.1, 1.2]);
             k.prism(&rect3(-0.1, -0.1, 1.1, 1.1, 0.0), [0.0, 0.0, 0.08], GREY);
-            k.prism(&rect3(0.25, 0.25, 0.75, 0.75, 0.08), [0.0, 0.0, 0.45], GOLD);
-            k.arrow(k.u(0.5, 0.5, 1.2), k.u(0.5, 0.5, 0.6), GREEN);
+            k.prism(&rect3(0.25, 0.25, 0.75, 0.75, 0.08), [0.0, 0.0, 0.45], TEAL);
+            k.arrow(k.u(0.5, 0.5, 1.2), k.u(0.5, 0.5, 0.6), ORANGE);
         }
         // Assemblies.
         "assembly" => {
             k.fit(o, [1.0, 1.0, 1.0]);
-            k.prism(&rect3(0.0, 0.0, 1.0, 1.0, 0.0), [0.0, 0.0, 0.4], GOLD);
+            k.prism(&rect3(0.0, 0.0, 1.0, 1.0, 0.0), [0.0, 0.0, 0.4], TEAL);
             k.prism(&rect3(0.25, 0.25, 0.75, 0.75, 0.4), [0.0, 0.0, 0.6], BLUE);
         }
         "insert" => {
             k.fit(o, [1.0, 1.0, 1.2]);
-            k.prism(&rect3(0.0, 0.0, 1.0, 1.0, 0.0), [0.0, 0.0, 0.35], GOLD);
+            k.prism(&rect3(0.0, 0.0, 1.0, 1.0, 0.0), [0.0, 0.0, 0.35], TEAL);
             k.prism(&rect3(0.3, 0.3, 0.7, 0.7, 0.75), [0.0, 0.0, 0.4], BLUE);
-            k.arrow(k.u(0.5, 0.5, 0.75), k.u(0.5, 0.5, 0.4), GREEN);
+            k.arrow(k.u(0.5, 0.5, 0.75), k.u(0.5, 0.5, 0.4), ORANGE);
         }
         "mate" => {
             k.fit(o, [1.0, 1.0, 1.0]);
-            k.prism(&rect3(0.0, 0.0, 1.0, 1.0, 0.0), [0.0, 0.0, 0.45], GOLD);
+            k.prism(&rect3(0.0, 0.0, 1.0, 1.0, 0.0), [0.0, 0.0, 0.45], TEAL);
             k.prism(&rect3(0.2, 0.2, 0.8, 0.8, 0.55), [0.0, 0.0, 0.45], BLUE);
         }
         "fix" => {
             k.fit(o, [1.0, 1.0, 1.0]);
-            k.prism(&rect3(0.0, 0.0, 1.0, 1.0, 0.0), [0.0, 0.0, 0.5], GOLD);
+            k.prism(&rect3(0.0, 0.0, 1.0, 1.0, 0.0), [0.0, 0.0, 0.5], TEAL);
             k.prism(&ring([0.5, 0.5, 0.5], 0.12, 16), [0.0, 0.0, 0.5], RED);
         }
         "interference" => {
             k.fit(o, [1.2, 1.0, 0.8]);
-            k.prism(&rect3(0.0, 0.0, 0.75, 1.0, 0.0), [0.0, 0.0, 0.8], GOLD);
+            k.prism(&rect3(0.0, 0.0, 0.75, 1.0, 0.0), [0.0, 0.0, 0.8], TEAL);
             k.prism(&rect3(0.45, 0.0, 0.75, 1.0, 0.0), [0.0, 0.0, 0.8], RED);
             k.outline3(&rect3(0.45, 0.0, 1.2, 1.0, 0.8), INK);
         }
         "explode" => {
             k.fit(o, [1.0, 1.0, 1.3]);
-            k.prism(&rect3(0.0, 0.0, 1.0, 1.0, 0.0), [0.0, 0.0, 0.35], GOLD);
+            k.prism(&rect3(0.0, 0.0, 1.0, 1.0, 0.0), [0.0, 0.0, 0.35], TEAL);
             k.prism(&rect3(0.25, 0.25, 0.75, 0.75, 0.9), [0.0, 0.0, 0.35], BLUE);
-            k.arrow(k.u(0.5, 0.5, 0.4), k.u(0.5, 0.5, 0.85), GREEN);
+            k.arrow(k.u(0.5, 0.5, 0.4), k.u(0.5, 0.5, 0.85), ORANGE);
         }
         "bom" => {
             k.fit(o, [1.0, 1.0, 0.1]);
@@ -1096,7 +1100,7 @@ pub fn paint(p: &Painter, r: Rect, name: &str, enabled: bool) {
         }
         "edit_part" => {
             k.fit(o, [1.0, 1.0, 1.0]);
-            k.prism(&rect3(0.0, 0.0, 0.8, 0.8, 0.0), [0.0, 0.0, 0.6], GOLD);
+            k.prism(&rect3(0.0, 0.0, 0.8, 0.8, 0.0), [0.0, 0.0, 0.6], TEAL);
             k.pencil(k.u(0.55, 0.55, 0.6), k.u(1.0, 1.0, 1.0));
         }
         // Drawings: marks on a white sheet.
