@@ -1677,7 +1677,7 @@ impl DrawingDocument {
             self.draw_dimension(d, &mut m);
         }
         for n in &s.notes {
-            self.draw_note(n, &mut m);
+            self.draw_note(sheet, n, &mut m);
         }
         Page {
             name: s.name.clone(),
@@ -1964,14 +1964,15 @@ impl DrawingDocument {
         }
     }
 
-    fn draw_note(&self, n: &Note, m: &mut Marks) {
-        let lines: Vec<&str> = n.text.lines().collect();
+    /// A note, its `{Name}` fields filled in like the title block's.
+    fn draw_note(&self, sheet: usize, n: &Note, m: &mut Marks) {
+        let lines: Vec<String> = n.text.lines().map(|l| self.fill(sheet, l)).collect();
         for (i, line) in lines.iter().enumerate() {
             m.text(
                 Layer::Notes,
                 [n.at[0], n.at[1] - i as f64 * TEXT * 1.6],
                 TEXT,
-                *line,
+                line.as_str(),
                 Align::Left,
             );
         }
@@ -2431,7 +2432,7 @@ mod tests {
         let target = [15.0, 10.0];
         d.edit(None, |c| {
             c.sheets[0].notes.push(Note {
-                text: "BREAK SHARP EDGES\nDEBURR".into(),
+                text: "BREAK SHARP EDGES\nDEBURR\nPART {Part number} IN {Material}".into(),
                 at: [200.0, 190.0],
                 leader: Some((front, target)),
             })
@@ -2443,6 +2444,7 @@ mod tests {
         for want in [
             "BREAK SHARP EDGES",
             "DEBURR",
+            "PART BLK-7 IN PLA",
             "block",
             "BLK-7",
             "PLA",
