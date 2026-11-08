@@ -14,9 +14,81 @@ use truck_topology::compress::{CompressedEdge, CompressedFace, CompressedShell};
 type Result<T, E = String> = std::result::Result<T, E>;
 
 /// Exact B-Rep export (truck writes the AP203/AP214-compatible `ISO-10303-042` schema) in
-/// millimetres, with `product` as the product name.
-pub fn write_step<'a>(path: &Path, product: &str, solids: impl IntoIterator<Item = &'a Solid>) -> io::Result<()> {
-    std::fs::write(path, name_products(&part_text(path, solids), &[product]))
+/// millimetres, with `product` as the product name. `colors` is the sRGB colour of each face of
+/// the solids in order (as `RenderMesh::faces` lists them); `None` and missing faces get none.
+pub fn write_step<'a>(
+    path: &Path,
+    product: &str,
+    solids: impl IntoIterator<Item = &'a Solid>,
+    colors: &[Option<[u8; 3]>],
+) -> io::Result<()> {
+    let text = name_products(&part_text(path, solids), &[product]);
+    std::fs::write(path, color_faces(&text, colors))
+}
+
+/// The entity numbers in `s`.
+fn ids(s: &str) -> impl Iterator<Item = usize> + '_ {
+    s.split('#').skip(1).filter_map(|t| {
+        let digits = t.find(|c: char| !c.is_ascii_digit()).unwrap_or(t.len());
+        t[..digits].parse().ok()
+    })
+}
+
+/// Adds AP214 face colours to a file truck wrote (whose shells list the faces in the solids'
+/// order): a `STYLED_ITEM` per coloured face, gathered in a
+/// `MECHANICAL_DESIGN_GEOMETRIC_PRESENTATION_REPRESENTATION`, which OpenCASCADE and most CAD read.
+fn color_faces(text: &str, colors: &[Option<[u8; 3]>]) -> String {
+    let faces: Vec<usize> = text
+        .lines()
+        .filter_map(|l| l.split_once("_SHELL("))
+        .flat_map(|(_, list)| ids(list))
+        .collect();
+    let context = text
+        .find("GEOMETRIC_REPRESENTATION_CONTEXT")
+        .and_then(|at| ids(&text[text[..at].rfind('#')?..at]).next());
+    let (Some(context), Some(end)) = (context, text.rfind("ENDSEC;")) else {
+        return text.to_string();
+    };
+    if colors.iter().all(Option::is_none) {
+        return text.to_string();
+    }
+    let mut next = ids(text).max().unwrap_or(0) + 1;
+    let mut add = |out: &mut String, entity: String| {
+        *out += &format!("#{next} = {entity};\n");
+        next += 1;
+        next - 1
+    };
+    let mut out = String::new();
+    let mut styles: Vec<([u8; 3], usize)> = Vec::new();
+    let mut items = Vec::new();
+    for (&face, c) in faces.iter().zip(colors) {
+        let Some(c) = *c else { continue };
+        let style = match styles.iter().find(|s| s.0 == c) {
+            Some(s) => s.1,
+            None => {
+                let [r, g, b] = c.map(|v| f64::from(v) / 255.0);
+                let rgb = add(&mut out, format!("COLOUR_RGB('', {r:.6}, {g:.6}, {b:.6})"));
+                let fill = add(&mut out, format!("FILL_AREA_STYLE_COLOUR('', #{rgb})"));
+                let area = add(&mut out, format!("FILL_AREA_STYLE('', (#{fill}))"));
+                let surface = add(&mut out, format!("SURFACE_STYLE_FILL_AREA(#{area})"));
+                let side = add(&mut out, format!("SURFACE_SIDE_STYLE('', (#{surface}))"));
+                let usage = add(&mut out, format!("SURFACE_STYLE_USAGE(.BOTH., #{side})"));
+                let s = add(&mut out, format!("PRESENTATION_STYLE_ASSIGNMENT((#{usage}))"));
+                styles.push((c, s));
+                s
+            }
+        };
+        items.push(add(&mut out, format!("STYLED_ITEM('color', (#{style}), #{face})")));
+    }
+    let list: Vec<String> = items.iter().map(|i| format!("#{i}")).collect();
+    add(
+        &mut out,
+        format!(
+            "MECHANICAL_DESIGN_GEOMETRIC_PRESENTATION_REPRESENTATION('', ({}), #{context})",
+            list.join(", ")
+        ),
+    );
+    format!("{}{out}{}", &text[..end], &text[end..])
 }
 
 /// A whole STEP file holding one unnamed product with these solids.

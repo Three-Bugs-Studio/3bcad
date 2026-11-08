@@ -26,11 +26,15 @@ pub struct Info {
     /// Material and sRGB colour of every object.
     pub material: String,
     pub color: [u8; 3],
+    /// Per object, the sRGB colour of each B-Rep face (as `PrintMesh::face_of` numbers them),
+    /// `None` or missing for the material colour.
+    pub colors: Vec<Vec<Option<[u8; 3]>>>,
     /// Print settings the part was prepared for (printer, nozzle...), kept as 3BCAD metadata.
     pub settings: Vec<(String, String)>,
 }
 
-/// 3MF package (millimetres): one named object per body, with its material and display colour.
+/// 3MF package (millimetres): one named object per body, with its material and display colour,
+/// and per-triangle colours (core-spec base materials) where faces have their own.
 /// The meshes are written where they are, so place them on the bed first.
 // shortcut: Bambu Studio and OrcaSlicer read only geometry from 3MF files they did not write, so
 // plates and per-object slicer settings need their (undocumented) project format; revisit if they
@@ -79,12 +83,41 @@ fn model_xml(objects: &[(&str, &PrintMesh)], info: &Info) -> String {
         let key: String = k.chars().filter(char::is_ascii_alphanumeric).collect();
         meta(&mut s, &format!("threebcad:{key}"), v);
     }
-    let [r, g, b] = info.color;
-    let _ = writeln!(
-        s,
-        "<resources>\n<basematerials id=\"1\"><base name=\"{}\" displaycolor=\"#{r:02X}{g:02X}{b:02X}\"/></basematerials>",
-        escape(&info.material)
-    );
+    // Base 0 is the material; each other colour used by a face gets its own base.
+    let mut palette = vec![info.color];
+    let base = |palette: &mut Vec<[u8; 3]>, c: [u8; 3]| match palette.iter().position(|&p| p == c) {
+        Some(k) => k,
+        None => {
+            palette.push(c);
+            palette.len() - 1
+        }
+    };
+    let mut per_triangle = Vec::new();
+    for (i, (_, m)) in objects.iter().enumerate() {
+        let faces = info.colors.get(i).map_or(&[][..], Vec::as_slice);
+        let ks: Vec<usize> = m
+            .face_of
+            .iter()
+            .map(|&f| {
+                faces
+                    .get(f as usize)
+                    .copied()
+                    .flatten()
+                    .map_or(0, |c| base(&mut palette, c))
+            })
+            .collect();
+        per_triangle.push(ks);
+    }
+    s.push_str("<resources>\n<basematerials id=\"1\">");
+    for (k, [r, g, b]) in palette.iter().enumerate() {
+        let name = if k == 0 {
+            escape(&info.material)
+        } else {
+            format!("{} #{r:02X}{g:02X}{b:02X}", escape(&info.material))
+        };
+        let _ = write!(s, "<base name=\"{name}\" displaycolor=\"#{r:02X}{g:02X}{b:02X}\"/>");
+    }
+    s.push_str("</basematerials>\n");
     for (i, (name, m)) in objects.iter().enumerate() {
         let _ = writeln!(
             s,
@@ -96,8 +129,14 @@ fn model_xml(objects: &[(&str, &PrintMesh)], info: &Info) -> String {
             let _ = writeln!(s, "<vertex x=\"{}\" y=\"{}\" z=\"{}\"/>", v[0], v[1], v[2]);
         }
         s.push_str("</vertices><triangles>\n");
-        for t in &m.triangles {
-            let _ = writeln!(s, "<triangle v1=\"{}\" v2=\"{}\" v3=\"{}\"/>", t[0], t[1], t[2]);
+        for (j, t) in m.triangles.iter().enumerate() {
+            let _ = write!(s, "<triangle v1=\"{}\" v2=\"{}\" v3=\"{}\"", t[0], t[1], t[2]);
+            match per_triangle[i].get(j) {
+                Some(&k) if k > 0 => {
+                    let _ = writeln!(s, " pid=\"1\" p1=\"{k}\"/>");
+                }
+                _ => s.push_str("/>\n"),
+            }
         }
         s.push_str("</triangles></mesh></object>\n");
     }
@@ -120,6 +159,7 @@ mod tests {
         let tri = PrintMesh {
             vertices: vec![[0.0; 3], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
             triangles: vec![[0, 2, 1], [0, 1, 3], [0, 3, 2], [1, 2, 3]],
+            face_of: vec![0, 1, 2, 3],
         };
         let info = Info {
             title: "Bracket <v2>".into(),
@@ -129,6 +169,8 @@ mod tests {
                 ("Printer".into(), "Prusa MK4".into()),
                 ("Nozzle diameter".into(), "0.4".into()),
             ],
+            // The second object's slanted face is red.
+            colors: vec![Vec::new(), vec![None, None, None, Some([255, 0, 0])]],
         };
         let path = std::env::temp_dir().join(format!("3bcad-rich-{}.3mf", std::process::id()));
         write_3mf(&path, &[("Body 1", &tri), ("Pins & clips", &tri)], &info).unwrap();
@@ -139,7 +181,13 @@ mod tests {
             .read_to_string(&mut xml)
             .unwrap();
         assert!(xml.contains("<metadata name=\"Title\">Bracket &lt;v2&gt;</metadata>"));
-        assert!(xml.contains("<base name=\"PETG\" displaycolor=\"#60A0C8\"/>"));
+        assert!(xml.contains(
+            "<base name=\"PETG\" displaycolor=\"#60A0C8\"/><base name=\"PETG #FF0000\" displaycolor=\"#FF0000\"/>"
+        ));
+        // Only the last triangle (v1 2 3) of the second object takes base 1.
+        assert_eq!(xml.matches("p1=\"1\"").count(), 1);
+        assert!(xml.contains("<triangle v1=\"1\" v2=\"2\" v3=\"3\" pid=\"1\" p1=\"1\"/>"));
+        assert!(xml.rfind("p1=").unwrap() > xml.find("name=\"Pins").unwrap());
         assert!(xml.contains("name=\"Pins &amp; clips\" pid=\"1\" pindex=\"0\""));
         assert!(xml.contains("<metadata name=\"threebcad:Nozzlediameter\">0.4</metadata>"));
         assert_eq!(xml.matches("<item objectid=").count(), 2);

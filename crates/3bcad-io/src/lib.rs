@@ -51,7 +51,7 @@ mod tests {
         assert!(zip.by_name("[Content_Types].xml").is_ok() && zip.by_name("_rels/.rels").is_ok());
 
         let step = dir.join("cube.step");
-        write_step(&step, "cube", [&solid]).unwrap();
+        write_step(&step, "cube", [&solid], &[]).unwrap();
         let text = std::fs::read_to_string(&step).unwrap();
         assert!(text.starts_with("ISO-10303-21;") && text.contains("MANIFOLD_SOLID_BREP"));
 
@@ -74,11 +74,74 @@ mod tests {
         );
         let cut = threebcad_kernel::boolean::subtract(&cube, &hole).unwrap().remove(0);
         let path = std::env::temp_dir().join(format!("3bcad-step-bool-{}.step", std::process::id()));
-        write_step(&path, "cut", [&cut]).unwrap();
+        write_step(&path, "cut", [&cut], &[]).unwrap();
         let text = std::fs::read_to_string(&path).unwrap();
         let faces = text.matches("= ADVANCED_FACE(").count() + text.matches("= FACE_SURFACE(").count();
         assert!(text.contains("MANIFOLD_SOLID_BREP"));
         assert_eq!(faces, cut.face_iter().count(), "every face is written");
         std::fs::remove_file(path).ok();
+    }
+
+    #[test]
+    fn step_colours_the_right_faces() {
+        let cube = extrude_polygon(&[[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 10.0]], 10.0).unwrap();
+        let faces = threebcad_kernel::mesher::render_mesh(&cube, 0.01).faces;
+        let top = faces
+            .iter()
+            .position(|f| f.is_some_and(|p| p.normal()[2] > 0.5))
+            .unwrap();
+        let mut colors = vec![None; faces.len()];
+        colors[top] = Some([255, 0, 0]);
+        colors[0] = Some([0, 0, 255]);
+        let path = std::env::temp_dir().join(format!("3bcad-step-color-{}.step", std::process::id()));
+        write_step(&path, "cube", [&cube], &colors).unwrap();
+        let text = std::fs::read_to_string(&path).unwrap();
+        std::fs::remove_file(path).ok();
+        let entity = |id: &str| {
+            let at = text
+                .find(&format!("\n{id} = "))
+                .unwrap_or_else(|| panic!("{id} missing"));
+            text[at + 1..].lines().next().unwrap()
+        };
+        let refs = |line: &str| -> Vec<String> {
+            line.split('#')
+                .skip(2)
+                .map(|t| format!("#{}", t.split(|c: char| !c.is_ascii_digit()).next().unwrap()))
+                .collect()
+        };
+        // Red style -> its styled face -> the face's plane -> its point: the top, z = 10.
+        let red = text
+            .lines()
+            .find(|l| l.contains("COLOUR_RGB('', 1.000000, 0.000000, 0.000000)"))
+            .unwrap();
+        let red_id = red.split(' ').next().unwrap();
+        let mut style = red_id.to_string();
+        for _ in 0..6 {
+            style = text
+                .lines()
+                .find(|l| refs(l).contains(&style) && !l.starts_with(&style))
+                .unwrap()
+                .split(' ')
+                .next()
+                .unwrap()
+                .to_string();
+        }
+        let item = text
+            .lines()
+            .find(|l| l.contains("STYLED_ITEM") && refs(l)[0] == style)
+            .unwrap();
+        let face = refs(item)[1].clone();
+        let plane = refs(entity(&face)).last().unwrap().clone();
+        let placement = refs(entity(&plane))[0].clone();
+        let point = refs(entity(&placement))[0].clone();
+        assert!(entity(&point).contains("10.0)"), "{}", entity(&point));
+        assert_eq!(text.matches("STYLED_ITEM(").count(), 2);
+        assert_eq!(
+            text.matches("MECHANICAL_DESIGN_GEOMETRIC_PRESENTATION_REPRESENTATION")
+                .count(),
+            1
+        );
+        // Still a valid file for our own reader.
+        assert_eq!(read_step(text.as_bytes()).unwrap().solids.len(), 1);
     }
 }
