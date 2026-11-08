@@ -1180,12 +1180,15 @@ impl SketchSession {
             return;
         };
         let mut commit = None;
+        let name = format!("D{}", self.sketch.number(i));
         egui::Area::new(egui::Id::new("dimension_editor"))
             .fixed_pos(at + egui::vec2(-40.0, 12.0))
             .order(egui::Order::Foreground)
             .show(ctx, |ui| {
                 egui::Frame::popup(ui.style()).show(ui, |ui| {
                     ui.horizontal(|ui| {
+                        ui.weak(&name)
+                            .on_hover_text(format!("In Equations: {name}@ and the sketch's name"));
                         let r = ui.add(egui::TextEdit::singleline(&mut text).desired_width(70.0));
                         if !r.has_focus() && !r.lost_focus() {
                             r.request_focus();
@@ -1205,9 +1208,7 @@ impl SketchSession {
                 self.editing = None;
                 let c = &self.sketch.constraints()[i];
                 let typed = if c.is_angular() {
-                    text.trim()
-                        .trim_end_matches('°')
-                        .parse::<f64>()
+                    threebcad_core::equations::evaluate(&text, units())
                         .ok()
                         .map(f64::to_radians)
                 } else {

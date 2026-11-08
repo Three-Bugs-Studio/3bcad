@@ -678,6 +678,18 @@ pub fn paint(p: &Painter, r: Rect, name: &str, enabled: bool) {
             k.line(&[(0.5, 0.34), (0.5, 0.6)], INK, 2.8);
             k.p.circle_filled(k.at(0.5, 0.72), k.w(1.6), k.c(INK));
         }
+        "equations" => {
+            k.badge(&[(0.14, 0.08), (0.86, 0.08), (0.86, 0.92), (0.14, 0.92)], WHITE);
+            k.line(&[(0.3, 0.3), (0.7, 0.3)], INK, 1.6);
+            k.line(&[(0.3, 0.46), (0.7, 0.46)], INK, 1.6);
+            k.line(&[(0.3, 0.7), (0.52, 0.7)], INK, 1.2);
+            k.bead(0.66, 0.72, 0.08, BLUE);
+        }
+        "appearance" => {
+            k.bead(0.5, 0.28, 0.2, RED);
+            k.bead(0.3, 0.66, 0.2, GREEN);
+            k.bead(0.7, 0.66, 0.2, BLUE);
+        }
         "rebuild" => {
             k.badge(&[(0.3, 0.04), (0.68, 0.04), (0.68, 0.92), (0.3, 0.92)], DARK);
             k.bead(0.49, 0.2, 0.11, RED);

@@ -798,6 +798,28 @@ fn evaluate(app: &mut App, ui: &mut egui::Ui) {
     ui.separator();
     if tile(
         ui,
+        "equations",
+        "Equations",
+        true,
+        "Global variables, equations that drive dimensions, and configurations",
+    ) {
+        app.equations = Some(crate::ui::design::Equations::of(app.doc.history()));
+    }
+    if tile(
+        ui,
+        "appearance",
+        "Appearance",
+        true,
+        "Colour the picked face, its body or its feature, or the feature selected in the tree",
+    ) {
+        app.appearance = crate::ui::design::Appearance::of_selection(app);
+        if app.appearance.is_none() {
+            app.status = "Pick a face, or select a feature in the tree, to colour it".into();
+        }
+    }
+    ui.separator();
+    if tile(
+        ui,
         "rebuild",
         "Rebuild",
         true,

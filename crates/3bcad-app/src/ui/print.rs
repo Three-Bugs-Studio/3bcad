@@ -25,6 +25,7 @@ fn color(c: [u8; 4]) -> Color32 {
 }
 
 pub fn tab(app: &mut App, ui: &mut egui::Ui) {
+    export_configuration(app, ui);
     for (format, label) in [
         (ExportFormat::Stl, "Export STL"),
         (ExportFormat::ThreeMf, "Export 3MF"),
@@ -47,6 +48,34 @@ pub fn tab(app: &mut App, ui: &mut egui::Ui) {
     bed(app, ui);
     ui.separator();
     checks(app, ui);
+}
+
+/// Which configuration the exports are made in, for a part that has several.
+fn export_configuration(app: &mut App, ui: &mut egui::Ui) {
+    let h = app.doc.history();
+    if h.configurations().len() < 2 {
+        return;
+    }
+    let names: Vec<String> = h.configurations().iter().map(|c| c.name.clone()).collect();
+    let chosen = app
+        .export_config
+        .filter(|&i| i < names.len())
+        .unwrap_or(h.active_configuration());
+    ui.vertical(|ui| {
+        ui.label("Export configuration");
+        egui::ComboBox::from_id_salt("export_configuration")
+            .selected_text(&names[chosen])
+            .show_ui(ui, |ui| {
+                for (i, n) in names.iter().enumerate() {
+                    if ui.selectable_label(i == chosen, n).clicked() {
+                        app.export_config = Some(i);
+                    }
+                }
+            })
+            .response
+            .on_hover_text("Exports and Send to Slicer build the part in this configuration");
+    });
+    ui.separator();
 }
 
 fn quality(app: &mut App, ui: &mut egui::Ui) {

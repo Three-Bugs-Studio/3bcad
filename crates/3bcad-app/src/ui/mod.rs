@@ -1,5 +1,6 @@
 pub mod advanced;
 pub mod assembly;
+pub mod design;
 pub mod drawing;
 pub mod evaluate;
 pub mod help;
