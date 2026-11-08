@@ -3,6 +3,7 @@
 pub mod assembly;
 pub mod document;
 pub mod drawing;
+pub mod equations;
 pub mod feature;
 pub mod history;
 pub mod holes;
@@ -14,8 +15,9 @@ pub mod units;
 pub use assembly::AssemblyDocument;
 pub use document::{PartDocument, DEFAULT_PRINT_DOWN};
 pub use drawing::DrawingDocument;
+pub use equations::{Dimension, Equation, Quantity};
 pub use feature::*;
-pub use history::{FeatureId, History};
+pub use history::{Configuration, FeatureId, History, Paint};
 pub use material::Material;
 pub use naming::{EdgeRef, FaceRef, FaceTag, VertexRef};
 pub use rebuild::{Body, Rebuild};

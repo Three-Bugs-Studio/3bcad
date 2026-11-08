@@ -10,7 +10,7 @@ use threebcad_sketch::{Sketch, Status};
 
 use crate::naming::{self, EdgeRef, FaceRef, VertexRef};
 use crate::rebuild::{self, CacheEntry};
-use crate::{Body, FeatureId, History, Material, Rebuild, Units};
+use crate::{Body, FeatureId, History, Material, Paint, Rebuild, Units};
 
 const UNDO_LIMIT: usize = 100;
 
@@ -18,7 +18,8 @@ const UNDO_LIMIT: usize = 100;
 const FORMAT: &str = "3bcad-part";
 /// Bump when the saved structure changes, and teach `migrate` to read the old one.
 /// 2 (v0.6): the Fit feature and the print orientation. 3 (v0.7): custom properties.
-pub const FORMAT_VERSION: u64 = 3;
+/// 4 (v0.9): equations, configurations, appearances and sketch dimension numbers.
+pub const FORMAT_VERSION: u64 = 4;
 
 /// The outward normal of the face a new part prints on: its bottom.
 pub const DEFAULT_PRINT_DOWN: P3 = [0.0, 0.0, -1.0];
@@ -56,8 +57,8 @@ fn default_print_down() -> P3 {
 fn migrate(file: serde_json::Value, version: u64) -> anyhow::Result<serde_json::Value> {
     match version {
         FORMAT_VERSION => Ok(file),
-        // Versions 2 and 3 only added things: older files read as they are.
-        1 | 2 => migrate(file, version + 1),
+        // Versions 2 to 4 only added things: older files read as they are.
+        1..=3 => migrate(file, version + 1),
         v => bail!("this part was saved in format version {v}, which this 3BCAD cannot read"),
     }
 }
@@ -79,6 +80,8 @@ pub struct PartDocument {
     built: Rebuild,
     cache: Vec<CacheEntry>,
     revision: u64,
+    /// Each active equation's value or error, from the last rebuild.
+    solved: Vec<Result<f64, String>>,
 }
 
 impl PartDocument {
@@ -97,6 +100,7 @@ impl PartDocument {
             built: Rebuild::default(),
             cache: Vec::new(),
             revision: 0,
+            solved: Vec::new(),
         };
         doc.rebuild();
         doc
@@ -196,8 +200,12 @@ impl PartDocument {
     }
 
     pub fn set_units(&mut self, units: Units) {
-        self.dirty |= units != self.units;
-        self.units = units;
+        if units != self.units {
+            self.dirty = true;
+            self.units = units;
+            // Plain numbers in equations are in document units.
+            self.rebuild();
+        }
     }
 
     pub fn material(&self) -> &Material {
@@ -322,8 +330,82 @@ impl PartDocument {
     }
 
     fn rebuild(&mut self) {
+        self.solved = self.history.apply_equations(self.units);
         self.built = rebuild::rebuild(&mut self.history, &mut self.cache);
         self.revision += 1;
+    }
+
+    /// Each of `History::active_equations`' value (document units, degrees) or error.
+    pub fn equation_results(&self) -> &[Result<f64, String>] {
+        &self.solved
+    }
+
+    /// Makes configuration `i` the active one (one undo step).
+    pub fn activate(&mut self, i: usize) {
+        if i != self.history.active_configuration() && i < self.history.configurations().len() {
+            self.edit(|h| h.activate(i));
+        }
+    }
+
+    /// A copy of the part built in configuration `i`, for exporting it.
+    pub fn in_configuration(&self, i: usize) -> anyhow::Result<PartDocument> {
+        let mut doc = Self::from_json(&self.to_json())?;
+        doc.history.activate(i);
+        doc.rebuild();
+        Ok(doc)
+    }
+
+    /// Gives `target` a colour, or takes its colour away (`None`). One colour per face, per body
+    /// and per feature: an older one for the same face or body is replaced.
+    pub fn set_appearance(&mut self, target: Paint, color: Option<[u8; 3]>, merge: Option<u64>) {
+        let at = |r: &FaceRef| self.resolve_face(r);
+        let same = |p: &Paint| match (p, &target) {
+            (Paint::Face(a), Paint::Face(b)) => a == b || at(a).is_some() && at(a) == at(b),
+            (Paint::Body(a), Paint::Body(b)) => a == b || at(a).is_some() && at(a).map(|x| x.0) == at(b).map(|x| x.0),
+            (a, b) => a == b,
+        };
+        let mut list: Vec<_> = self
+            .history
+            .appearances()
+            .iter()
+            .filter(|(p, _)| !same(p))
+            .cloned()
+            .collect();
+        list.extend(color.map(|c| (target.clone(), c)));
+        self.edit_merging(merge, |h| *h.appearances_mut() = list);
+    }
+
+    /// The colour of each face of body `body` (`None`: the material colour).
+    pub fn face_colors(&self, body: usize) -> Vec<Option<[u8; 3]>> {
+        let Some(b) = self.bodies().get(body) else {
+            return Vec::new();
+        };
+        let paints = self.history.appearances();
+        let mut out: Vec<Option<[u8; 3]>> = b
+            .tags
+            .iter()
+            .map(|t| {
+                paints.iter().rev().find_map(|(p, c)| match p {
+                    Paint::Feature(f) if *f == t.feature => Some(*c),
+                    _ => None,
+                })
+            })
+            .collect();
+        for (p, c) in paints {
+            if let Paint::Body(r) = p {
+                if self.resolve_face(r).is_some_and(|(b, _)| b == body) {
+                    out.iter_mut().for_each(|o| *o = Some(*c));
+                }
+            }
+        }
+        for (p, c) in paints {
+            if let Paint::Face(r) = p {
+                if let Some((_, f)) = self.resolve_face(r).filter(|(b, _)| *b == body) {
+                    out[f] = Some(*c);
+                }
+            }
+        }
+        out
     }
 
     /// Persistent reference to a face of the current bodies.
@@ -1583,5 +1665,153 @@ mod tests {
             "{} vs {removed}",
             before - vol(&doc)
         );
+    }
+
+    fn x_size(doc: &PartDocument) -> f64 {
+        let (lo, hi) = threebcad_kernel::boolean::bbox(&doc.bodies()[0].solid);
+        hi[0] - lo[0]
+    }
+
+    #[test]
+    fn equations_drive_sketch_and_feature_dimensions() {
+        use crate::Equation;
+        let mut doc = PartDocument::new("Part");
+        cube(&mut doc, 10.0);
+        let names: Vec<_> = doc
+            .history()
+            .dimensions()
+            .into_iter()
+            .map(|d| (d.name, d.label))
+            .collect();
+        assert!(names.contains(&("D1@Sketch1".into(), "Distance".into())), "{names:?}");
+        assert!(
+            names.contains(&("D1@Boss-Extrude1".into(), "Depth".into())),
+            "{names:?}"
+        );
+        // Listed so that each uses one further down: they are solved in dependency order.
+        let eqs = |wall: &str| {
+            vec![
+                Equation::new("\"D2@Sketch1\"", "\"D1@Sketch1\" / 2"),
+                Equation::new("D1@Sketch1", "wall * 10"),
+                Equation::new("D1@Boss-Extrude1", "5 mm"),
+                Equation::new("wall", wall),
+            ]
+        };
+        doc.edit(|h| h.set_equations(eqs("2")));
+        assert_eq!(doc.equation_results(), [Ok(10.0), Ok(20.0), Ok(5.0), Ok(2.0)]);
+        assert!(doc.errors().is_empty(), "{:?}", doc.errors());
+        assert!((vol(&doc) - 20.0 * 10.0 * 5.0).abs() < 1e-3, "{}", vol(&doc));
+        doc.edit(|h| h.set_equations(eqs("3")));
+        assert!((vol(&doc) - 30.0 * 15.0 * 5.0).abs() < 1e-3, "{}", vol(&doc));
+        // Saved and read back, the equations still drive the part.
+        let mut back = PartDocument::from_json(&doc.to_json()).unwrap();
+        assert_eq!(back.history().equations(), doc.history().equations());
+        assert!((x_size(&back) - 30.0).abs() < 1e-6);
+        // In inches `wall = 3` is 3 in, so the sketch is 30 in wide; `5 mm` stays 5 mm.
+        back.set_units(crate::Units {
+            system: crate::UnitSystem::Ips,
+            decimals: 3,
+        });
+        assert!((x_size(&back) - 762.0).abs() < 1e-6, "{}", x_size(&back));
+        let (lo, hi) = threebcad_kernel::boolean::bbox(&back.bodies()[0].solid);
+        assert!((hi[2] - lo[2] - 5.0).abs() < 1e-6);
+        // A cycle is an error on its equation and leaves the geometry as it was.
+        let mut cyclic = eqs("3");
+        cyclic[2].expr = "\"D1@Boss-Extrude1\" + 1".into();
+        doc.edit(|h| h.set_equations(cyclic));
+        assert!(doc.equation_results()[2].as_ref().unwrap_err().contains("circular"));
+        assert!((vol(&doc) - 30.0 * 15.0 * 5.0).abs() < 1e-3, "{}", vol(&doc));
+        // A deleted dimension is reported, not taken for a variable.
+        doc.edit(|h| h.set_equations(vec![Equation::new("D9@Sketch1", "4")]));
+        assert!(doc.equation_results()[0].as_ref().unwrap_err().contains("no dimension"));
+    }
+
+    #[test]
+    fn configurations_switch_dimensions_and_suppression() {
+        use crate::Equation;
+        let mut doc = PartDocument::demo();
+        let cube_sketch = doc.history().iter().next().unwrap().0;
+        let cylinder = doc.history().iter().nth(3).unwrap().0;
+        let cube_v = 27000.0;
+        let cyl = |h: f64| PI * 100.0 * h;
+        let close = |doc: &PartDocument, v: f64| (vol(doc) - v).abs() < 0.01 * v;
+        assert!(close(&doc, cube_v + cyl(40.0)), "{}", vol(&doc));
+        // "Short": the cylinder 10 high and no cube.
+        let short = doc.edit(|h| {
+            let i = h.add_configuration("Short");
+            h.activate(i);
+            h.configuration_mut(i).unwrap().equations = vec![Equation::new("D1@Boss-Extrude2", "10")];
+            h.set_suppressed(cube_sketch, true);
+            i
+        });
+        assert_eq!(doc.history().configuration_name(), "Short");
+        assert_eq!(doc.bodies().len(), 1);
+        assert!(close(&doc, cyl(10.0)), "{}", vol(&doc));
+        // Back to Default: the cube and the 40 mm cylinder are back.
+        doc.activate(0);
+        assert!(!doc.history().get(cube_sketch).unwrap().suppressed);
+        assert!(close(&doc, cube_v + cyl(40.0)), "{}", vol(&doc));
+        // Suppressing in Default leaves Short alone.
+        doc.edit(|h| h.set_suppressed(cylinder, true));
+        assert!(close(&doc, cube_v), "{}", vol(&doc));
+        let exported = doc.in_configuration(short).unwrap();
+        assert!(close(&exported, cyl(10.0)), "{}", vol(&exported));
+        assert!(close(&doc, cube_v), "the open part keeps its configuration");
+        // Saved with Short active, it opens in Short.
+        doc.activate(short);
+        let back = PartDocument::from_json(&doc.to_json()).unwrap();
+        assert_eq!(back.history().configurations().len(), 2);
+        assert_eq!(back.history().configuration_name(), "Short");
+        assert!(close(&back, cyl(10.0)), "{}", vol(&back));
+        // A deleted feature is forgotten by every configuration, so a new one is not suppressed.
+        doc.activate(0);
+        doc.edit(|h| h.remove(cube_sketch));
+        let s = doc.edit(|h| h.add_sketch(Sketch::rectangle(5.0, 5.0), Plane::TOP));
+        doc.activate(short);
+        assert!(!doc.history().get(s).unwrap().suppressed);
+        // Deleting the active configuration falls back to another one.
+        doc.edit(|h| h.remove_configuration(short));
+        assert_eq!(doc.history().configuration_name(), "Default");
+    }
+
+    #[test]
+    fn appearances_follow_their_faces_through_rebuilds() {
+        let mut doc = PartDocument::new("Part");
+        let extrude = cube(&mut doc, 10.0);
+        let (red, blue, green) = ([255, 0, 0], [0, 0, 255], [0, 200, 0]);
+        let top = top_face(&doc, 10.0);
+        doc.set_appearance(Paint::Face(top.clone()), Some(red), None);
+        doc.set_appearance(Paint::Feature(extrude), Some(blue), None);
+        let colored_z = |doc: &PartDocument, c: [u8; 3]| -> Vec<f64> {
+            let b = &doc.bodies()[0];
+            doc.face_colors(0)
+                .iter()
+                .zip(&b.topo.faces)
+                .filter(|(k, _)| **k == Some(c))
+                .map(|(_, f)| f.plane.map_or(f64::NAN, |p| p.origin[2]))
+                .collect()
+        };
+        assert_eq!(colored_z(&doc, red), [10.0]);
+        assert_eq!(colored_z(&doc, blue).len(), 5);
+        // A taller cube: the colour stays on the (moved) top face.
+        doc.edit(|h| {
+            if let Some(FeatureKind::Extrude(e)) = h.get_mut(extrude).map(|f| &mut f.kind) {
+                e.end = End::Blind(15.0);
+            }
+        });
+        assert_eq!(colored_z(&doc, red), [15.0]);
+        // A body colour beats the feature's; a new face colour replaces the old one.
+        doc.set_appearance(Paint::Body(top.clone()), Some(green), None);
+        assert_eq!(colored_z(&doc, green).len(), 5);
+        doc.set_appearance(Paint::Face(top.clone()), Some(blue), None);
+        assert_eq!(colored_z(&doc, blue), [15.0]);
+        assert_eq!(doc.history().appearances().len(), 3);
+        let back = PartDocument::from_json(&doc.to_json()).unwrap();
+        assert_eq!(back.face_colors(0), doc.face_colors(0));
+        doc.set_appearance(Paint::Face(top), None, None);
+        assert_eq!(colored_z(&doc, green).len(), 6);
+        // Undo brings the face colour back.
+        doc.undo();
+        assert_eq!(colored_z(&doc, blue), [15.0]);
     }
 }
