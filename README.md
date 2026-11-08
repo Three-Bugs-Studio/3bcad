@@ -330,5 +330,10 @@ at your option.
 Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in the work by you,
 as defined in the Apache-2.0 license, shall be dual licensed as above, without any additional terms or conditions.
 
+3BCAD was created by Duong Phu Dong at Three Bugs Studio. If you share or build on it, keep the license files and
+[NOTICE](NOTICE), and say your version is based on 3BCAD by Three Bugs Studio. The names and logos are covered by
+the [trademark policy](TRADEMARKS.md): a modified version needs its own name. To cite 3BCAD, use **Cite this
+repository** on GitHub ([CITATION.cff](CITATION.cff)).
+
 3BCAD is an independent open-source project and is not affiliated with, endorsed by or sponsored by any CAD
 vendor. Product names and trademarks belong to their owners.
