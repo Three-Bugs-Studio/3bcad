@@ -29,7 +29,13 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
         )
         .show(ctx, |ui| {
             ui.horizontal(|ui| {
-                ui.strong("3BCAD");
+                if ui
+                    .add(egui::Label::new(egui::RichText::new("3BCAD").strong()).sense(egui::Sense::click()))
+                    .on_hover_text("About 3BCAD")
+                    .clicked()
+                {
+                    app.show_about = true;
+                }
                 ui.hyperlink_to(format!("v{VERSION}"), RELEASE_NOTES_URL)
                     .on_hover_text("What's new in this version");
                 if let Some(v) = app.update.available().map(str::to_string) {

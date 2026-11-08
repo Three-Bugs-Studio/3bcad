@@ -1,8 +1,10 @@
-//! Keyboard Shortcuts window (F1 or the ? button in the ribbon).
+//! Keyboard Shortcuts window (F1 or the ? button in the ribbon) and the About window.
 
 use eframe::egui::{self, RichText};
 
-use crate::app::App;
+use crate::app::{App, VERSION};
+
+const REPOSITORY: &str = "https://github.com/Three-Bugs-Studio/3bcad";
 
 /// (section, [(keys, what they do)]).
 const SHORTCUTS: &[(&str, &[(&str, &str)])] = &[
@@ -100,4 +102,37 @@ pub fn window(app: &mut App, ctx: &egui::Context) {
             }
         });
     app.show_shortcuts = open;
+}
+
+/// Who made 3BCAD, its license and where it lives (click the 3BCAD name, or File > About).
+pub fn about(app: &mut App, ctx: &egui::Context) {
+    if !app.show_about {
+        return;
+    }
+    let mut open = true;
+    egui::Window::new("About 3BCAD")
+        .open(&mut open)
+        .collapsible(false)
+        .resizable(false)
+        .pivot(egui::Align2::CENTER_CENTER)
+        .default_pos(ctx.screen_rect().center())
+        .default_width(400.0)
+        .show(ctx, |ui| {
+            ui.heading(format!("3BCAD {VERSION}"));
+            ui.label("Open-source parametric CAD for parts, assemblies, drawings and 3D printing.");
+            ui.add_space(6.0);
+            ui.label(RichText::new("Made by Three Bugs Studio").strong());
+            ui.label("Created by Duong Phu Dong, with the 3BCAD contributors.");
+            ui.hyperlink_to(REPOSITORY, REPOSITORY);
+            ui.add_space(6.0);
+            ui.label("Copyright © 2026 Three Bugs Studio and the 3BCAD contributors.");
+            ui.label("Licensed under the MIT license or the Apache License 2.0, at your option.");
+            ui.weak(
+                "Building on 3BCAD? Keep the license files and NOTICE, give your version its own name, and \
+                 say it is based on 3BCAD by Three Bugs Studio (see TRADEMARKS.md).",
+            );
+            ui.add_space(6.0);
+            ui.weak("Built with truck (B-Rep kernel), egui and wgpu.");
+        });
+    app.show_about = open;
 }

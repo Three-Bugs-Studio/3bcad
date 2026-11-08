@@ -115,6 +115,7 @@ pub struct App {
     pub show_measure: bool,
     pub show_mass: bool,
     pub show_shortcuts: bool,
+    pub show_about: bool,
     /// The Equations window (and configurations), while open.
     pub equations: Option<crate::ui::design::Equations>,
     /// The Appearance window, while open.
@@ -168,6 +169,7 @@ impl App {
             show_measure: false,
             show_mass: false,
             show_shortcuts: false,
+            show_about: false,
             equations: None,
             appearance: None,
             export_config: None,
@@ -924,6 +926,7 @@ impl eframe::App for App {
         self.files_frame(ctx);
         crate::files::properties_window(self, ctx);
         ui::update::window(self, ctx);
+        ui::help::about(self, ctx);
         if self.asm.is_some() {
             return ui::assembly::frame(self, ctx);
         }

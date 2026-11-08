@@ -955,6 +955,10 @@ pub fn menu(app: &mut App, ui: &mut egui::Ui) {
             app.update.check(true);
             app.status = "Checking for updates…".into();
         }
+        if ui.button("About 3BCAD…").clicked() {
+            ui.close_menu();
+            app.show_about = true;
+        }
         ui.horizontal(|ui| {
             ui.label("Autosave every");
             let mut m = app.files.settings.autosave_minutes;

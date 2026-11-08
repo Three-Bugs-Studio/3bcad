@@ -31,6 +31,10 @@ saved files and workflows; patch versions (0.x.y) only fix bugs.
     face styles, read by FreeCAD and other OpenCASCADE-based CAD) (#92).
   - Custom properties: drawing notes fill in `{Part number}`, `{Material}` and every other property the
     way title blocks do, and File → Properties has an **Author** row button and wider fields (#93).
+- **About 3BCAD** (click the 3BCAD name at the top left, or File → About 3BCAD…): who made 3BCAD, its
+  license and its home page.
+- A `NOTICE` file (shipped in the release downloads), `CITATION.cff` for GitHub's **Cite this repository**,
+  and a trademark policy (`TRADEMARKS.md`) for forks and derived products.
 
 ### Changed
 
