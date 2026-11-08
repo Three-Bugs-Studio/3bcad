@@ -29,6 +29,10 @@ pub struct RenderMesh {
 pub struct PrintMesh {
     pub vertices: Vec<[f64; 3]>,
     pub triangles: Vec<[usize; 3]>,
+    /// The B-Rep face (index as in `RenderMesh::faces`) of each triangle; empty for meshes not
+    /// made from a solid.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub face_of: Vec<u32>,
 }
 
 fn f32x3(v: [f64; 3]) -> [f32; 3] {
@@ -146,17 +150,35 @@ fn max_turn(meshed: &Meshed) -> f64 {
 }
 
 fn welded(meshed: &Meshed) -> PrintMesh {
-    let poly = meshed.to_polygon();
-    let (vertices, remap) = weld(poly.positions(), TOLERANCE);
-    PrintMesh {
-        vertices,
-        triangles: poly
-            .faces()
-            .triangle_iter()
-            .map(|t| t.map(|v| remap[v.pos]))
-            .filter(|t| t[0] != t[1] && t[1] != t[2] && t[2] != t[0])
-            .collect(),
+    // Face by face (as `to_polygon` merges them), so each triangle knows its face.
+    let mut positions = Vec::new();
+    let mut tris = Vec::new();
+    for (f, face) in meshed.face_iter().enumerate() {
+        let Some(mut poly) = face.surface() else { continue };
+        if !face.orientation() {
+            poly.invert();
+        }
+        let base = positions.len();
+        positions.extend_from_slice(poly.positions());
+        tris.extend(
+            poly.faces()
+                .triangle_iter()
+                .map(|t| (t.map(|v| base + v.pos), f as u32)),
+        );
     }
+    let (vertices, remap) = weld(&positions, TOLERANCE);
+    let mut out = PrintMesh {
+        vertices,
+        ..Default::default()
+    };
+    for (t, f) in tris {
+        let t = t.map(|i| remap[i]);
+        if t[0] != t[1] && t[1] != t[2] && t[2] != t[0] {
+            out.triangles.push(t);
+            out.face_of.push(f);
+        }
+    }
+    out
 }
 
 /// Merges positions closer than `eps`: the kept positions and each input's index among them.
@@ -249,6 +271,22 @@ mod tests {
             assert_watertight(&m);
             assert!((volume(&m) - 6000.0).abs() < 1e-6, "volume {}", volume(&m));
         }
+    }
+
+    #[test]
+    fn print_triangles_know_their_face() {
+        let solid = extrude_polygon(&[[0.0, 0.0], [10.0, 0.0], [10.0, 20.0], [0.0, 20.0]], 30.0).unwrap();
+        let (m, faces) = (print_mesh(&solid, 0.01), render_mesh(&solid, 0.01).faces);
+        assert_eq!(m.face_of.len(), m.triangles.len());
+        let mut seen = HashSet::new();
+        for (t, &f) in m.triangles.iter().zip(&m.face_of) {
+            let [a, b, c] = t.map(|i| Vector3::from(m.vertices[i]));
+            let n = (b - a).cross(c - a).normalize();
+            let face = faces[f as usize].expect("a box has flat faces").normal();
+            assert!(n.dot(Vector3::from(face)) > 1.0 - 1e-9, "triangle off its face {f}");
+            seen.insert(f);
+        }
+        assert_eq!(seen.len(), 6);
     }
 
     #[test]
