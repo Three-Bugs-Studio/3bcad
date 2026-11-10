@@ -1,0 +1,215 @@
+name: Package
+
+# Builds the release downloads. release.yml calls it to publish them; pull requests that change the
+# packaging run it too, so the installers are tested before release day (nothing is published).
+# Signing runs only when its secrets exist, and never for pull requests. See RELEASING.md.
+on:
+  workflow_call:
+  pull_request:
+    paths:
+      - packaging/**
+      - assets/**
+      - crates/3bcad-app/build.rs
+      - .github/workflows/package.yml
+      - .github/workflows/release.yml
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: windows-latest, name: windows-x64 }
+          - { os: macos-latest, name: macos-universal }
+          # Oldest supported runner, so the binary works on older glibc distros.
+          - { os: ubuntu-22.04, name: linux-x64 }
+    runs-on: ${{ matrix.os }}
+    env:
+      # Flags only: the secrets themselves reach just the signing steps, not the build.
+      WINDOWS_SIGN: ${{ github.event_name != 'pull_request' && secrets.WINDOWS_CERTIFICATE != '' }}
+      MACOS_SIGN: ${{ github.event_name != 'pull_request' && secrets.MACOS_CERTIFICATE != '' }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ runner.os == 'macOS' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Name the downloads
+        run: |
+          version=$(cargo metadata --no-deps --format-version 1 \
+            | jq -r '.packages[] | select(.name == "threebcad-app") | .version')
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+          echo "PKG=3BCAD-$version-${{ matrix.name }}" >> "$GITHUB_ENV"
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libxkbcommon-dev libwayland-dev desktop-file-utils
+
+      # Windows: the program in a .zip, and a per-user .msi installer.
+      - name: Build (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          cargo build --release --locked
+          # build.rs embedded the icon and version details (Explorer and "Open with" show the name).
+          powershell -NoProfile -Command 'if ((Get-Item target/release/3bcad.exe).VersionInfo.FileDescription -ne "3BCAD") { exit 1 }'
+
+      - name: Sign the program (Windows)
+        if: runner.os == 'Windows' && env.WINDOWS_SIGN == 'true'
+        shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: packaging/windows/sign.ps1 target/release/3bcad.exe
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          mkdir -p "dist/$PKG"
+          cp target/release/3bcad.exe README.md CHANGELOG.md LICENSE-MIT LICENSE-APACHE NOTICE "dist/$PKG/"
+          (cd dist && 7z a "$PKG.zip" "$PKG")
+          # WiX 5: later versions come with the Open Source Maintenance Fee EULA.
+          dotnet tool install wix --version 5.0.2 --tool-path "$RUNNER_TEMP/wix"
+          # MSI versions are plain dotted numbers, so drop any -beta.N suffix.
+          "$RUNNER_TEMP/wix/wix" build packaging/windows/3bcad.wxs -arch x64 -d "Version=${VERSION%%-*}" -o "dist/$PKG.msi"
+          "$RUNNER_TEMP/wix/wix" msi validate "dist/$PKG.msi"
+
+      - name: Sign the installer (Windows)
+        if: runner.os == 'Windows' && env.WINDOWS_SIGN == 'true'
+        shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: packaging/windows/sign.ps1 "dist/$env:PKG.msi"
+
+      # macOS: one 3BCAD.app, in a .zip and in a .dmg.
+      - name: Build (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          cargo build --release --locked --target aarch64-apple-darwin
+          cargo build --release --locked --target x86_64-apple-darwin
+          app="dist/$PKG/3BCAD.app"
+          mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
+          lipo -create -output "$app/Contents/MacOS/3bcad" \
+            target/aarch64-apple-darwin/release/3bcad target/x86_64-apple-darwin/release/3bcad
+          # Bundle versions must be plain dotted numbers, so drop any -beta.N suffix.
+          sed "s/@VERSION@/${VERSION%%-*}/g" packaging/macos/Info.plist > "$app/Contents/Info.plist"
+          plutil -lint "$app/Contents/Info.plist"
+          cp assets/icon.icns "$app/Contents/Resources/3bcad.icns"
+          # Ad-hoc signature: required for Apple Silicon to launch it (replaced below when signing).
+          codesign --force --deep --sign - "$app"
+
+      - name: Sign and notarize the app (macOS)
+        if: runner.os == 'macOS' && env.MACOS_SIGN == 'true'
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          # A throwaway keychain holding the Developer ID certificate, searched by codesign.
+          kc="$RUNNER_TEMP/signing.keychain-db"
+          kcpass=$(uuidgen)
+          security create-keychain -p "$kcpass" "$kc"
+          security set-keychain-settings -lut 21600 "$kc"
+          security unlock-keychain -p "$kcpass" "$kc"
+          echo "$MACOS_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -P "$MACOS_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$kc"
+          rm "$RUNNER_TEMP/cert.p12"
+          security set-key-partition-list -S apple-tool:,apple: -k "$kcpass" "$kc"
+          security list-keychain -d user -s "$kc"
+          app="dist/$PKG/3BCAD.app"
+          codesign --force --options runtime --timestamp --sign "Developer ID Application" "$app"
+          ditto -c -k --keepParent "$app" "$RUNNER_TEMP/notarize.zip"
+          xcrun notarytool submit "$RUNNER_TEMP/notarize.zip" --wait \
+            --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD"
+          xcrun stapler staple "$app"
+          codesign --verify --deep --strict --verbose=2 "$app"
+          spctl -a -vv "$app"
+          xcrun stapler validate "$app"
+
+      - name: Package (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          cp README.md CHANGELOG.md LICENSE-MIT LICENSE-APACHE NOTICE "dist/$PKG/"
+          (cd dist && ditto -c -k --keepParent "$PKG" "$PKG.zip")
+          # The disk image shows the same folder plus a shortcut to drag 3BCAD.app onto.
+          ln -s /Applications "dist/$PKG/Applications"
+          hdiutil create -volname 3BCAD -srcfolder "dist/$PKG" -format UDZO "dist/$PKG.dmg"
+          hdiutil verify "dist/$PKG.dmg"
+
+      - name: Sign and notarize the disk image (macOS)
+        if: runner.os == 'macOS' && env.MACOS_SIGN == 'true'
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          dmg="dist/$PKG.dmg"
+          codesign --timestamp --sign "Developer ID Application" "$dmg"
+          xcrun notarytool submit "$dmg" --wait \
+            --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD"
+          xcrun stapler staple "$dmg"
+          spctl -a -t open --context context:primary-signature -vv "$dmg"
+          xcrun stapler validate "$dmg"
+
+      # Linux: the program in a .tar.gz, and an AppImage with its desktop entry and icons.
+      - name: Package (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          cargo build --release --locked
+          mkdir -p "dist/$PKG"
+          cp target/release/3bcad README.md CHANGELOG.md LICENSE-MIT LICENSE-APACHE NOTICE "dist/$PKG/"
+          tar -C dist -czf "dist/$PKG.tar.gz" "$PKG"
+          desktop-file-validate packaging/linux/3bcad.desktop
+          d="$RUNNER_TEMP/AppDir"
+          install -Dm755 target/release/3bcad "$d/usr/bin/3bcad"
+          install -Dm644 packaging/linux/3bcad.desktop "$d/usr/share/applications/3bcad.desktop"
+          install -Dm644 packaging/linux/3bcad.xml "$d/usr/share/mime/packages/3bcad.xml"
+          for s in 16 32 48 64 128 256 512; do
+            install -Dm644 "assets/icon-$s.png" "$d/usr/share/icons/hicolor/${s}x$s/apps/3bcad.png"
+          done
+          install -Dm644 -t "$d/usr/share/doc/3bcad" LICENSE-MIT LICENSE-APACHE NOTICE
+          ln -s usr/bin/3bcad "$d/AppRun"
+          ln -s usr/share/applications/3bcad.desktop "$d/3bcad.desktop"
+          ln -s usr/share/icons/hicolor/256x256/apps/3bcad.png "$d/3bcad.png"
+          ln -s 3bcad.png "$d/.DirIcon"
+          # Pinned appimagetool and runtime (the static runtime needs no FUSE 2 on the user's system).
+          curl -fsSLo "$RUNNER_TEMP/appimagetool" \
+            https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage
+          curl -fsSLo "$RUNNER_TEMP/runtime" \
+            https://github.com/AppImage/type2-runtime/releases/download/20251108/runtime-x86_64
+          sha256sum -c - <<EOF
+          ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0  $RUNNER_TEMP/appimagetool
+          2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d  $RUNNER_TEMP/runtime
+          EOF
+          chmod +x "$RUNNER_TEMP/appimagetool"
+          appimage="$PWD/dist/3BCAD-$VERSION-linux-x86_64.AppImage"
+          ARCH=x86_64 APPIMAGE_EXTRACT_AND_RUN=1 "$RUNNER_TEMP/appimagetool" \
+            --runtime-file "$RUNNER_TEMP/runtime" "$d" "$appimage"
+          # The AppImage starts and holds the program (unpacking it needs no FUSE).
+          (cd "$RUNNER_TEMP" && "$appimage" --appimage-extract >/dev/null)
+          test -x "$RUNNER_TEMP/squashfs-root/usr/bin/3bcad"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.PKG }}
+          path: |
+            dist/*.zip
+            dist/*.tar.gz
+            dist/*.msi
+            dist/*.dmg
+            dist/*.AppImage
+          if-no-files-found: error

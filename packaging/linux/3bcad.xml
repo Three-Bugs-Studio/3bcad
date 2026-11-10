@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 3BCAD's own file types, for the desktop entry's MimeType (shared-mime-info format). -->
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <mime-type type="application/x-3bcad-part">
+    <comment>3BCAD part</comment>
+    <glob pattern="*.3bcad"/>
+  </mime-type>
+  <mime-type type="application/x-3bcad-assembly">
+    <comment>3BCAD assembly</comment>
+    <glob pattern="*.3bcasm"/>
+  </mime-type>
+  <mime-type type="application/x-3bcad-drawing">
+    <comment>3BCAD drawing</comment>
+    <glob pattern="*.3bcdrw"/>
+  </mime-type>
+</mime-info>
