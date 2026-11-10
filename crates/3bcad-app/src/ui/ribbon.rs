@@ -1,6 +1,7 @@
 //! Command ribbon. Each command creates its feature from the current selection with
 //! sensible defaults; the Properties panel then edits it.
 
+use crate::i18n::tr;
 use eframe::egui;
 use threebcad_core::*;
 use threebcad_kernel::Plane;
@@ -24,24 +25,24 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
     egui::TopBottomPanel::top("ribbon")
         .frame(
             egui::Frame::new()
-                .fill(theme::PANEL)
+                .fill(theme::panel())
                 .inner_margin(egui::Margin::symmetric(6, 3)),
         )
         .show(ctx, |ui| {
             ui.horizontal(|ui| {
                 if ui
-                    .add(egui::Label::new(egui::RichText::new("3BCAD").strong()).sense(egui::Sense::click()))
-                    .on_hover_text("About 3BCAD")
+                    .add(egui::Label::new(egui::RichText::new(tr("3BCAD")).strong()).sense(egui::Sense::click()))
+                    .on_hover_text(tr("About 3BCAD"))
                     .clicked()
                 {
                     app.show_about = true;
                 }
                 ui.hyperlink_to(format!("v{VERSION}"), RELEASE_NOTES_URL)
-                    .on_hover_text("What's new in this version");
+                    .on_hover_text(tr("What's new in this version"));
                 if let Some(v) = app.update.available().map(str::to_string) {
                     if ui
                         .button(format!("⬆ Update to v{v}"))
-                        .on_hover_text("What's new in it, and install it")
+                        .on_hover_text(tr("What's new in it, and install it"))
                         .clicked()
                     {
                         app.update.open = true;
@@ -49,6 +50,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                 }
                 ui.separator();
                 crate::files::menu(app, ui);
+                crate::ui::help::menu(app, ui);
                 ui.separator();
                 ui.label(format!("{}{}", app.doc_name(), if app.is_dirty() { " *" } else { "" }));
                 if let (None, None, Some(back)) = (&app.asm, &app.drw, app.files.return_to.clone()) {
@@ -57,7 +59,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                         .map_or_else(String::new, |n| n.to_string_lossy().into_owned());
                     if ui
                         .button(format!("◀ Back to {name}"))
-                        .on_hover_text("Save the part and go back, to see the change there")
+                        .on_hover_text(tr("Save the part and go back, to see the change there"))
                         .clicked()
                     {
                         app.request(crate::files::Pending::Open(back));
@@ -65,22 +67,22 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                 }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if icons::small(ui, "help", "Shortcuts", true, app.show_shortcuts)
-                        .on_hover_text("Keyboard shortcuts (F1)")
+                        .on_hover_text(tr("Keyboard shortcuts (F1)"))
                         .clicked()
                     {
                         app.show_shortcuts = !app.show_shortcuts;
                     }
                     let (can_undo, can_redo) = (app.can_undo(), app.can_redo());
                     if ui
-                        .add_enabled(can_redo, egui::Button::new("Redo"))
-                        .on_hover_text("Ctrl+Y")
+                        .add_enabled(can_redo, egui::Button::new(tr("Redo")))
+                        .on_hover_text(tr("Ctrl+Y"))
                         .clicked()
                     {
                         app.redo();
                     }
                     if ui
-                        .add_enabled(can_undo, egui::Button::new("Undo"))
-                        .on_hover_text("Ctrl+Z")
+                        .add_enabled(can_undo, egui::Button::new(tr("Undo")))
+                        .on_hover_text(tr("Ctrl+Z"))
                         .clicked()
                     {
                         app.undo();
@@ -89,20 +91,13 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
             });
             // Ribbon: the current tab's commands, then the tabs underneath.
             egui::Frame::new()
-                .fill(egui::Color32::from_rgb(250, 250, 250))
-                .stroke(egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(210, 210, 210)))
+                .fill(theme::raised().0)
+                .stroke(theme::raised().1)
                 .corner_radius(3)
                 .inner_margin(egui::Margin::symmetric(4, 3))
                 .show(ui, |ui| {
                     ui.set_min_height(64.0);
-                    ui.horizontal_wrapped(|ui| match app.tab {
-                        RibbonTab::Features => features(app, ui),
-                        RibbonTab::Sketch => sketch(app, ui),
-                        RibbonTab::Evaluate => evaluate(app, ui),
-                        RibbonTab::Print => crate::ui::print::tab(app, ui),
-                        RibbonTab::Assembly => crate::ui::assembly::tab(app, ui),
-                        RibbonTab::Drawing => crate::ui::drawing::tab(app, ui),
-                    });
+                    ui.horizontal_wrapped(|ui| tab_commands(app, ui));
                 });
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = 0.0;
@@ -127,17 +122,29 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
         });
 }
 
+/// The open tab's commands (the ribbon, and the S key's shortcut bar).
+pub fn tab_commands(app: &mut App, ui: &mut egui::Ui) {
+    match app.tab {
+        RibbonTab::Features => features(app, ui),
+        RibbonTab::Sketch => sketch(app, ui),
+        RibbonTab::Evaluate => evaluate(app, ui),
+        RibbonTab::Print => crate::ui::print::tab(app, ui),
+        RibbonTab::Assembly => crate::ui::assembly::tab(app, ui),
+        RibbonTab::Drawing => crate::ui::drawing::tab(app, ui),
+    }
+}
+
 /// A ribbon tile; true when clicked.
 fn tile(ui: &mut egui::Ui, icon: &str, label: &str, enabled: bool, tip: &str) -> bool {
     icons::tile(ui, icon, label, enabled, false)
-        .on_hover_text(tip)
+        .on_hover_text(crate::i18n::tr(tip))
         .clicked()
 }
 
 /// A small one-line command; true when clicked.
 fn small(ui: &mut egui::Ui, icon: &str, label: &str, enabled: bool, tip: &str) -> bool {
     icons::small(ui, icon, label, enabled, false)
-        .on_hover_text(tip)
+        .on_hover_text(crate::i18n::tr(tip))
         .clicked()
 }
 
@@ -176,7 +183,7 @@ fn create(app: &mut App, kind: FeatureKind) {
 fn sketch_feature(app: &mut App, make: impl FnOnce(FeatureId) -> FeatureKind) {
     match source_sketch(app) {
         Some(s) => create(app, make(s)),
-        None => app.status = "Select a sketch (in the feature tree or the graphics area) first".into(),
+        None => app.status = tr("Select a sketch (in the feature tree or the graphics area) first").into(),
     }
 }
 
@@ -259,7 +266,7 @@ fn features(app: &mut App, ui: &mut egui::Ui) {
     ) {
         let edges = app.selected_edges(true);
         if edges.is_empty() {
-            app.status = "Fillet: select edges or faces first (Ctrl+click for more)".into();
+            app.status = tr("Fillet: select edges or faces first (Ctrl+click for more)").into();
         } else {
             create(
                 app,
@@ -281,7 +288,7 @@ fn features(app: &mut App, ui: &mut egui::Ui) {
         ) {
             let edges = app.selected_edges(true);
             if edges.is_empty() {
-                app.status = "Chamfer: select edges or faces first (Ctrl+click for more)".into();
+                app.status = tr("Chamfer: select edges or faces first (Ctrl+click for more)").into();
             } else {
                 create(
                     app,
@@ -322,7 +329,7 @@ fn features(app: &mut App, ui: &mut egui::Ui) {
         ) {
             let faces = app.selected_faces();
             if faces.is_empty() {
-                app.status = "Draft: select the side faces to draft".into();
+                app.status = tr("Draft: select the side faces to draft").into();
             } else {
                 let neutral = app
                     .selection
@@ -521,7 +528,7 @@ fn hole_wizard(app: &mut App) {
         let c = app.doc.bodies().get(body)?.topo.faces.get(face)?.center();
         Some((plane, on, plane.to_local(c)))
     }) else {
-        app.status = "Hole Wizard: select a flat face or a sketch of points".into();
+        app.status = tr("Hole Wizard: select a flat face or a sketch of points").into();
         return;
     };
     let mut pts = Sketch::default();
@@ -540,7 +547,7 @@ fn hole_wizard(app: &mut App) {
         Ok(id) => {
             app.selected = Some(id);
             app.selection.clear();
-            app.status = "Hole placed at the face center; edit its sketch to move or add holes".into();
+            app.status = tr("Hole placed at the face center; edit its sketch to move or add holes").into();
         }
         Err(e) => app.status = e.to_string(),
     }
@@ -598,7 +605,7 @@ fn ref_axis(app: &mut App) {
         .or_else(|| (planes.len() >= 2).then(|| RefAxisDef::TwoPlanes(planes[0].clone(), planes[1].clone())));
     match def {
         Some(d) => create(app, FeatureKind::RefAxis(d)),
-        None => app.status = "Axis: select an edge, a cylindrical face, two vertices or two planes".into(),
+        None => app.status = tr("Axis: select an edge, a cylindrical face, two vertices or two planes").into(),
     }
 }
 
@@ -776,7 +783,7 @@ fn sketch(app: &mut App, ui: &mut egui::Ui) {
         });
     }
     ui.separator();
-    ui.checkbox(&mut session.opts.show_relations, "Display relations");
+    ui.checkbox(&mut session.opts.show_relations, tr("Display relations"));
 }
 
 fn evaluate(app: &mut App, ui: &mut egui::Ui) {
@@ -820,7 +827,7 @@ fn evaluate(app: &mut App, ui: &mut egui::Ui) {
     ) {
         app.appearance = crate::ui::design::Appearance::of_selection(app);
         if app.appearance.is_none() {
-            app.status = "Pick a face, or select a feature in the tree, to colour it".into();
+            app.status = tr("Pick a face, or select a feature in the tree, to colour it").into();
         }
     }
     ui.separator();

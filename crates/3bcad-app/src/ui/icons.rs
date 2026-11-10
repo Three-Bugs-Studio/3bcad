@@ -1233,23 +1233,23 @@ pub fn inline(ui: &mut Ui, name: &str, enabled: bool) {
 fn frame(ui: &Ui, resp: &Response, selected: bool) {
     let r = resp.rect;
     if selected {
-        ui.painter().rect_filled(r, 3.0, theme::SELECTED_FILL);
+        ui.painter().rect_filled(r, 3.0, theme::selected_fill());
     }
     if resp.hovered() && resp.sense.senses_click() {
-        ui.painter().rect_filled(r, 3.0, theme::HOVER_FILL);
+        ui.painter().rect_filled(r, 3.0, theme::hover_fill());
         ui.painter()
-            .rect_stroke(r, 3.0, Stroke::new(1.0_f32, theme::HOVER_STROKE), StrokeKind::Inside);
+            .rect_stroke(r, 3.0, Stroke::new(1.0_f32, theme::ACCENT), StrokeKind::Inside);
     }
 }
 
 /// Ribbon button: a large icon over its label.
 pub fn tile(ui: &mut Ui, icon: &str, label: &str, enabled: bool, selected: bool) -> Response {
     let color = if enabled {
-        Color32::from_rgb(30, 30, 30)
+        ui.visuals().strong_text_color()
     } else {
-        theme::MUTED
+        theme::muted()
     };
-    let mut job = egui::text::LayoutJob::simple(label.to_owned(), FontId::proportional(11.5), color, 74.0);
+    let mut job = egui::text::LayoutJob::simple(crate::i18n::tr(label).to_owned(), FontId::proportional(11.5), color, 74.0);
     job.halign = egui::Align::Center;
     let galley = ui.fonts(|f| f.layout_job(job));
     let size = vec2(galley.size().x.max(40.0) + 10.0, 30.0 + galley.size().y + 10.0);
@@ -1267,13 +1267,13 @@ pub fn tile(ui: &mut Ui, icon: &str, label: &str, enabled: bool, selected: bool)
 /// Small command: icon and label on one line (stacked three high in the ribbon).
 pub fn small(ui: &mut Ui, icon: &str, label: &str, enabled: bool, selected: bool) -> Response {
     let color = if enabled {
-        Color32::from_rgb(30, 30, 30)
+        ui.visuals().strong_text_color()
     } else {
-        theme::MUTED
+        theme::muted()
     };
     let galley = ui
         .painter()
-        .layout_no_wrap(label.to_owned(), FontId::proportional(12.0), color);
+        .layout_no_wrap(crate::i18n::tr(label).to_owned(), FontId::proportional(12.0), color);
     let size = vec2(galley.size().x + 28.0, 21.0);
     let sense = if enabled { Sense::click() } else { Sense::hover() };
     let (rect, resp) = ui.allocate_exact_size(size, sense);
@@ -1292,9 +1292,9 @@ pub fn small(ui: &mut Ui, icon: &str, label: &str, enabled: bool, selected: bool
 /// Label used as a tab under the command row.
 pub fn tab(ui: &mut Ui, label: &str, selected: bool) -> Response {
     let galley = ui.painter().layout_no_wrap(
-        label.to_owned(),
+        crate::i18n::tr(label).to_owned(),
         FontId::proportional(12.5),
-        Color32::from_rgb(30, 30, 30),
+        ui.visuals().strong_text_color(),
     );
     let size = vec2(galley.size().x + 18.0, 22.0);
     let (rect, resp) = ui.allocate_exact_size(size, Sense::click());
@@ -1312,10 +1312,10 @@ pub fn tab(ui: &mut Ui, label: &str, selected: bool) -> Response {
         );
         painter.line_segment(
             [rect.left_bottom(), rect.right_bottom()],
-            Stroke::new(2.0_f32, theme::HOVER_STROKE),
+            Stroke::new(2.0_f32, theme::ACCENT),
         );
     } else if resp.hovered() {
-        painter.rect_filled(rect, 3.0, theme::HOVER_FILL);
+        painter.rect_filled(rect, 3.0, theme::hover_fill());
     }
     painter.galley(
         rect.min + vec2(9.0, (22.0 - galley.size().y) / 2.0),

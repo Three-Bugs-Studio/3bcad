@@ -8,6 +8,7 @@ pub mod icons;
 pub mod print;
 pub mod properties;
 pub mod ribbon;
+pub mod settings;
 pub mod sketch_mode;
 pub mod theme;
 pub mod tree_view;

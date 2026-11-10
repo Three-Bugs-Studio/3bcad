@@ -1,6 +1,7 @@
 //! Evaluate windows: What's Wrong, Measure and Mass Properties.
 
 use eframe::egui::{self, Color32, RichText};
+use crate::i18n::tr;
 use threebcad_kernel::topology::{cross, dot, norm, point_triangle, sub, unit, EdgeCurve, P3};
 
 use threebcad_core::material;
@@ -55,12 +56,12 @@ fn whats_wrong(app: &mut App, ctx: &egui::Context) {
     let (errors, warnings) = (list(app.doc.errors()), list(app.doc.warnings()));
     let mut open = true;
     let mut pick = None;
-    egui::Window::new("What's Wrong")
+    egui::Window::new(tr("What's Wrong"))
         .open(&mut open)
         .default_width(420.0)
         .show(ctx, |ui| {
             if errors.is_empty() && warnings.is_empty() {
-                ui.label("No rebuild errors or warnings.");
+                ui.label(tr("No rebuild errors or warnings."));
             }
             for (title, items, color) in [
                 ("Errors", &errors, Color32::from_rgb(200, 40, 40)),
@@ -76,7 +77,7 @@ fn whats_wrong(app: &mut App, ctx: &egui::Context) {
                 );
                 for (_, id, name, msg) in items.iter() {
                     ui.horizontal_wrapped(|ui| {
-                        if ui.link(name).on_hover_text("Select the feature").clicked() {
+                        if ui.link(name).on_hover_text(tr("Select the feature")).clicked() {
                             pick = Some(*id);
                         }
                         ui.label(msg);
@@ -274,15 +275,15 @@ fn measure(app: &mut App, ctx: &egui::Context) {
     };
     app.measured = Some((revision, app.selection.clone(), lines.clone()));
     let mut open = true;
-    egui::Window::new("Measure")
+    egui::Window::new(tr("Measure"))
         .open(&mut open)
         .default_width(340.0)
         .show(ctx, |ui| {
-            ui.weak("Ctrl+click to measure between two items.");
+            ui.weak(tr("Ctrl+click to measure between two items."));
             for l in &lines {
                 ui.label(l);
             }
-            if ui.button("Copy").clicked() {
+            if ui.button(tr("Copy")).clicked() {
                 ctx.copy_text(lines.join("\n"));
             }
         });
@@ -293,7 +294,7 @@ fn measure(app: &mut App, ctx: &egui::Context) {
 pub fn material_editor(app: &mut App, ui: &mut egui::Ui) {
     let mut m = app.doc.material().clone();
     ui.horizontal(|ui| {
-        ui.label("Material");
+        ui.label(tr("Material"));
         egui::ComboBox::from_id_salt("material")
             .selected_text(&m.name)
             .show_ui(ui, |ui| {
@@ -306,18 +307,18 @@ pub fn material_editor(app: &mut App, ui: &mut egui::Ui) {
             });
     });
     ui.horizontal(|ui| {
-        ui.label("Name");
+        ui.label(tr("Name"));
         ui.text_edit_singleline(&mut m.name);
     });
     ui.horizontal(|ui| {
-        ui.label("Density");
+        ui.label(tr("Density"));
         ui.add(
             egui::DragValue::new(&mut m.density)
                 .speed(0.01)
                 .range(0.001..=30.0)
                 .suffix(" g/cm³"),
         );
-        ui.label("Colour");
+        ui.label(tr("Colour"));
         ui.color_edit_button_srgb(&mut m.color);
     });
     app.doc.set_material(m);
@@ -329,14 +330,14 @@ fn mass(app: &mut App, ctx: &egui::Context) {
     }
     let mut open = true;
     let props = app.mass_properties().cloned();
-    egui::Window::new("Mass Properties")
+    egui::Window::new(tr("Mass Properties"))
         .open(&mut open)
         .default_width(360.0)
         .show(ctx, |ui| {
             material_editor(app, ui);
             ui.separator();
             let Some(p) = props else {
-                ui.label("The part has no bodies.");
+                ui.label(tr("The part has no bodies."));
                 return;
             };
             let (u, m) = (app.doc.units(), app.doc.material());
@@ -361,10 +362,10 @@ fn mass(app: &mut App, ctx: &egui::Context) {
             for l in &lines {
                 ui.label(l);
             }
-            if ui.button("Copy").clicked() {
+            if ui.button(tr("Copy")).clicked() {
                 ctx.copy_text(lines.join("\n"));
             }
-            ui.weak("The center of mass is marked in the graphics area.");
+            ui.weak(tr("The center of mass is marked in the graphics area."));
         });
     app.show_mass = open;
 }

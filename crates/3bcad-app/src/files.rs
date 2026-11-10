@@ -1,10 +1,11 @@
 //! The desktop file workflow: New / Open / Save, recent files, the unsaved-changes prompt,
 //! autosave with crash recovery, and importing other formats.
 
+use crate::i18n::tr;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
-use eframe::egui::{self, Key, KeyboardShortcut, Modifiers};
+use eframe::egui::{self, Key};
 use threebcad_core::assembly::EXT as ASSEMBLY_EXT;
 use threebcad_core::drawing::EXT as DRAWING_EXT;
 use threebcad_core::{
@@ -47,6 +48,23 @@ pub struct Settings {
     pub check_updates: bool,
     /// A release the user chose to skip: not offered at start.
     pub skip_update: String,
+    pub language: crate::i18n::Language,
+    pub theme: crate::ui::theme::Theme,
+    /// Size of the whole interface (1 = 100 %).
+    pub ui_scale: f32,
+    /// How the model is drawn, and with perspective, when 3BCAD starts.
+    pub display_style: threebcad_render::DisplayStyle,
+    pub perspective: bool,
+    pub view_cube: bool,
+    /// Units of new parts.
+    pub units: UnitSystem,
+    /// Draw a coarse copy of large models while the view moves.
+    pub lod: bool,
+    pub show_fps: bool,
+    /// Right-drag shows the mouse gesture wheel instead of panning (pan with Shift+right-drag).
+    pub mouse_gestures: bool,
+    /// Keyboard shortcuts that differ from the defaults.
+    pub keys: crate::commands::Overrides,
 }
 
 impl Default for Settings {
@@ -65,6 +83,17 @@ impl Default for Settings {
             angle_deg: 10.0,
             check_updates: true,
             skip_update: String::new(),
+            language: Default::default(),
+            theme: Default::default(),
+            ui_scale: 1.0,
+            display_style: Default::default(),
+            perspective: true,
+            view_cube: true,
+            units: UnitSystem::Mmgs,
+            lod: true,
+            show_fps: false,
+            mouse_gestures: false,
+            keys: Default::default(),
         }
     }
 }
@@ -103,9 +132,33 @@ impl Settings {
                 "angle_deg" => s.angle_deg = num(s.angle_deg).min(90.0),
                 "check_updates" => s.check_updates = v.trim() != "false",
                 "skip_update" => s.skip_update = v.trim().into(),
+                "language" => s.language = crate::i18n::Language::from_id(v).unwrap_or(s.language),
+                "theme" => s.theme = crate::ui::theme::Theme::from_id(v).unwrap_or(s.theme),
+                "ui_scale" => s.ui_scale = (num(f64::from(s.ui_scale)) as f32).clamp(0.5, 3.0),
+                "display_style" => {
+                    s.display_style = threebcad_render::DisplayStyle::from_id(v).unwrap_or(s.display_style)
+                }
+                "perspective" => s.perspective = v.trim() != "false",
+                "view_cube" => s.view_cube = v.trim() != "false",
+                "units" => s.units = UnitSystem::ALL.into_iter().find(|u| u.short() == v.trim()).unwrap_or(s.units),
+                "lod" => s.lod = v.trim() != "false",
+                "show_fps" => s.show_fps = v.trim() == "true",
+                "mouse_gestures" => s.mouse_gestures = v.trim() == "true",
                 _ => {
                     if let Some(sl) = k.strip_prefix("slicer_path.").and_then(Slicer::from_name) {
                         s.slicer_paths[sl as usize] = Some(PathBuf::from(v));
+                    }
+                    if let Some(c) = k.strip_prefix("key.").and_then(crate::commands::Command::from_id) {
+                        match v.trim() {
+                            "none" => {
+                                s.keys.insert(c, None);
+                            }
+                            key => {
+                                if let Some(key) = crate::commands::parse(key) {
+                                    s.keys.insert(c, Some(key));
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -127,6 +180,25 @@ impl Settings {
             self.angle_deg
         );
         out += &format!("check_updates={}\n", self.check_updates);
+        out += &format!(
+            "language={}\ntheme={}\nui_scale={}\ndisplay_style={}\nperspective={}\nview_cube={}\nunits={}\nlod={}\nshow_fps={}\nmouse_gestures={}\n",
+            self.language.id(),
+            self.theme.id(),
+            self.ui_scale,
+            self.display_style.id(),
+            self.perspective,
+            self.view_cube,
+            self.units.short(),
+            self.lod,
+            self.show_fps,
+            self.mouse_gestures
+        );
+        for c in crate::commands::Command::ALL {
+            if let Some(k) = self.keys.get(&c) {
+                let k = k.as_ref().map_or_else(|| "none".to_string(), crate::commands::text);
+                out += &format!("key.{}={k}\n", c.id());
+            }
+        }
         if !self.skip_update.is_empty() {
             out += &format!("skip_update={}\n", self.skip_update);
         }
@@ -156,6 +228,16 @@ impl Settings {
                 .and_then(|()| std::fs::write(&tmp, self.to_text()))
                 .and_then(|()| std::fs::rename(&tmp, d.join("settings.txt")));
         }
+    }
+
+    /// Settings > Reset to defaults: every preference, but not the recent files or where the
+    /// slicers were found.
+    pub fn reset(&mut self) {
+        *self = Self {
+            recent: std::mem::take(&mut self.recent),
+            slicer_paths: std::mem::take(&mut self.slicer_paths),
+            ..Self::default()
+        };
     }
 
     /// Puts `path` first in the recent list.
@@ -400,7 +482,7 @@ impl App {
     pub fn undo(&mut self) {
         if let Some(d) = &mut self.drw {
             d.doc.undo();
-            self.status = "Undone".into();
+            self.status = tr("Undone").into();
             return;
         }
         match (&mut self.asm, &mut self.sketch) {
@@ -408,13 +490,13 @@ impl App {
             (None, Some(sk)) => return sk.undo(),
             (None, None) => self.doc.undo(),
         }
-        self.status = "Undone".into();
+        self.status = tr("Undone").into();
     }
 
     pub fn redo(&mut self) {
         if let Some(d) = &mut self.drw {
             d.doc.redo();
-            self.status = "Redone".into();
+            self.status = tr("Redone").into();
             return;
         }
         match (&mut self.asm, &mut self.sketch) {
@@ -422,33 +504,13 @@ impl App {
             (None, Some(sk)) => return sk.redo(),
             (None, None) => self.doc.redo(),
         }
-        self.status = "Redone".into();
+        self.status = tr("Redone").into();
     }
 
     /// Shortcuts, title, autosave, the close button and the file dialogs; once per frame.
     pub fn files_frame(&mut self, ctx: &egui::Context) {
         crate::ui::properties::set_units(self.units());
-        // Ctrl+Shift+S first: the Ctrl+S shortcut would also match it.
-        let (new, open, save_as, save) = ctx.input_mut(|i| {
-            (
-                i.consume_shortcut(&KeyboardShortcut::new(Modifiers::COMMAND, Key::N)),
-                i.consume_shortcut(&KeyboardShortcut::new(Modifiers::COMMAND, Key::O)),
-                i.consume_shortcut(&KeyboardShortcut::new(Modifiers::COMMAND | Modifiers::SHIFT, Key::S)),
-                i.consume_shortcut(&KeyboardShortcut::new(Modifiers::COMMAND, Key::S)),
-            )
-        });
-        if new {
-            self.request(Pending::New);
-        }
-        if open {
-            self.open_dialog();
-        }
         self.dropped_files(ctx);
-        if save_as {
-            self.save_as();
-        } else if save {
-            self.save();
-        }
         if ctx.input(|i| i.viewport().close_requested()) && !self.files.close_ok && self.is_dirty() {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
             self.files.pending = Some(Pending::Close);
@@ -561,16 +623,20 @@ impl App {
         match p {
             Pending::New => {
                 self.files.return_to = None;
-                self.set_doc(PartDocument::new("Part1"), None);
-                self.status = "New part".into();
+                let units = Units {
+                    system: self.files.settings.units,
+                    ..Units::default()
+                };
+                self.set_doc(PartDocument::new_in("Part1", units), None);
+                self.status = tr("New part").into();
             }
             Pending::NewAssembly => {
                 self.set_assembly(AssemblyDocument::new("Assembly1"), None);
-                self.status = "New assembly: insert a part to start".into();
+                self.status = tr("New assembly: insert a part to start").into();
             }
             Pending::NewDrawing => {
                 self.set_drawing(DrawingDocument::new("Drawing1"), None);
-                self.status = "New drawing: choose the part it shows (Drawing tab > Model)".into();
+                self.status = tr("New drawing: choose the part it shows (Drawing tab > Model)").into();
             }
             Pending::Open(path) if is_drawing(&path) => match DrawingDocument::open(&path) {
                 Ok(mut doc) => {
@@ -779,17 +845,17 @@ impl App {
         let mut answer = None;
         egui::Modal::new(egui::Id::new("unsaved")).show(ctx, |ui| {
             ui.set_width(340.0);
-            ui.heading("Save changes?");
+            ui.heading(tr("Save changes?"));
             ui.label(format!("{} has changes that are not saved.", self.doc_name()));
             ui.add_space(8.0);
             ui.horizontal(|ui| {
-                if ui.button("Save").clicked() {
+                if ui.button(tr("Save")).clicked() {
                     answer = Some(true);
                 }
-                if ui.button("Don't Save").clicked() {
+                if ui.button(tr("Don't Save")).clicked() {
                     answer = Some(false);
                 }
-                if ui.button("Cancel").clicked() || ui.input(|i| i.key_pressed(Key::Escape)) {
+                if ui.button(tr("Cancel")).clicked() || ui.input(|i| i.key_pressed(Key::Escape)) {
                     self.files.pending = None;
                     self.files.restart = None;
                 }
@@ -817,7 +883,7 @@ impl App {
         let mut answer = None;
         egui::Modal::new(egui::Id::new("recover")).show(ctx, |ui| {
             ui.set_width(380.0);
-            ui.heading("Recover your work?");
+            ui.heading(tr("Recover your work?"));
             ui.label(format!(
                 "3BCAD did not close normally last time. A copy of the {} was autosaved{when}.",
                 if is_assembly(&path) {
@@ -830,10 +896,10 @@ impl App {
             ));
             ui.add_space(8.0);
             ui.horizontal(|ui| {
-                if ui.button("Recover").clicked() {
+                if ui.button(tr("Recover")).clicked() {
                     answer = Some(true);
                 }
-                if ui.button("Discard").clicked() {
+                if ui.button(tr("Discard")).clicked() {
                     answer = Some(false);
                 }
             });
@@ -908,7 +974,7 @@ impl App {
             })
         });
         let Some(sketch) = sketch else {
-            self.status = "Select a sketch or a planar face to export as DXF".into();
+            self.status = tr("Select a sketch or a planar face to export as DXF").into();
             return;
         };
         let Some(path) = rfd::FileDialog::new()
@@ -927,39 +993,43 @@ impl App {
 
 /// The File menu in the title row.
 pub fn menu(app: &mut App, ui: &mut egui::Ui) {
+    use crate::commands::Command;
+    use crate::i18n::tr;
     let part = app.asm.is_none() && app.drw.is_none();
-    ui.menu_button("File", |ui| {
-        if ui.add(egui::Button::new("New Part").shortcut_text("Ctrl+N")).clicked() {
+    let keys = app.files.settings.keys.clone();
+    let key = |c: Command| crate::commands::key_of(&keys, c).map_or_else(String::new, |k| crate::commands::text(&k));
+    ui.menu_button(tr("File"), |ui| {
+        if ui.add(egui::Button::new(tr("New Part")).shortcut_text(key(Command::New))).clicked() {
             ui.close_menu();
             app.request(Pending::New);
         }
         if ui
-            .button("New Assembly")
-            .on_hover_text("Put parts together with mates")
+            .button(tr("New Assembly"))
+            .on_hover_text(tr("Put parts together with mates"))
             .clicked()
         {
             ui.close_menu();
             app.request(Pending::NewAssembly);
         }
         if ui
-            .button("New Drawing")
-            .on_hover_text("Engineering drawing of a part: views, sections, dimensions, PDF / DXF")
+            .button(tr("New Drawing"))
+            .on_hover_text(tr("Engineering drawing of a part: views, sections, dimensions, PDF / DXF"))
             .clicked()
         {
             ui.close_menu();
             app.request(Pending::NewDrawing);
         }
         if ui
-            .add(egui::Button::new("Open…").shortcut_text("Ctrl+O"))
-            .on_hover_text("3BCAD files, or STEP, STL, 3MF, OBJ and DXF as a new part")
+            .add(egui::Button::new(tr("Open…")).shortcut_text(key(Command::Open)))
+            .on_hover_text(tr("3BCAD files, or STEP, STL, 3MF, OBJ and DXF as a new part"))
             .clicked()
         {
             ui.close_menu();
             app.open_dialog();
         }
-        ui.menu_button("Open Recent", |ui| {
+        ui.menu_button(tr("Open Recent"), |ui| {
             if app.files.settings.recent.is_empty() {
-                ui.weak("No recent parts");
+                ui.weak(tr("No recent parts"));
             }
             for p in app.files.settings.recent.clone() {
                 if ui.button(p.display().to_string()).clicked() {
@@ -968,20 +1038,20 @@ pub fn menu(app: &mut App, ui: &mut egui::Ui) {
                 }
             }
         });
-        if ui.add(egui::Button::new("Save").shortcut_text("Ctrl+S")).clicked() {
+        if ui.add(egui::Button::new(tr("Save")).shortcut_text(key(Command::Save))).clicked() {
             ui.close_menu();
             app.save();
         }
         if ui
-            .add(egui::Button::new("Save As…").shortcut_text("Ctrl+Shift+S"))
+            .add(egui::Button::new(tr("Save As…")).shortcut_text(key(Command::SaveAs)))
             .clicked()
         {
             ui.close_menu();
             app.save_as();
         }
         if ui
-            .button("Properties…")
-            .on_hover_text("Part number, description and other properties, for the bill of materials")
+            .button(tr("Properties…"))
+            .on_hover_text(tr("Part number, description and other properties, for the bill of materials"))
             .clicked()
         {
             ui.close_menu();
@@ -993,60 +1063,35 @@ pub fn menu(app: &mut App, ui: &mut egui::Ui) {
         }
         ui.separator();
         if ui
-            .add_enabled(part, egui::Button::new("Import…"))
-            .on_hover_text("STEP solids, STL / 3MF / OBJ meshes, DXF sketches")
+            .add_enabled(part, egui::Button::new(tr("Import…")))
+            .on_hover_text(tr("STEP solids, STL / 3MF / OBJ meshes, DXF sketches"))
             .clicked()
         {
             ui.close_menu();
             app.import_dialog();
         }
         if ui
-            .add_enabled(part, egui::Button::new("Export DXF…"))
-            .on_hover_text("The selected sketch or planar face")
+            .add_enabled(part, egui::Button::new(tr("Export DXF…")))
+            .on_hover_text(tr("The selected sketch or planar face"))
             .clicked()
         {
             ui.close_menu();
             app.export_dxf();
         }
         ui.separator();
-        ui.menu_button("Units", |ui| units_ui(app, ui));
+        ui.menu_button(tr("Units"), |ui| units_ui(app, ui));
         if part {
-            ui.menu_button("Material", |ui| crate::ui::evaluate::material_editor(app, ui));
+            ui.menu_button(tr("Material"), |ui| crate::ui::evaluate::material_editor(app, ui));
         }
         ui.separator();
-        let mut check = app.files.settings.check_updates;
         if ui
-            .checkbox(&mut check, "Check for updates at start")
-            .on_hover_text("Asks GitHub for a newer release when 3BCAD starts; nothing else is sent")
-            .changed()
-        {
-            app.files.settings.check_updates = check;
-            app.files.settings.save();
-        }
-        if ui
-            .add_enabled(!app.update.busy(), egui::Button::new("Check for Updates…"))
+            .add(egui::Button::new(tr("Settings…")).shortcut_text(key(Command::Settings)))
+            .on_hover_text(tr("Theme, language, interface size, shortcuts, mouse, autosave, updates"))
             .clicked()
         {
             ui.close_menu();
-            app.update.check(true);
-            app.status = "Checking for updates…".into();
+            app.run(ui.ctx(), Command::Settings);
         }
-        if ui.button("About 3BCAD…").clicked() {
-            ui.close_menu();
-            app.show_about = true;
-        }
-        ui.horizontal(|ui| {
-            ui.label("Autosave every");
-            let mut m = app.files.settings.autosave_minutes;
-            if ui
-                .add(egui::DragValue::new(&mut m).range(0..=120).suffix(" min"))
-                .on_hover_text("0 turns autosave off")
-                .changed()
-            {
-                app.files.settings.autosave_minutes = m;
-                app.files.settings.save();
-            }
-        });
     });
 }
 
@@ -1057,7 +1102,7 @@ pub fn units_ui(app: &mut App, ui: &mut egui::Ui) {
         ui.radio_value(&mut u.system, s, s.name());
     }
     ui.horizontal(|ui| {
-        ui.label("Decimals");
+        ui.label(tr("Decimals"));
         ui.add(egui::DragValue::new(&mut u.decimals).range(0..=6));
     });
     app.set_units(u);
@@ -1079,8 +1124,8 @@ pub fn properties_window(app: &mut App, ctx: &egui::Context) {
                  Drawings fill in {Name} in title blocks and notes.",
             );
             egui::Grid::new("custom_properties").num_columns(3).show(ui, |ui| {
-                ui.strong("Name");
-                ui.strong("Value");
+                ui.strong(tr("Name"));
+                ui.strong(tr("Value"));
                 ui.end_row();
                 let mut gone = None;
                 for (i, (k, v)) in rows.iter_mut().enumerate() {
@@ -1088,7 +1133,7 @@ pub fn properties_window(app: &mut App, ctx: &egui::Context) {
                     let h = ui.spacing().interact_size.y;
                     ui.add_sized([150.0, h], egui::TextEdit::singleline(k));
                     ui.add_sized([260.0, h], egui::TextEdit::singleline(v));
-                    if ui.small_button("✖").on_hover_text("Remove").clicked() {
+                    if ui.small_button("✖").on_hover_text(tr("Remove")).clicked() {
                         gone = Some(i);
                     }
                     ui.end_row();
@@ -1104,12 +1149,12 @@ pub fn properties_window(app: &mut App, ctx: &egui::Context) {
                         rows.push((name.into(), String::new()));
                     }
                 }
-                if ui.button("+ Other").clicked() {
+                if ui.button(tr("+ Other")).clicked() {
                     rows.push((String::new(), String::new()));
                 }
             });
             ui.separator();
-            apply = ui.button("Apply").clicked();
+            apply = ui.button(tr("Apply")).clicked();
         });
     if apply {
         let clean: Vec<(String, String)> = rows
@@ -1122,7 +1167,7 @@ pub fn properties_window(app: &mut App, ctx: &egui::Context) {
             (Some(s), _) => s.doc.set_properties(clean),
             _ => app.doc.set_properties(clean),
         }
-        app.status = "Properties saved with the file".into();
+        app.status = tr("Properties saved with the file").into();
         return;
     }
     if open {
@@ -1153,9 +1198,43 @@ mod tests {
         s.angle_deg = 5.0;
         s.check_updates = false;
         s.skip_update = "0.9.0".into();
+        s.language = crate::i18n::Language::Vietnamese;
+        s.theme = crate::ui::theme::Theme::HighContrast;
+        s.ui_scale = 1.5;
+        s.display_style = threebcad_render::DisplayStyle::HiddenLinesVisible;
+        s.perspective = false;
+        s.view_cube = false;
+        s.units = UnitSystem::Ips;
+        s.lod = false;
+        s.show_fps = true;
+        s.mouse_gestures = true;
+        use crate::commands::Command;
+        s.keys.insert(Command::ZoomToFit, None);
+        s.keys.insert(Command::SectionView, crate::commands::parse("Ctrl+Shift+X"));
         assert_eq!(Settings::parse(&s.to_text()), s);
-        let junk = Settings::parse("junk\nautosave_minutes=x\nbed=1,2\nnozzle=-1\nchord=NaN\nslicer=Cura");
+        let junk = Settings::parse(
+            "junk\nautosave_minutes=x\nbed=1,2\nnozzle=-1\nchord=NaN\nslicer=Cura\ntheme=pink\nui_scale=0\nkey.save=Hyper+S\nkey.nothing=F",
+        );
         assert_eq!(junk, Settings::default());
+    }
+
+    #[test]
+    fn reset_restores_every_preference_but_keeps_recent_files_and_slicers() {
+        let mut s = Settings::default();
+        s.add_recent(Path::new("part.3bcad"));
+        s.slicer_paths[0] = Some(PathBuf::from("orca.exe"));
+        s.theme = crate::ui::theme::Theme::Dark;
+        s.ui_scale = 2.0;
+        s.keys.insert(crate::commands::Command::Save, None);
+        s.reset();
+        assert_eq!(
+            s,
+            Settings {
+                recent: vec![PathBuf::from("part.3bcad")],
+                slicer_paths: [Some(PathBuf::from("orca.exe")), None, None],
+                ..Settings::default()
+            }
+        );
     }
 
     #[test]

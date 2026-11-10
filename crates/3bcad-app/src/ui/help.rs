@@ -1,10 +1,80 @@
-//! Keyboard Shortcuts window (F1 or the ? button in the ribbon) and the About window.
+//! The Help menu, the Keyboard Shortcuts window (F1 or the ? button in the ribbon), the About
+//! window and the notice after a crash.
 
 use eframe::egui::{self, RichText};
 
 use crate::app::{App, VERSION};
+use crate::i18n::{tr, trf};
 
 const REPOSITORY: &str = "https://github.com/Three-Bugs-Studio/3bcad";
+const USER_GUIDE: &str = "https://three-bugs-studio.github.io/3bcad/";
+const BUG_REPORT: &str = "https://github.com/Three-Bugs-Studio/3bcad/issues/new?template=bug_report.yml";
+
+/// The Help menu in the title row.
+pub fn menu(app: &mut App, ui: &mut egui::Ui) {
+    use crate::commands::{key_of, text, Command};
+    let key = |c| key_of(&app.files.settings.keys, c).map_or_else(String::new, |k| text(&k));
+    let f1 = key(Command::ShortcutsWindow);
+    ui.menu_button(tr("Help"), |ui| {
+        if ui.add(egui::Button::new(tr("Keyboard Shortcuts")).shortcut_text(f1)).clicked() {
+            ui.close_menu();
+            app.show_shortcuts = true;
+        }
+        ui.hyperlink_to(tr("User Guide and Tutorials"), USER_GUIDE);
+        ui.hyperlink_to(tr("Report a Bug"), BUG_REPORT);
+        if ui
+            .button(tr("Open Log Folder"))
+            .on_hover_text(tr("3bcad.log and crash reports, to attach to a bug report"))
+            .clicked()
+        {
+            ui.close_menu();
+            if let Err(e) = crate::logfile::open_folder() {
+                app.status = trf("Could not open the log folder: {}", &[&e]);
+            }
+        }
+        ui.separator();
+        if ui
+            .add_enabled(!app.update.busy(), egui::Button::new(tr("Check for Updates…")))
+            .clicked()
+        {
+            ui.close_menu();
+            app.update.check(true);
+            app.status = tr("Checking for updates…").into();
+        }
+        if ui.button(tr("About 3BCAD…")).clicked() {
+            ui.close_menu();
+            app.show_about = true;
+        }
+    });
+}
+
+/// After a crash: where its report is, and how to send it.
+pub fn crash_notice(app: &mut App, ctx: &egui::Context) {
+    let Some(report) = app.crashed.clone() else {
+        return;
+    };
+    let mut open = true;
+    egui::Window::new(tr("3BCAD closed unexpectedly"))
+        .open(&mut open)
+        .collapsible(false)
+        .resizable(false)
+        .pivot(egui::Align2::CENTER_CENTER)
+        .default_pos(ctx.screen_rect().center())
+        .show(ctx, |ui| {
+            ui.label(tr("Sorry, the last time it ran, 3BCAD stopped without closing. Your work may be in the autosave it offers."));
+            ui.label(trf("A crash report was saved: {}", &[&report.display()]));
+            ui.label(tr("Attaching it to a bug report helps fix the cause."));
+            ui.horizontal(|ui| {
+                if ui.button(tr("Open Log Folder")).clicked() {
+                    let _ = crate::logfile::open_folder();
+                }
+                ui.hyperlink_to(tr("Report a Bug"), BUG_REPORT);
+            });
+        });
+    if !open {
+        app.crashed = None;
+    }
+}
 
 /// (section, [(keys, what they do)]).
 const SHORTCUTS: &[(&str, &[(&str, &str)])] = &[
@@ -82,7 +152,7 @@ pub fn window(app: &mut App, ctx: &egui::Context) {
         return;
     }
     let mut open = true;
-    egui::Window::new("Keyboard Shortcuts")
+    egui::Window::new(tr("Keyboard Shortcuts"))
         .open(&mut open)
         .default_width(460.0)
         .show(ctx, |ui| {
@@ -110,7 +180,7 @@ pub fn about(app: &mut App, ctx: &egui::Context) {
         return;
     }
     let mut open = true;
-    egui::Window::new("About 3BCAD")
+    egui::Window::new(tr("About 3BCAD"))
         .open(&mut open)
         .collapsible(false)
         .resizable(false)
@@ -119,20 +189,20 @@ pub fn about(app: &mut App, ctx: &egui::Context) {
         .default_width(400.0)
         .show(ctx, |ui| {
             ui.heading(format!("3BCAD {VERSION}"));
-            ui.label("Open-source parametric CAD for parts, assemblies, drawings and 3D printing.");
+            ui.label(tr("Open-source parametric CAD for parts, assemblies, drawings and 3D printing."));
             ui.add_space(6.0);
-            ui.label(RichText::new("Made by Three Bugs Studio").strong());
-            ui.label("Created by Duong Phu Dong, with the 3BCAD contributors.");
+            ui.label(RichText::new(tr("Made by Three Bugs Studio")).strong());
+            ui.label(tr("Created by Duong Phu Dong, with the 3BCAD contributors."));
             ui.hyperlink_to(REPOSITORY, REPOSITORY);
             ui.add_space(6.0);
-            ui.label("Copyright © 2026 Three Bugs Studio and the 3BCAD contributors.");
-            ui.label("Licensed under the MIT license or the Apache License 2.0, at your option.");
+            ui.label(tr("Copyright © 2026 Three Bugs Studio and the 3BCAD contributors."));
+            ui.label(tr("Licensed under the MIT license or the Apache License 2.0, at your option."));
             ui.weak(
                 "Building on 3BCAD? Keep the license files and NOTICE, give your version its own name, and \
                  say it is based on 3BCAD by Three Bugs Studio (see TRADEMARKS.md).",
             );
             ui.add_space(6.0);
-            ui.weak("Built with truck (B-Rep kernel), egui and wgpu.");
+            ui.weak(tr("Built with truck (B-Rep kernel), egui and wgpu."));
         });
     app.show_about = open;
 }

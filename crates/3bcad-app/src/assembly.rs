@@ -2,6 +2,7 @@
 //! interference results and the assembly exports.
 
 use std::collections::{HashMap, HashSet};
+use crate::i18n::tr;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -269,7 +270,7 @@ impl App {
                 );
                 for poly in &m.edges {
                     for w in poly.windows(2) {
-                        g.line(
+                        g.edge(
                             f32x3(pose.apply(f64x3(w[0]))),
                             f32x3(pose.apply(f64x3(w[1]))),
                             EDGE_COLOR,
@@ -315,7 +316,7 @@ impl App {
                 return false;
             }
             if s.explode != 0.0 {
-                self.status = "Collapse the exploded view to move components".into();
+                self.status = tr("Collapse the exploded view to move components").into();
                 return false;
             }
             s.drags += 1;
@@ -480,7 +481,7 @@ impl App {
                 self.files.return_to = Some(me.clone());
                 self.request(crate::files::Pending::Open(file));
             }
-            None => self.status = "Save the assembly first, so 3BCAD can bring you back to it".into(),
+            None => self.status = tr("Save the assembly first, so 3BCAD can bring you back to it").into(),
         }
     }
 

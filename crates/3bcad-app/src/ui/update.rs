@@ -1,6 +1,7 @@
 //! The update window: what a newer release brings, installing it, and restarting into it.
 
 use std::time::Duration;
+use crate::i18n::tr;
 
 use eframe::egui::{self, Color32};
 
@@ -29,7 +30,7 @@ pub fn window(app: &mut App, ctx: &egui::Context) {
     }
     let mut open = true;
     let mut act = None;
-    egui::Window::new("Update")
+    egui::Window::new(tr("Update"))
         .open(&mut open)
         .collapsible(false)
         .default_width(460.0)
@@ -47,18 +48,18 @@ pub fn window(app: &mut App, ctx: &egui::Context) {
                 ui.separator();
                 ui.horizontal(|ui| {
                     if ui
-                        .add_enabled(can_install(r), egui::Button::new("Update now"))
-                        .on_hover_text("Download it, check it against the release's checksums and install it")
-                        .on_disabled_hover_text("Download it from the release page (not possible from this build)")
+                        .add_enabled(can_install(r), egui::Button::new(tr("Update now")))
+                        .on_hover_text(tr("Download it, check it against the release's checksums and install it"))
+                        .on_disabled_hover_text(tr("Download it from the release page (not possible from this build)"))
                         .clicked()
                     {
                         act = Some(Act::Install);
                     }
-                    ui.hyperlink_to("Release page", &r.page);
-                    if ui.button("Skip this version").clicked() {
+                    ui.hyperlink_to(tr("Release page"), &r.page);
+                    if ui.button(tr("Skip this version")).clicked() {
                         act = Some(Act::Skip(r.version.clone()));
                     }
-                    if ui.button("Later").clicked() {
+                    if ui.button(tr("Later")).clicked() {
                         act = Some(Act::Close);
                     }
                 });
@@ -71,12 +72,12 @@ pub fn window(app: &mut App, ctx: &egui::Context) {
             }
             State::Installed(v) => {
                 ui.heading(format!("3BCAD {v} is installed"));
-                ui.label("It starts the next time 3BCAD opens.");
+                ui.label(tr("It starts the next time 3BCAD opens."));
                 ui.horizontal(|ui| {
-                    if ui.button("Restart now").clicked() {
+                    if ui.button(tr("Restart now")).clicked() {
                         act = Some(Act::Restart);
                     }
-                    if ui.button("Later").clicked() {
+                    if ui.button(tr("Later")).clicked() {
                         act = Some(Act::Close);
                     }
                 });

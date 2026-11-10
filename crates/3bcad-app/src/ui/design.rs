@@ -2,6 +2,7 @@
 //! configuration picker in the feature tree, and the Appearance window.
 
 use std::collections::HashMap;
+use crate::i18n::tr;
 
 use eframe::egui::{self, TextEdit};
 use threebcad_core::{Equation, FaceRef, FeatureId, History, Paint};
@@ -129,12 +130,12 @@ pub fn equations_window(app: &mut App, ctx: &egui::Context) {
     let active = h.active_configuration().min(names.len() - 1);
     let mut open = true;
     let mut act = None;
-    egui::Window::new("Equations")
+    egui::Window::new(tr("Equations"))
         .open(&mut open)
         .default_width(640.0)
         .show(ctx, |ui| {
             ui.horizontal(|ui| {
-                ui.label("Configuration");
+                ui.label(tr("Configuration"));
                 egui::ComboBox::from_id_salt("equations_configuration")
                     .selected_text(&names[active])
                     .show_ui(ui, |ui| {
@@ -146,18 +147,18 @@ pub fn equations_window(app: &mut App, ctx: &egui::Context) {
                     });
                 let rename = ui
                     .add_enabled(configured, TextEdit::singleline(&mut w.name).desired_width(120.0))
-                    .on_hover_text("Rename this configuration");
+                    .on_hover_text(tr("Rename this configuration"));
                 if rename.lost_focus() && !w.name.trim().is_empty() && w.name.trim() != names[active] {
                     act = Some(Act::Rename);
                 }
                 if ui
-                    .button("+ New")
-                    .on_hover_text("A new configuration like this one")
+                    .button(tr("+ New"))
+                    .on_hover_text(tr("A new configuration like this one"))
                     .clicked()
                 {
                     act = Some(Act::Add);
                 }
-                if names.len() > 1 && ui.button("Delete").clicked() {
+                if names.len() > 1 && ui.button(tr("Delete")).clicked() {
                     act = Some(Act::Delete);
                 }
             });
@@ -175,18 +176,18 @@ pub fn equations_window(app: &mut App, ctx: &egui::Context) {
                 .num_columns(if configured { 5 } else { 4 })
                 .striped(true)
                 .show(ui, |ui| {
-                    ui.strong("Name");
-                    ui.strong("Expression");
-                    ui.strong("Value");
+                    ui.strong(tr("Name"));
+                    ui.strong(tr("Expression"));
+                    ui.strong(tr("Value"));
                     if configured {
-                        ui.strong("This configuration only");
+                        ui.strong(tr("This configuration only"));
                     }
                     ui.end_row();
                     for (i, r) in w.rows.iter_mut().enumerate() {
                         // A grid cell is only as wide as its column was: size the fields outright.
                         let h = ui.spacing().interact_size.y;
-                        ui.add_sized([170.0, h], TextEdit::singleline(&mut r.name).hint_text("wall"));
-                        ui.add_sized([200.0, h], TextEdit::singleline(&mut r.expr).hint_text("2 mm"));
+                        ui.add_sized([170.0, h], TextEdit::singleline(&mut r.name).hint_text(tr("wall")));
+                        ui.add_sized([200.0, h], TextEdit::singleline(&mut r.expr).hint_text(tr("2 mm")));
                         let target = Equation::new(&r.name, "").target().to_string();
                         let unit = dims
                             .iter()
@@ -195,12 +196,12 @@ pub fn equations_window(app: &mut App, ctx: &egui::Context) {
                         match results.get(&target) {
                             Some(Ok(v)) => ui.label(format!("{v:.*} {unit}", units.decimals)),
                             Some(Err(e)) => ui.colored_label(theme::ERROR, e),
-                            None => ui.weak("(Apply)"),
+                            None => ui.weak(tr("(Apply)")),
                         };
                         if configured {
                             ui.checkbox(&mut r.here, "");
                         }
-                        if ui.small_button("✖").on_hover_text("Remove").clicked() {
+                        if ui.small_button("✖").on_hover_text(tr("Remove")).clicked() {
                             gone = Some(i);
                         }
                         ui.end_row();
@@ -210,13 +211,13 @@ pub fn equations_window(app: &mut App, ctx: &egui::Context) {
                 w.rows.remove(i);
             }
             ui.horizontal(|ui| {
-                if ui.button("+ Variable").clicked() {
+                if ui.button(tr("+ Variable")).clicked() {
                     w.rows.push(Row::default());
                 }
-                ui.menu_button("+ Dimension", |ui| {
+                ui.menu_button(tr("+ Dimension"), |ui| {
                     egui::ScrollArea::vertical().max_height(320.0).show(ui, |ui| {
                         if dims.is_empty() {
-                            ui.weak("The part has no dimensions yet");
+                            ui.weak(tr("The part has no dimensions yet"));
                         }
                         for d in &dims {
                             let v = format!("{:.*}", units.decimals, d.quantity.shown(d.value, units));
@@ -233,7 +234,7 @@ pub fn equations_window(app: &mut App, ctx: &egui::Context) {
                     });
                 });
                 ui.separator();
-                if ui.button("Apply").clicked() {
+                if ui.button(tr("Apply")).clicked() {
                     act = Some(Act::Apply);
                 }
             });
@@ -279,7 +280,7 @@ pub fn configuration_picker(app: &mut App, ui: &mut egui::Ui) {
     let active = h.active_configuration().min(names.len() - 1);
     let (mut pick, mut edit) = (None, false);
     ui.horizontal(|ui| {
-        ui.label("Configuration");
+        ui.label(tr("Configuration"));
         egui::ComboBox::from_id_salt("tree_configuration")
             .selected_text(&names[active])
             .show_ui(ui, |ui| {
@@ -289,10 +290,10 @@ pub fn configuration_picker(app: &mut App, ui: &mut egui::Ui) {
                     }
                 }
                 ui.separator();
-                edit = ui.button("New / Edit Configurations…").clicked();
+                edit = ui.button(tr("New / Edit Configurations…")).clicked();
             })
             .response
-            .on_hover_text("Variants of the part with their own dimensions and suppressed features");
+            .on_hover_text(tr("Variants of the part with their own dimensions and suppressed features"));
     });
     if let Some(i) = pick.filter(|&i| i != active) {
         app.doc.activate(i);
@@ -381,22 +382,22 @@ pub fn appearance_window(app: &mut App, ctx: &egui::Context) {
         .map(|f| f.name.clone());
     let before = a.scope;
     let (mut open, mut set, mut clear) = (true, false, false);
-    egui::Window::new("Appearance")
+    egui::Window::new(tr("Appearance"))
         .open(&mut open)
         .default_width(320.0)
         .show(ctx, |ui| {
             ui.horizontal(|ui| {
                 let face = a.face.is_some();
-                ui.add_enabled_ui(face, |ui| ui.radio_value(&mut a.scope, Scope::Face, "Face"));
-                ui.add_enabled_ui(face, |ui| ui.radio_value(&mut a.scope, Scope::Body, "Body"));
+                ui.add_enabled_ui(face, |ui| ui.radio_value(&mut a.scope, Scope::Face, tr("Face")));
+                ui.add_enabled_ui(face, |ui| ui.radio_value(&mut a.scope, Scope::Body, tr("Body")));
                 if let Some(name) = &feature {
                     ui.radio_value(&mut a.scope, Scope::Feature, format!("Feature ({name})"));
                 }
             });
             ui.horizontal(|ui| {
-                ui.label("Colour");
+                ui.label(tr("Colour"));
                 set = ui.color_edit_button_srgb(&mut a.color).changed();
-                clear = ui.button("Remove colour").clicked();
+                clear = ui.button(tr("Remove colour")).clicked();
             });
             ui.weak(
                 "A face shows its own colour, else its body's, else its feature's, else the material's. \
@@ -411,7 +412,7 @@ pub fn appearance_window(app: &mut App, ctx: &egui::Context) {
             app.doc.set_appearance(target, Some(a.color), Some(APPEARANCE_KEY));
         } else if clear {
             app.doc.set_appearance(target, None, None);
-            app.status = "Colour removed".into();
+            app.status = tr("Colour removed").into();
         }
     }
     if open {

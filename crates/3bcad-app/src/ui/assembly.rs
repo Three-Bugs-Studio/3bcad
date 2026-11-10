@@ -2,12 +2,13 @@
 //! the Properties panel for what is picked, and the interference and bill of materials windows.
 
 use std::time::Duration;
+use crate::i18n::tr;
 
 use eframe::egui::{self, Color32, Key, KeyboardShortcut, Modifiers, RichText};
 use threebcad_kernel::mate::{Geom, MateKind, Pose};
 use threebcad_kernel::topology::P3;
 
-use crate::app::{App, ExportFormat, ModelRef, VIEWPORT_BG};
+use crate::app::{App, ExportFormat, ModelRef};
 use crate::assembly::{insertable, Session};
 use crate::ui::icons;
 use crate::ui::properties::{length, number, units};
@@ -23,7 +24,7 @@ pub fn frame(app: &mut App, ctx: &egui::Context) {
             ctx.request_repaint();
         }
         if s.refresh() {
-            app.status = "Parts changed on disk: the assembly shows them as they are now".into();
+            app.status = tr("Parts changed on disk: the assembly shows them as they are now").into();
         }
     }
     // Keep looking for parts changed in another window.
@@ -39,7 +40,7 @@ pub fn frame(app: &mut App, ctx: &egui::Context) {
     app.sync_assembly();
     windows(app, ctx);
     egui::CentralPanel::default()
-        .frame(egui::Frame::new().fill(VIEWPORT_BG))
+        .frame(egui::Frame::new().fill(crate::ui::theme::sky().1))
         .show(ctx, |ui| crate::ui::viewport::show(app, ui));
     if app.selection != picked_before {
         // A face picked in the viewport picks its component.
@@ -94,14 +95,14 @@ fn delete_selected(app: &mut App) {
     let Some(s) = &mut app.asm else { return };
     if let Some(m) = s.mate.take() {
         s.doc.remove_mate(m);
-        app.status = "Mate deleted".into();
+        app.status = tr("Mate deleted").into();
     } else if let Some(k) = s.step.take() {
         s.doc.remove_explode_step(k);
-        app.status = "Explode step deleted".into();
+        app.status = tr("Explode step deleted").into();
     } else if let Some(id) = s.selected.take() {
         s.doc.remove(id);
         app.selection.clear();
-        app.status = "Component deleted, with its mates".into();
+        app.status = tr("Component deleted, with its mates").into();
     }
 }
 
@@ -156,7 +157,7 @@ fn mate_buttons(app: &mut App, ui: &mut egui::Ui) {
 
 fn add_mate(app: &mut App, kind: MateKind) {
     let Some([(a, _), (b, _)]) = mate_pair(app) else {
-        app.status = "Pick two faces on two different components (Ctrl+click the second)".into();
+        app.status = tr("Pick two faces on two different components (Ctrl+click the second)").into();
         return;
     };
     let Some(s) = &mut app.asm else { return };
@@ -177,16 +178,16 @@ fn add_mate(app: &mut App, kind: MateKind) {
 /// The Assembly ribbon tab.
 pub fn tab(app: &mut App, ui: &mut egui::Ui) {
     if icons::tile(ui, "insert", "Insert", true, false)
-        .on_hover_text("Insert a part or an assembly from a file")
+        .on_hover_text(tr("Insert a part or an assembly from a file"))
         .clicked()
     {
         app.insert_dialog();
     }
     let recent = insertable(&app.files.settings.recent, app.files.path.as_deref());
     ui.vertical(|ui| {
-        ui.menu_button("Recent", |ui| {
+        ui.menu_button(tr("Recent"), |ui| {
             if recent.is_empty() {
-                ui.weak("No recent parts");
+                ui.weak(tr("No recent parts"));
             }
             for p in &recent {
                 let name = p
@@ -199,7 +200,7 @@ pub fn tab(app: &mut App, ui: &mut egui::Ui) {
             }
         })
         .response
-        .on_hover_text("Insert a part opened recently");
+        .on_hover_text(tr("Insert a part opened recently"));
     });
     ui.separator();
     mate_buttons(app, ui);
@@ -212,7 +213,7 @@ pub fn tab(app: &mut App, ui: &mut egui::Ui) {
         ui.spacing_mut().item_spacing.y = 1.0;
         let label = if fixed == Some(true) { "Float" } else { "Fix" };
         if icons::small(ui, "fix", label, fixed.is_some(), false)
-            .on_hover_text("A fixed component stays put; mates move the others to it")
+            .on_hover_text(tr("A fixed component stays put; mates move the others to it"))
             .clicked()
         {
             if let (Some(s), Some(id), Some(f)) = (&mut app.asm, selected, fixed) {
@@ -220,7 +221,7 @@ pub fn tab(app: &mut App, ui: &mut egui::Ui) {
             }
         }
         if icons::small(ui, "edit_part", "Edit Part", selected.is_some(), false)
-            .on_hover_text("Open the component's part to change it")
+            .on_hover_text(tr("Open the component's part to change it"))
             .clicked()
         {
             if let Some(id) = selected {
@@ -228,7 +229,7 @@ pub fn tab(app: &mut App, ui: &mut egui::Ui) {
             }
         }
         if icons::small(ui, "delete_body", "Delete", selected.is_some(), false)
-            .on_hover_text("Remove the component and its mates (Delete)")
+            .on_hover_text(tr("Remove the component and its mates (Delete)"))
             .clicked()
         {
             delete_selected(app);
@@ -236,7 +237,7 @@ pub fn tab(app: &mut App, ui: &mut egui::Ui) {
     });
     ui.separator();
     if icons::tile(ui, "interference", "Interference", true, false)
-        .on_hover_text("Find parts that overlap (parts that only touch are fine)")
+        .on_hover_text(tr("Find parts that overlap (parts that only touch are fine)"))
         .clicked()
     {
         if let Some(s) = &mut app.asm {
@@ -250,7 +251,7 @@ pub fn tab(app: &mut App, ui: &mut egui::Ui) {
     }
     explode_tiles(app, ui);
     if icons::tile(ui, "bom", "BOM", true, false)
-        .on_hover_text("Bill of materials")
+        .on_hover_text(tr("Bill of materials"))
         .clicked()
     {
         if let Some(s) = &mut app.asm {
@@ -261,13 +262,13 @@ pub fn tab(app: &mut App, ui: &mut egui::Ui) {
     ui.vertical(|ui| {
         ui.spacing_mut().item_spacing.y = 1.0;
         if icons::small(ui, "export", "STEP", true, false)
-            .on_hover_text("Export the assembly as STEP: each part once, every component placed and named")
+            .on_hover_text(tr("Export the assembly as STEP: each part once, every component placed and named"))
             .clicked()
         {
             app.export(ExportFormat::Step);
         }
         if icons::small(ui, "export", "3MF", true, false)
-            .on_hover_text("Export one object per part, laid out on the bed for the slicer")
+            .on_hover_text(tr("Export one object per part, laid out on the bed for the slicer"))
             .clicked()
         {
             app.export(ExportFormat::ThreeMf);
@@ -307,7 +308,7 @@ fn explode_tiles(app: &mut App, ui: &mut egui::Ui) {
         s.step = Some(steps);
         s.mate = None;
         s.explode_to = (steps + 1) as f64;
-        app.status = "Explode step added".into();
+        app.status = tr("Explode step added").into();
     }
     let exploded = s.explode_to > 0.0;
     if icons::tile(
@@ -317,7 +318,7 @@ fn explode_tiles(app: &mut App, ui: &mut egui::Ui) {
         steps > 0,
         exploded,
     )
-    .on_hover_text("Play the exploded view, or put the parts back")
+    .on_hover_text(tr("Play the exploded view, or put the parts back"))
     .clicked()
     {
         s.explode_to = if exploded { 0.0 } else { steps as f64 };
@@ -334,7 +335,7 @@ fn status_bar(app: &mut App, ctx: &egui::Context) {
                     crate::files::units_ui(app, ui)
                 })
                 .response
-                .on_hover_text("Unit system");
+                .on_hover_text(tr("Unit system"));
                 let Some(s) = &app.asm else { return };
                 ui.label(format!("{} components", s.doc.contents().components.len()));
                 let problems = s.doc.problems().len();
@@ -358,13 +359,13 @@ pub fn tree(app: &mut App, ctx: &egui::Context) {
         .resizable(true)
         .default_width(240.0)
         .show(ctx, |ui| {
-            ui.heading("Assembly Tree");
+            ui.heading(tr("Assembly Tree"));
             ui.separator();
             let Some(s) = &mut app.asm else { return };
             ui.label(RichText::new(&s.doc.name).strong());
             egui::ScrollArea::vertical().show(ui, |ui| {
                 if s.doc.contents().components.is_empty() {
-                    ui.weak("Insert a part to start: the first one is fixed at the origin.");
+                    ui.weak(tr("Insert a part to start: the first one is fixed at the origin."));
                 }
                 let comps = s.doc.contents().components.clone();
                 for c in &comps {
@@ -402,11 +403,11 @@ pub fn tree(app: &mut App, ctx: &egui::Context) {
                             s.doc.set_fixed(c.id, !c.fixed);
                             ui.close_menu();
                         }
-                        if ui.button("Edit Part").clicked() {
+                        if ui.button(tr("Edit Part")).clicked() {
                             edit = Some(c.id);
                             ui.close_menu();
                         }
-                        if ui.button("Delete").clicked() {
+                        if ui.button(tr("Delete")).clicked() {
                             s.doc.remove(c.id);
                             s.selected = None;
                             ui.close_menu();
@@ -440,11 +441,11 @@ pub fn tree(app: &mut App, ctx: &egui::Context) {
                                 (s.selected, s.mate, s.step) = (None, Some(i), None);
                             }
                             resp.context_menu(|ui| {
-                                if ui.button("Flip").clicked() {
+                                if ui.button(tr("Flip")).clicked() {
                                     s.doc.set_mate(i, m.value, !m.flip, None);
                                     ui.close_menu();
                                 }
-                                if ui.button("Delete").clicked() {
+                                if ui.button(tr("Delete")).clicked() {
                                     s.doc.remove_mate(i);
                                     s.mate = None;
                                     ui.close_menu();
@@ -457,12 +458,12 @@ pub fn tree(app: &mut App, ctx: &egui::Context) {
                     .default_open(true)
                     .show(ui, |ui| {
                         if steps.is_empty() {
-                            ui.weak("Select a component and click Explode Step.");
+                            ui.weak(tr("Select a component and click Explode Step."));
                             return;
                         }
                         let mut t = s.explode;
                         if ui
-                            .add(egui::Slider::new(&mut t, 0.0..=steps.len() as f64).text("steps"))
+                            .add(egui::Slider::new(&mut t, 0.0..=steps.len() as f64).text(tr("steps")))
                             .changed()
                         {
                             (s.explode, s.explode_to) = (t, t);
@@ -499,7 +500,7 @@ pub fn properties(app: &mut App, ctx: &egui::Context) {
         .show(ctx, |ui| {
             egui::ScrollArea::vertical().show(ui, |ui| {
                 if pair {
-                    ui.heading("Mate");
+                    ui.heading(tr("Mate"));
                     ui.separator();
                     for r in app.selection.clone() {
                         ui.label(app.describe(r));
@@ -518,7 +519,7 @@ pub fn properties(app: &mut App, ctx: &egui::Context) {
                         app.edit_component(id);
                     }
                 } else {
-                    ui.heading("Assembly");
+                    ui.heading(tr("Assembly"));
                     ui.separator();
                     ui.weak(
                         "Click a component to move or fix it. To mate, click a face, Ctrl+click a face of \
@@ -544,21 +545,21 @@ fn mate_panel(s: &mut Session, ui: &mut egui::Ui, i: usize) {
     match m.kind {
         MateKind::Distance => {
             ui.horizontal(|ui| {
-                ui.label("Distance");
+                ui.label(tr("Distance"));
                 ui.add(length(&mut value).speed(0.1));
             });
         }
         MateKind::Angle => {
             ui.horizontal(|ui| {
-                ui.label("Angle");
+                ui.label(tr("Angle"));
                 ui.add(number(&mut value).speed(0.5).range(0.0..=180.0).suffix("°"));
             });
         }
         _ => {}
     }
     if m.kind != MateKind::Lock {
-        ui.checkbox(&mut flip, "Flip alignment")
-            .on_hover_text("Faces facing the same way instead of each other, or the other side");
+        ui.checkbox(&mut flip, tr("Flip alignment"))
+            .on_hover_text(tr("Faces facing the same way instead of each other, or the other side"));
     }
     if value != m.value || flip != m.flip {
         let dragging = ui.ctx().input(|i| i.pointer.any_down());
@@ -568,7 +569,7 @@ fn mate_panel(s: &mut Session, ui: &mut egui::Ui, i: usize) {
         ui.colored_label(ERROR, format!("Does not hold: {why}"));
     }
     ui.add_space(6.0);
-    if ui.button("Delete Mate").clicked() {
+    if ui.button(tr("Delete Mate")).clicked() {
         s.doc.remove_mate(i);
         s.mate = None;
     }
@@ -585,12 +586,12 @@ fn step_panel(s: &mut Session, ui: &mut egui::Ui, k: usize) {
     }
     let mut distance = st.distance;
     ui.horizontal(|ui| {
-        ui.label("Distance");
+        ui.label(tr("Distance"));
         ui.add(length(&mut distance).speed(0.5));
     });
     let mut direction: P3 = st.direction;
     ui.horizontal(|ui| {
-        ui.label("Direction");
+        ui.label(tr("Direction"));
         for (label, d) in [
             ("+X", [1.0, 0.0, 0.0]),
             ("−X", [-1.0, 0.0, 0.0]),
@@ -611,7 +612,7 @@ fn step_panel(s: &mut Session, ui: &mut egui::Ui, k: usize) {
         s.explode_to = s.doc.contents().explode.len() as f64;
     }
     ui.add_space(6.0);
-    if ui.button("Delete Step").clicked() {
+    if ui.button(tr("Delete Step")).clicked() {
         s.doc.remove_explode_step(k);
         s.step = None;
     }
@@ -630,21 +631,21 @@ fn component_panel(s: &mut Session, ui: &mut egui::Ui, id: u32) -> bool {
     }
     let mut name = c.name.clone();
     ui.horizontal(|ui| {
-        ui.label("Name");
+        ui.label(tr("Name"));
         if ui.text_edit_singleline(&mut name).lost_focus() && name != c.name && !name.trim().is_empty() {
             s.doc.rename(id, name.trim().to_string());
         }
     });
     let mut fixed = c.fixed;
     if ui
-        .checkbox(&mut fixed, "Fixed")
-        .on_hover_text("A fixed component stays put; mates move the others to it")
+        .checkbox(&mut fixed, tr("Fixed"))
+        .on_hover_text(tr("A fixed component stays put; mates move the others to it"))
         .changed()
     {
         s.doc.set_fixed(id, fixed);
     }
     ui.add_space(4.0);
-    ui.label("Position");
+    ui.label(tr("Position"));
     let mut t = c.pose.t;
     for (k, axis) in ["X", "Y", "Z"].iter().enumerate() {
         ui.horizontal(|ui| {
@@ -654,7 +655,7 @@ fn component_panel(s: &mut Session, ui: &mut egui::Ui, id: u32) -> bool {
     }
     let mut pose = Pose { t, ..c.pose };
     ui.horizontal(|ui| {
-        ui.label("Turn 90°");
+        ui.label(tr("Turn 90°"));
         for (k, axis) in ["X", "Y", "Z"].iter().enumerate() {
             let mut w = [0.0; 3];
             w[k] = std::f64::consts::FRAC_PI_2;
@@ -669,10 +670,10 @@ fn component_panel(s: &mut Session, ui: &mut egui::Ui, id: u32) -> bool {
     }
     ui.add_space(6.0);
     let edit = ui
-        .button("Edit Part")
-        .on_hover_text("Open the part to change it")
+        .button(tr("Edit Part"))
+        .on_hover_text(tr("Open the part to change it"))
         .clicked();
-    if ui.button("Delete Component").clicked() {
+    if ui.button(tr("Delete Component")).clicked() {
         s.doc.remove(id);
         s.selected = None;
     }
@@ -684,13 +685,13 @@ fn windows(app: &mut App, ctx: &egui::Context) {
     let Some(s) = &mut app.asm else { return };
     let mut open = s.show_clashes;
     let mut again = false;
-    egui::Window::new("Interference")
+    egui::Window::new(tr("Interference"))
         .open(&mut open)
         .default_width(320.0)
         .show(ctx, |ui| {
             match s.current_clashes() {
                 None => {
-                    ui.weak("The assembly changed since it was checked.");
+                    ui.weak(tr("The assembly changed since it was checked."));
                 }
                 Some([]) => {
                     ui.colored_label(
@@ -700,8 +701,8 @@ fn windows(app: &mut App, ctx: &egui::Context) {
                 }
                 Some(found) => {
                     egui::Grid::new("clashes").striped(true).show(ui, |ui| {
-                        ui.strong("Parts");
-                        ui.strong("Shared volume");
+                        ui.strong(tr("Parts"));
+                        ui.strong(tr("Shared volume"));
                         ui.end_row();
                         for c in found {
                             ui.label(format!("{}  ×  {}", c.names.0, c.names.1));
@@ -709,10 +710,10 @@ fn windows(app: &mut App, ctx: &egui::Context) {
                             ui.end_row();
                         }
                     });
-                    ui.weak("They are shown in red.");
+                    ui.weak(tr("They are shown in red."));
                 }
             }
-            again = ui.button("Check Again").clicked();
+            again = ui.button(tr("Check Again")).clicked();
         });
     s.show_clashes = open;
     if again {
@@ -724,14 +725,14 @@ fn windows(app: &mut App, ctx: &egui::Context) {
     }
     let mut open = s.show_bom;
     let mut export = false;
-    egui::Window::new("Bill of Materials")
+    egui::Window::new(tr("Bill of Materials"))
         .open(&mut open)
         .default_width(460.0)
         .show(ctx, |ui| {
             ui.horizontal(|ui| {
-                ui.checkbox(&mut s.bom_indented, "Indented")
-                    .on_hover_text("List the parts of each sub-assembly under it");
-                export = ui.button("Export CSV…").clicked();
+                ui.checkbox(&mut s.bom_indented, tr("Indented"))
+                    .on_hover_text(tr("List the parts of each sub-assembly under it"));
+                export = ui.button(tr("Export CSV…")).clicked();
             });
             ui.separator();
             egui::Grid::new("bom").striped(true).show(ui, |ui| {
@@ -749,7 +750,7 @@ fn windows(app: &mut App, ctx: &egui::Context) {
                     ui.end_row();
                 }
             });
-            ui.weak("Part number and description come from each part's File > Properties.");
+            ui.weak(tr("Part number and description come from each part's File > Properties."));
         });
     s.show_bom = open;
     if export {

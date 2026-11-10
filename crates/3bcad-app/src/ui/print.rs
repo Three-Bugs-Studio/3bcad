@@ -2,6 +2,7 @@
 //! on its bed, and the printability checks.
 
 use eframe::egui::{self, Color32, RichText};
+use crate::i18n::tr;
 use threebcad_core::DEFAULT_PRINT_DOWN;
 use threebcad_io::printer::{self, PRINTERS};
 use threebcad_io::Slicer;
@@ -62,7 +63,7 @@ fn export_configuration(app: &mut App, ui: &mut egui::Ui) {
         .filter(|&i| i < names.len())
         .unwrap_or(h.active_configuration());
     ui.vertical(|ui| {
-        ui.label("Export configuration");
+        ui.label(tr("Export configuration"));
         egui::ComboBox::from_id_salt("export_configuration")
             .selected_text(&names[chosen])
             .show_ui(ui, |ui| {
@@ -73,7 +74,7 @@ fn export_configuration(app: &mut App, ui: &mut egui::Ui) {
                 }
             })
             .response
-            .on_hover_text("Exports and Send to Slicer build the part in this configuration");
+            .on_hover_text(tr("Exports and Send to Slicer build the part in this configuration"));
     });
     ui.separator();
 }
@@ -97,17 +98,17 @@ fn quality(app: &mut App, ui: &mut egui::Ui) {
                 }
             });
         ui.horizontal(|ui| {
-            ui.label("Chord");
+            ui.label(tr("Chord"));
             changed |= ui
                 .add(length(&mut s.chord).speed(0.001).range(0.001..=1.0))
-                .on_hover_text("Furthest a triangle may lie from the true surface")
+                .on_hover_text(tr("Furthest a triangle may lie from the true surface"))
                 .changed();
         });
         ui.horizontal(|ui| {
-            ui.label("Angle");
+            ui.label(tr("Angle"));
             changed |= ui
                 .add(number(&mut s.angle_deg).speed(0.5).range(1.0..=60.0).suffix("°"))
-                .on_hover_text("Most a curved surface may turn within one triangle")
+                .on_hover_text(tr("Most a curved surface may turn within one triangle"))
                 .changed();
         });
     });
@@ -122,9 +123,9 @@ fn quality(app: &mut App, ui: &mut egui::Ui) {
         ui.add_space(14.0);
         match app.export_triangles() {
             Some(n) => ui.label(format!("{n} triangles")),
-            None => ui.weak("… triangles"),
+            None => ui.weak(tr("… triangles")),
         }
-        .on_hover_text("Triangles in an STL or 3MF export at this quality");
+        .on_hover_text(tr("Triangles in an STL or 3MF export at this quality"));
     });
 }
 
@@ -146,11 +147,11 @@ fn slicer(app: &mut App, ui: &mut egui::Ui) {
             None => "Using the default install location".into(),
         };
         ui.horizontal(|ui| {
-            pick = ui.small_button("Locate…").on_hover_text(tip).clicked();
+            pick = ui.small_button(tr("Locate…")).on_hover_text(tip).clicked();
             if path.is_some()
                 && ui
-                    .small_button("Default")
-                    .on_hover_text("Forget the located program")
+                    .small_button(tr("Default"))
+                    .on_hover_text(tr("Forget the located program"))
                     .clicked()
             {
                 s.slicer_paths[s.slicer as usize] = None;
@@ -226,7 +227,7 @@ fn bed(app: &mut App, ui: &mut egui::Ui) {
     app.files.settings_changed |= changed;
     ui.vertical(|ui| {
         if icons::small(ui, "lay_flat", "Lay Flat", true, false)
-            .on_hover_text("Put the selected flat face on the bed, or point a selected edge or axis up")
+            .on_hover_text(tr("Put the selected flat face on the bed, or point a selected edge or axis up"))
             .clicked()
         {
             lay_flat(app);
@@ -238,11 +239,11 @@ fn bed(app: &mut App, ui: &mut egui::Ui) {
             app.doc.print_down() != DEFAULT_PRINT_DOWN,
             false,
         )
-        .on_hover_text("Print the part on its bottom again")
+        .on_hover_text(tr("Print the part on its bottom again"))
         .clicked()
         {
             app.doc.set_print_down(DEFAULT_PRINT_DOWN);
-            app.status = "The part rests on its bottom".into();
+            app.status = tr("The part rests on its bottom").into();
         }
     });
 }
@@ -268,7 +269,7 @@ fn lay_flat(app: &mut App) {
         _ => None,
     });
     let Some(mut down) = down else {
-        app.status = "Lay Flat: select a flat face to put on the bed (or an edge or axis to point up)".into();
+        app.status = tr("Lay Flat: select a flat face to put on the bed (or an edge or axis to point up)").into();
         return;
     };
     // A line has no up of its own: keep the end nearer the current top on top.
@@ -279,7 +280,7 @@ fn lay_flat(app: &mut App) {
     }
     app.doc.set_print_down(down);
     app.selection.clear();
-    app.status = "The part is laid out on the bed".into();
+    app.status = tr("The part is laid out on the bed").into();
 }
 
 fn checks(app: &mut App, ui: &mut egui::Ui) {
@@ -305,21 +306,21 @@ fn checks(app: &mut App, ui: &mut egui::Ui) {
     let mut changed = false;
     ui.vertical(|ui| {
         ui.horizontal(|ui| {
-            ui.label("Overhang");
+            ui.label(tr("Overhang"));
             changed |= ui
                 .add(number(&mut s.overhang_deg).speed(0.5).range(1.0..=89.0).suffix("°"))
-                .on_hover_text("The steepest overhang, from vertical, the printer manages without support")
+                .on_hover_text(tr("The steepest overhang, from vertical, the printer manages without support"))
                 .changed();
         });
         ui.horizontal(|ui| {
-            ui.label("Nozzle");
+            ui.label(tr("Nozzle"));
             changed |= ui.add(length(&mut s.nozzle).speed(0.01).range(0.1..=2.0)).changed();
         });
         ui.horizontal(|ui| {
-            ui.label("Min wall");
+            ui.label(tr("Min wall"));
             changed |= ui
                 .add(length(&mut s.min_wall).speed(0.01).range(0.1..=10.0))
-                .on_hover_text("Usually two or three nozzle widths")
+                .on_hover_text(tr("Usually two or three nozzle widths"))
                 .changed();
         });
     });
@@ -367,10 +368,10 @@ pub fn slicer_prompt(app: &mut App, ctx: &egui::Context) {
         ));
         ui.add_space(8.0);
         ui.horizontal(|ui| {
-            if ui.button("Locate…").clicked() {
+            if ui.button(tr("Locate…")).clicked() {
                 answer = Some(true);
             }
-            if ui.button("Cancel").clicked() || ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+            if ui.button(tr("Cancel")).clicked() || ui.input(|i| i.key_pressed(egui::Key::Escape)) {
                 answer = Some(false);
             }
         });

@@ -2,6 +2,7 @@
 //! the tool in use, and the drawing exports.
 
 use std::path::{Path, PathBuf};
+use crate::i18n::tr;
 use std::time::{Duration, Instant};
 
 use eframe::egui::{Pos2, Rect};
@@ -182,7 +183,7 @@ impl App {
                 self.files.return_to = Some(me.clone());
                 self.request(crate::files::Pending::Open(model));
             }
-            None => self.status = "Save the drawing first, so 3BCAD can bring you back to it".into(),
+            None => self.status = tr("Save the drawing first, so 3BCAD can bring you back to it").into(),
         }
     }
 

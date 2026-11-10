@@ -1,6 +1,7 @@
 //! Properties panel: parameters of the selected feature, or the active sketch tool and selection.
 
 use eframe::egui::{self, Color32, RichText};
+use crate::i18n::tr;
 use threebcad_core::holes;
 use threebcad_core::*;
 use threebcad_sketch::tools::Item;
@@ -33,15 +34,15 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
         egui::SidePanel::right("property_manager")
             .default_width(260.0)
             .show(ctx, |ui| {
-                ui.heading("Selection");
+                ui.heading(tr("Selection"));
                 ui.separator();
                 match &target {
                     Some(name) => {
                         ui.label(name);
-                        start = ui.button("✏ Sketch on it").clicked();
+                        start = ui.button(tr("✏ Sketch on it")).clicked();
                     }
                     None if picked.is_empty() => {
-                        ui.weak("Nothing selected. Click a face, edge or plane, or a feature in the tree to edit it.");
+                        ui.weak(tr("Nothing selected. Click a face, edge or plane, or a feature in the tree to edit it."));
                     }
                     None => {
                         for d in &picked {
@@ -251,12 +252,12 @@ fn end_editor(ed: &mut Ed, ui: &mut egui::Ui, salt: &str, end: &mut End, p: &Pic
         End::Blind(d) | End::MidPlane(d) => ed.length(ui, "Depth", d, 0.001),
         End::OffsetFromSurface(_, d) => {
             ui.horizontal(|ui| {
-                ui.label("Offset");
+                ui.label(tr("Offset"));
                 ed.track(ui.add(length(d).speed(0.1)));
             });
         }
         End::UpToVertex(_) | End::UpToSurface(_) => {
-            ui.weak("Select another vertex/face and pick the condition again to change it.");
+            ui.weak(tr("Select another vertex/face and pick the condition again to change it."));
         }
         _ => {}
     }
@@ -323,7 +324,7 @@ fn feature_panel(app: &mut App, ctx: &egui::Context) {
         .show(ctx, |ui| {
             ui.horizontal(|ui| {
                 ui.heading(&name);
-                close = ui.small_button("✖").on_hover_text("Close").clicked();
+                close = ui.small_button("✖").on_hover_text(tr("Close")).clicked();
             });
             ui.separator();
             if let Some(e) = &error {
@@ -349,7 +350,7 @@ fn feature_panel(app: &mut App, ctx: &egui::Context) {
                         if let Some(o) = on {
                             ui.label(format!("Follows {}", describe_plane(h, o)));
                         }
-                        edit_sketch = ui.button("✏ Edit Sketch").clicked();
+                        edit_sketch = ui.button(tr("✏ Edit Sketch")).clicked();
                         let dims: Vec<_> = sketch
                             .constraints()
                             .iter()
@@ -357,7 +358,7 @@ fn feature_panel(app: &mut App, ctx: &egui::Context) {
                             .filter_map(|(i, c)| Some((i, c.name(), c.dimension()?, c.is_angular())))
                             .collect();
                         if !dims.is_empty() {
-                            ui.label("Dimensions");
+                            ui.label(tr("Dimensions"));
                         }
                         for (i, label, value, is_angle) in dims {
                             ui.horizontal(|ui| {
@@ -388,7 +389,7 @@ fn feature_panel(app: &mut App, ctx: &egui::Context) {
                     }
                     FeatureKind::Extrude(e) => {
                         ui.label(from(&e.sketch));
-                        ui.label(RichText::new("Direction 1").strong());
+                        ui.label(RichText::new(tr("Direction 1")).strong());
                         end_editor(&mut ed, ui, "end1", &mut e.end, &p);
                         ed.check(ui, &mut e.reverse, "Reverse direction");
                         let mut two = e.end2.is_some();
@@ -538,8 +539,8 @@ fn feature_panel(app: &mut App, ctx: &egui::Context) {
                             });
                         ui.horizontal(|ui| {
                             let before = hole.standard;
-                            ed.track(ui.radio_value(&mut hole.standard, HoleStandard::Iso, "ISO"));
-                            ed.track(ui.radio_value(&mut hole.standard, HoleStandard::Ansi, "ANSI Inch"));
+                            ed.track(ui.radio_value(&mut hole.standard, HoleStandard::Iso, tr("ISO")));
+                            ed.track(ui.radio_value(&mut hole.standard, HoleStandard::Ansi, tr("ANSI Inch")));
                             if before != hole.standard {
                                 hole.size = holes::table(hole.standard)[4].name.into();
                             }
@@ -578,11 +579,11 @@ fn feature_panel(app: &mut App, ctx: &egui::Context) {
                         if let Some(t) = &thread {
                             ui.label(format!("Thread: {} (cosmetic)", t.designation));
                         }
-                        ui.weak("Holes go at the sketch's points; edit the sketch to move or add them.");
+                        ui.weak(tr("Holes go at the sketch's points; edit the sketch to move or add them."));
                     }
                     FeatureKind::LinearPattern(lp) => {
                         seeds_editor(&mut ed, ui, h, id, &mut lp.seeds);
-                        ui.label(RichText::new("Direction 1").strong());
+                        ui.label(RichText::new(tr("Direction 1")).strong());
                         axis_editor(&mut ed, ui, h, &mut lp.dir1.axis, &p, "Along");
                         ed.length(ui, "Spacing", &mut lp.dir1.spacing, 0.001);
                         ed.count(ui, "Instances", &mut lp.dir1.count);
@@ -609,7 +610,7 @@ fn feature_panel(app: &mut App, ctx: &egui::Context) {
                             .map(|(i, j)| format!("{},{}", i + 1, j + 1))
                             .collect::<Vec<_>>()
                             .join("; ");
-                        ui.label("Instances to skip (row,column; …)");
+                        ui.label(tr("Instances to skip (row,column; …)"));
                         if let Some(text) = list_field(ui, text) {
                             lp.skip = parse_list(&text)
                                 .into_iter()
@@ -637,7 +638,7 @@ fn feature_panel(app: &mut App, ctx: &egui::Context) {
                             .map(|k| (k + 1).to_string())
                             .collect::<Vec<_>>()
                             .join(", ");
-                        ui.label("Instances to skip (1 is the seed)");
+                        ui.label(tr("Instances to skip (1 is the seed)"));
                         if let Some(text) = list_field(ui, text) {
                             cp.skip = parse_list(&text.replace(',', ";"))
                                 .into_iter()
@@ -658,7 +659,7 @@ fn feature_panel(app: &mut App, ctx: &egui::Context) {
                         RefPlaneDef::Offset { base, distance, flip } => {
                             plane_editor(&mut ed, ui, h, base, &p, "Offset from");
                             ui.horizontal(|ui| {
-                                ui.label("Distance");
+                                ui.label(tr("Distance"));
                                 ed.track(ui.add(length(distance).speed(0.2)));
                             });
                             ed.check(ui, flip, "Flip normal");
@@ -669,7 +670,7 @@ fn feature_panel(app: &mut App, ctx: &egui::Context) {
                             ed.angle(ui, "Angle", angle, -360.0..=360.0);
                         }
                         RefPlaneDef::ThreePoint(_) => {
-                            ui.label("Through three points");
+                            ui.label(tr("Through three points"));
                         }
                         RefPlaneDef::Mid(a, b) => {
                             plane_editor(&mut ed, ui, h, a, &p, "First");
@@ -694,13 +695,13 @@ fn feature_panel(app: &mut App, ctx: &egui::Context) {
                             }
                         }
                         RefPointDef::Vertex(_) => {
-                            ui.label("At a vertex");
+                            ui.label(tr("At a vertex"));
                         }
                         RefPointDef::FaceCenter(_) => {
-                            ui.label("At the center of a face");
+                            ui.label(tr("At the center of a face"));
                         }
                         RefPointDef::ArcCenter(_) => {
-                            ui.label("At the center of an arc");
+                            ui.label(tr("At the center of an arc"));
                         }
                     },
                     FeatureKind::CoordSys(c) => {
@@ -790,7 +791,7 @@ pub(crate) fn seeds_editor(ed: &mut Ed, ui: &mut egui::Ui, h: &History, me: Feat
         };
     }
     if let Seeds::Features(list) = seeds {
-        ui.label("Features to repeat:");
+        ui.label(tr("Features to repeat:"));
         // Solid features above this one.
         for (id, f) in h.iter().take_while(|(id, _)| *id != me) {
             let solid = matches!(
@@ -840,17 +841,17 @@ fn sketch_panel(s: &mut SketchSession, ui: &mut egui::Ui) {
             Color32::from_rgb(200, 40, 40),
             "Some relations conflict or repeat each other.",
         );
-        if ui.button("Diagnose").clicked() {
+        if ui.button(tr("Diagnose")).clicked() {
             s.run_diagnosis();
         }
         if let Some(fixes) = s.diagnosis.clone() {
             if fixes.is_empty() {
-                ui.label("No single relation fixes it; delete relations until the sketch turns black or blue.");
+                ui.label(tr("No single relation fixes it; delete relations until the sketch turns black or blue."));
             } else {
-                ui.label("Deleting any one of these fixes it:");
+                ui.label(tr("Deleting any one of these fixes it:"));
                 for i in fixes {
                     ui.horizontal(|ui| {
-                        if ui.small_button("Delete").clicked() {
+                        if ui.small_button(tr("Delete")).clicked() {
                             s.remove_relation(i);
                         }
                         ui.label(s.describe_relation(i));
@@ -862,10 +863,10 @@ fn sketch_panel(s: &mut SketchSession, ui: &mut egui::Ui) {
     }
 
     if s.selection.is_empty() {
-        ui.weak("Select sketch geometry to see and add relations.");
+        ui.weak(tr("Select sketch geometry to see and add relations."));
         return;
     }
-    ui.label(RichText::new("Selected").strong());
+    ui.label(RichText::new(tr("Selected")).strong());
     for item in s.selection.clone() {
         ui.label(format!("• {}", s.describe(item)));
     }
@@ -879,7 +880,7 @@ fn sketch_panel(s: &mut SketchSession, ui: &mut egui::Ui) {
         .collect();
     if !entities.is_empty() {
         let mut construction = entities.iter().all(|&e| s.sketch.entity(e).construction);
-        if ui.checkbox(&mut construction, "For construction").changed() {
+        if ui.checkbox(&mut construction, tr("For construction")).changed() {
             s.set_construction(construction);
         }
     }
@@ -887,7 +888,7 @@ fn sketch_panel(s: &mut SketchSession, ui: &mut egui::Ui) {
         if let Some(v) = s.sketch.constraints()[i].dimension() {
             ui.horizontal(|ui| {
                 ui.label(fmt_value(&s.sketch.constraints()[i], v));
-                if ui.button("Edit value").clicked() {
+                if ui.button(tr("Edit value")).clicked() {
                     s.start_editing(i);
                 }
             });
@@ -897,10 +898,10 @@ fn sketch_panel(s: &mut SketchSession, ui: &mut egui::Ui) {
     let existing = s.relations_of_selection();
     if !existing.is_empty() {
         ui.separator();
-        ui.label(RichText::new("Existing relations").strong());
+        ui.label(RichText::new(tr("Existing relations")).strong());
         for i in existing {
             ui.horizontal(|ui| {
-                if ui.small_button("✖").on_hover_text("Delete relation").clicked() {
+                if ui.small_button("✖").on_hover_text(tr("Delete relation")).clicked() {
                     s.remove_relation(i);
                 }
                 let over = s.analysis.over_constraints.get(i).copied().unwrap_or(false);
@@ -916,7 +917,7 @@ fn sketch_panel(s: &mut SketchSession, ui: &mut egui::Ui) {
     let candidates = s.sketch.relation_candidates(&s.selection);
     if !candidates.is_empty() {
         ui.separator();
-        ui.label(RichText::new("Add relations").strong());
+        ui.label(RichText::new(tr("Add relations")).strong());
         ui.horizontal_wrapped(|ui| {
             for c in candidates {
                 if ui.button(c.name()).clicked() {
@@ -926,7 +927,7 @@ fn sketch_panel(s: &mut SketchSession, ui: &mut egui::Ui) {
         });
     }
     ui.separator();
-    if ui.button("Delete selected").clicked() {
+    if ui.button(tr("Delete selected")).clicked() {
         s.delete_selection();
     }
 }
@@ -937,7 +938,7 @@ fn tool_options(s: &mut SketchSession, ui: &mut egui::Ui) {
         Tool::Circle => {
             let mut typed = o.radius.is_some();
             ui.horizontal(|ui| {
-                ui.checkbox(&mut typed, "Radius");
+                ui.checkbox(&mut typed, tr("Radius"));
                 let mut r = o.radius.unwrap_or(10.0);
                 if ui
                     .add_enabled(typed, length(&mut r).speed(0.1).range(0.001..=10_000.0))
@@ -953,28 +954,28 @@ fn tool_options(s: &mut SketchSession, ui: &mut egui::Ui) {
         }
         Tool::Polygon => {
             ui.horizontal(|ui| {
-                ui.label("Sides");
+                ui.label(tr("Sides"));
                 ui.add(egui::DragValue::new(&mut o.polygon_sides).range(3..=40));
             });
-            ui.radio_value(&mut o.inscribed, true, "Inscribed circle (click a vertex)");
-            ui.radio_value(&mut o.inscribed, false, "Circumscribed circle (click an edge midpoint)");
+            ui.radio_value(&mut o.inscribed, true, tr("Inscribed circle (click a vertex)"));
+            ui.radio_value(&mut o.inscribed, false, tr("Circumscribed circle (click an edge midpoint)"));
         }
         Tool::Fillet => {
             ui.horizontal(|ui| {
-                ui.label("Radius");
+                ui.label(tr("Radius"));
                 ui.add(length(&mut o.fillet_radius).speed(0.1).range(0.001..=10_000.0));
             });
         }
         Tool::Chamfer => {
-            ui.radio_value(&mut o.chamfer_angle_mode, false, "Distance-distance");
-            ui.radio_value(&mut o.chamfer_angle_mode, true, "Angle-distance");
+            ui.radio_value(&mut o.chamfer_angle_mode, false, tr("Distance-distance"));
+            ui.radio_value(&mut o.chamfer_angle_mode, true, tr("Angle-distance"));
             ui.horizontal(|ui| {
-                ui.label("Distance");
+                ui.label(tr("Distance"));
                 ui.add(length(&mut o.chamfer_d1).speed(0.1).range(0.001..=10_000.0));
             });
             ui.horizontal(|ui| {
                 if o.chamfer_angle_mode {
-                    ui.label("Angle");
+                    ui.label(tr("Angle"));
                     ui.add(
                         egui::DragValue::new(&mut o.chamfer_angle)
                             .speed(0.5)
@@ -982,39 +983,39 @@ fn tool_options(s: &mut SketchSession, ui: &mut egui::Ui) {
                             .suffix("°"),
                     );
                 } else {
-                    ui.label("Distance 2");
+                    ui.label(tr("Distance 2"));
                     ui.add(length(&mut o.chamfer_d2).speed(0.1).range(0.001..=10_000.0));
                 }
             });
         }
         Tool::Offset => {
             ui.horizontal(|ui| {
-                ui.label("Distance");
+                ui.label(tr("Distance"));
                 ui.add(length(&mut o.offset).speed(0.1).range(0.001..=10_000.0));
             });
-            ui.checkbox(&mut o.offset_reverse, "Reverse");
+            ui.checkbox(&mut o.offset_reverse, tr("Reverse"));
         }
         Tool::LinearPattern => {
             ui.horizontal(|ui| {
-                ui.label("Instances");
+                ui.label(tr("Instances"));
                 ui.add(egui::DragValue::new(&mut o.pattern_count).range(2..=200));
             });
             ui.horizontal(|ui| {
-                ui.label("Spacing");
+                ui.label(tr("Spacing"));
                 ui.add(length(&mut o.pattern_spacing).speed(0.1));
             });
             ui.horizontal(|ui| {
-                ui.label("Direction");
+                ui.label(tr("Direction"));
                 ui.add(egui::DragValue::new(&mut o.pattern_angle).speed(1.0).suffix("°"));
             });
         }
         Tool::CircularPattern => {
             ui.horizontal(|ui| {
-                ui.label("Instances");
+                ui.label(tr("Instances"));
                 ui.add(egui::DragValue::new(&mut o.circular_count).range(2..=200));
             });
             ui.horizontal(|ui| {
-                ui.label("Total angle");
+                ui.label(tr("Total angle"));
                 ui.add(
                     egui::DragValue::new(&mut o.circular_total)
                         .speed(1.0)
@@ -1028,7 +1029,7 @@ fn tool_options(s: &mut SketchSession, ui: &mut egui::Ui) {
     ui.weak(s.tool.hint());
     if s.tool.uses_selection() {
         let ready = !s.selection.is_empty();
-        if ui.add_enabled(ready, egui::Button::new("Apply")).clicked() {
+        if ui.add_enabled(ready, egui::Button::new(tr("Apply"))).clicked() {
             s.apply_selection_tool();
         }
     }
