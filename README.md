@@ -249,9 +249,17 @@ cargo test --workspace
 | Pan | Right drag (or Ctrl + middle drag) |
 | Zoom | Mouse wheel |
 | Zoom to fit | `F` or double-click |
+| Standard views | `Ctrl+1` … `Ctrl+7` (Front, Back, Left, Right, Top, Bottom, Isometric), `Ctrl+8` Normal To, the View toolbar or the view cube |
+| Perspective / orthographic | `P`, or **Perspective** in the View toolbar |
+| Display style | `D` (next style), or the View toolbar |
+| Section view | **Section** in the View toolbar |
+| Turn the view from the keyboard | Arrow keys (15°, with Shift 90°), `Ctrl`+arrows pan, Page Up / Down zoom |
+| The tab's commands at the mouse | `S` |
 | Undo / Redo | `Ctrl+Z` / `Ctrl+Y` |
 | New / Open / Save / Save As | `Ctrl+N` / `Ctrl+O` / `Ctrl+S` / `Ctrl+Shift+S`, or the **File** menu |
-| Import STEP, STL, 3MF, OBJ or DXF | **File → Import…** |
+| Open STEP, STL, 3MF, OBJ or DXF as a new part | **File → Open…**, or drag the file onto the window |
+| Import STEP, STL, 3MF, OBJ or DXF into the open part | **File → Import…** |
+| Settings: language (English, Tiếng Việt), theme, interface size, shortcuts | **File → Settings…** (`Ctrl+,`) |
 | Change units or material | Click the unit system in the status bar, or **File → Units / Material** |
 | Roll back | Drag the blue bar in the feature tree, or right-click a feature |
 | Start a sketch | Sketch tab → Front / Top / Right (or a reference plane), double-click a plane in the feature tree, or select a flat face → Sketch |
@@ -268,7 +276,8 @@ cargo test --workspace
 | Variables, equations and configurations | **Evaluate → Equations**, or the **Configuration** box at the top of the tree |
 | Colour a face, body or feature | Pick it and **Evaluate → Appearance**, or right-click a feature or body in the tree |
 | Rebuild everything | `Ctrl+Q` |
-| Keyboard shortcuts | `F1` or the Shortcuts button (top right) |
+| Keyboard shortcuts | `F1` or the Shortcuts button (top right); change them in **Settings → Shortcuts** |
+| Log file for a bug report | **Help → Open Log Folder** |
 
 ## Files
 

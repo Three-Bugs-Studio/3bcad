@@ -3,13 +3,25 @@ use egui_wgpu::wgpu;
 use crate::scene::{LineVertex, MeshVertex};
 
 const SHADER: &str = r#"
-struct Globals { view_proj: mat4x4<f32>, eye: vec4<f32>, body: vec4<f32> };
+// style.x: 0 shaded, 1 flat white (hidden lines removed / visible); style.yzw: the colour model edges
+// take instead of their own (a wireframe on a dark background), unless y < 0. clip: plane normal and offset,
+// the side where dot(n, p) > w is cut away; a zero normal means no section.
+struct Globals {
+    view_proj: mat4x4<f32>,
+    eye: vec4<f32>,
+    body: vec4<f32>,
+    style: vec4<f32>,
+    clip: vec4<f32>,
+};
 @group(0) @binding(0) var<uniform> globals: Globals;
 // Per pick id: 0 = normal, 1 = hovered, 2 = selected.
 @group(0) @binding(1) var<storage, read> states: array<u32>;
 
 const HOVER = vec3<f32>(1.0, 0.55, 0.1);
 const SELECT = vec3<f32>(0.1, 0.5, 1.0);
+// Where the section plane cuts the solid (its inside shows through the cut).
+const CAP = vec3<f32>(0.85, 0.45, 0.25);
+const HIDDEN = vec3<f32>(0.62, 0.64, 0.68);
 
 fn state_of(id: u32) -> u32 {
     if (id < arrayLength(&states)) { return states[id]; }
@@ -20,6 +32,12 @@ fn tint(c: vec3<f32>, s: u32, amount: f32) -> vec3<f32> {
     if (s == 1u) { return mix(c, HOVER, amount); }
     if (s == 2u) { return mix(c, SELECT, amount); }
     return c;
+}
+
+fn sectioned() -> bool { return dot(globals.clip.xyz, globals.clip.xyz) > 0.0; }
+
+fn clipped(p: vec3<f32>) -> bool {
+    return sectioned() && dot(globals.clip.xyz, p) > globals.clip.w;
 }
 
 struct MeshOut {
@@ -47,7 +65,12 @@ fn vs_mesh(
 }
 
 @fragment
-fn fs_mesh(frag: MeshOut) -> @location(0) vec4<f32> {
+fn fs_mesh(frag: MeshOut, @builtin(front_facing) front: bool) -> @location(0) vec4<f32> {
+    if (clipped(frag.world)) { discard; }
+    let s = state_of(frag.id);
+    // Looking into a cut solid shows its back faces: they cap the section.
+    if (sectioned() && !front) { return vec4<f32>(tint(CAP, s, 0.45), 1.0); }
+    if (globals.style.x > 0.5) { return vec4<f32>(tint(vec3<f32>(0.97, 0.97, 0.98), s, 0.45), 1.0); }
     let v = normalize(globals.eye.xyz - frag.world);
     var n = normalize(frag.normal);
     if (dot(n, v) < 0.0) { n = -n; }
@@ -58,13 +81,14 @@ fn fs_mesh(frag: MeshOut) -> @location(0) vec4<f32> {
     let spec = pow(max(dot(n, normalize(l + v)), 0.0), 64.0);
     let base = mix(globals.body.rgb, frag.tint.rgb, frag.tint.a);
     let c = base * (0.22 + 0.18 * hemi + 0.6 * diffuse) + vec3<f32>(0.25 * spec);
-    return vec4<f32>(tint(c, state_of(frag.id), 0.45), 1.0);
+    return vec4<f32>(tint(c, s, 0.45), 1.0);
 }
 
 struct LineOut {
     @builtin(position) clip: vec4<f32>,
     @location(0) color: vec3<f32>,
     @location(1) @interpolate(flat) id: u32,
+    @location(2) world: vec3<f32>,
 };
 
 @vertex
@@ -73,12 +97,29 @@ fn vs_line(@location(0) pos: vec3<f32>, @location(1) color: vec3<f32>, @location
     out.clip = globals.view_proj * vec4<f32>(pos, 1.0);
     out.color = color;
     out.id = id;
+    out.world = pos;
     return out;
 }
 
 @fragment
 fn fs_line(frag: LineOut) -> @location(0) vec4<f32> {
     return vec4<f32>(tint(frag.color, state_of(frag.id), 1.0), 1.0);
+}
+
+// Model edges and silhouettes: cut by the section like the faces.
+@fragment
+fn fs_edge(frag: LineOut) -> @location(0) vec4<f32> {
+    if (clipped(frag.world)) { discard; }
+    var c = frag.color;
+    if (globals.style.y >= 0.0) { c = globals.style.yzw; }
+    return vec4<f32>(tint(c, state_of(frag.id), 1.0), 1.0);
+}
+
+// Edges behind faces (Hidden Lines Visible), light grey.
+@fragment
+fn fs_hidden(frag: LineOut) -> @location(0) vec4<f32> {
+    if (clipped(frag.world)) { discard; }
+    return vec4<f32>(tint(HIDDEN, state_of(frag.id), 1.0), 1.0);
 }
 
 @fragment
@@ -89,10 +130,13 @@ fn fs_plane(frag: LineOut) -> @location(0) vec4<f32> {
 }
 "#;
 
-/// Shaded faces, lines (B-Rep edges, grid, axes) and translucent reference planes.
+/// Shaded faces, lines (grid, axes, sketches), model edges, hidden edges and translucent
+/// reference planes.
 pub struct Pipelines {
     pub mesh: wgpu::RenderPipeline,
     pub lines: wgpu::RenderPipeline,
+    pub edges: wgpu::RenderPipeline,
+    pub hidden: wgpu::RenderPipeline,
     pub planes: wgpu::RenderPipeline,
     pub bind_group_layout: wgpu::BindGroupLayout,
 }
@@ -135,7 +179,13 @@ impl Pipelines {
         // pick id, tint).
         let line_attributes = wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x3, 2 => Uint32];
         let mesh_attributes = wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x3, 2 => Uint32, 3 => Unorm8x4];
-        let make = |vs: &str, fs: &str, topology, bias, blend: Option<wgpu::BlendState>, depth_write| {
+        let make = |vs: &str,
+                    fs: &str,
+                    topology,
+                    bias,
+                    blend: Option<wgpu::BlendState>,
+                    depth_write,
+                    compare: wgpu::CompareFunction| {
             let (stride, attributes): (usize, &[wgpu::VertexAttribute]) = if vs == "vs_mesh" {
                 (std::mem::size_of::<MeshVertex>(), &mesh_attributes)
             } else {
@@ -171,7 +221,7 @@ impl Pipelines {
                 depth_stencil: depth.map(|format| wgpu::DepthStencilState {
                     format,
                     depth_write_enabled: depth_write,
-                    depth_compare: wgpu::CompareFunction::LessEqual,
+                    depth_compare: compare,
                     stencil: Default::default(),
                     bias,
                 }),
@@ -189,16 +239,21 @@ impl Pipelines {
             slope_scale: 2.0,
             clamp: 0.0,
         };
-        let tri = wgpu::PrimitiveTopology::TriangleList;
+        let (tri, line) = (wgpu::PrimitiveTopology::TriangleList, wgpu::PrimitiveTopology::LineList);
+        let less = wgpu::CompareFunction::LessEqual;
         Self {
-            mesh: make("vs_mesh", "fs_mesh", tri, face_bias, None, true),
-            lines: make(
+            mesh: make("vs_mesh", "fs_mesh", tri, face_bias, None, true, less),
+            lines: make("vs_line", "fs_line", line, Default::default(), None, true, less),
+            edges: make("vs_line", "fs_edge", line, Default::default(), None, true, less),
+            // Only what lies behind the faces, and without hiding anything itself.
+            hidden: make(
                 "vs_line",
-                "fs_line",
-                wgpu::PrimitiveTopology::LineList,
+                "fs_hidden",
+                line,
                 Default::default(),
                 None,
-                true,
+                false,
+                wgpu::CompareFunction::Greater,
             ),
             planes: make(
                 "vs_line",
@@ -207,6 +262,7 @@ impl Pipelines {
                 Default::default(),
                 Some(wgpu::BlendState::ALPHA_BLENDING),
                 false,
+                less,
             ),
             bind_group_layout,
         }

@@ -6,6 +6,7 @@
 //! Downloads go through the `curl`, and unpacking through the `tar`, that come with Windows 10 and
 //! later, macOS and Linux, so 3BCAD carries no HTTP or TLS code. Nothing is sent but the request.
 
+use crate::i18n::trf;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -224,9 +225,9 @@ fn install_over(r: &Release, target: &Path) -> anyhow::Result<()> {
     let dir = target.parent().context("3BCAD's folder is unknown")?.join(STAGING);
     remove(&dir);
     std::fs::create_dir_all(&dir).with_context(|| {
-        format!(
+        trf(
             "cannot write to {}: update from the release page instead",
-            dir.display()
+            &[&dir.display()],
         )
     })?;
     let archive = dir.join(&name);
@@ -253,7 +254,7 @@ fn install_over(r: &Release, target: &Path) -> anyhow::Result<()> {
     let new = find(&dir, target.file_name().context("no program name")?)
         .filter(|p| p != &archive)
         .context("the download does not hold 3BCAD")?;
-    swap(target, &new).with_context(|| format!("cannot replace {}", target.display()))
+    swap(target, &new).with_context(|| trf("cannot replace {}", &[&target.display()]))
 }
 
 pub fn hex(bytes: &[u8]) -> String {
@@ -401,8 +402,10 @@ impl Updater {
                 self.open = true;
                 None
             }
-            (Msg::Checked(Ok(_)), _) => self.manual.then(|| format!("3BCAD {VERSION} is the latest version")),
-            (Msg::Checked(Err(e)), _) => self.manual.then(|| format!("Could not check for updates: {e:#}")),
+            (Msg::Checked(Ok(_)), _) => self.manual.then(|| trf("3BCAD {} is the latest version", &[&VERSION])),
+            (Msg::Checked(Err(e)), _) => self
+                .manual
+                .then(|| trf("Could not check for updates: {}", &[&format!("{:#}", e)])),
             (Msg::Installed(Ok(_)), State::Installing(r)) => {
                 self.state = State::Installed(r.version);
                 self.open = true;

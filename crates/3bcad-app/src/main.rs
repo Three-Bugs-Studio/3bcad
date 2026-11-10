@@ -3,8 +3,11 @@
 
 mod app;
 mod assembly;
+mod commands;
 mod drawing;
 mod files;
+mod i18n;
+mod logfile;
 mod print;
 mod ui;
 mod update;
@@ -12,7 +15,7 @@ mod update;
 use eframe::egui;
 
 fn main() -> eframe::Result {
-    env_logger::init();
+    let crashed = logfile::init();
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_title(format!("3BCAD {}", app::VERSION))
@@ -26,5 +29,9 @@ fn main() -> eframe::Result {
         multisampling: app::MSAA as u16,
         ..Default::default()
     };
-    eframe::run_native("3BCAD", options, Box::new(|cc| Ok(Box::new(app::App::new(cc)?))))
+    eframe::run_native(
+        "3BCAD",
+        options,
+        Box::new(move |cc| Ok(Box::new(app::App::new(cc, crashed)?))),
+    )
 }

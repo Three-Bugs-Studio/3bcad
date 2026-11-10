@@ -199,6 +199,13 @@ impl PartDocument {
         self.units
     }
 
+    /// An empty part in `units` (Settings > units of new parts), with nothing to save yet.
+    pub fn new_in(name: impl Into<String>, units: Units) -> Self {
+        let mut doc = Self::new(name);
+        doc.units = units;
+        doc
+    }
+
     pub fn set_units(&mut self, units: Units) {
         if units != self.units {
             self.dirty = true;

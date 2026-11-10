@@ -1,6 +1,7 @@
 //! The open assembly: its scene, picking faces for mates, dragging components with the mouse,
 //! interference results and the assembly exports.
 
+use crate::i18n::{tr, trf};
 use std::collections::{HashMap, HashSet};
 use std::io;
 use std::path::{Path, PathBuf};
@@ -269,7 +270,7 @@ impl App {
                 );
                 for poly in &m.edges {
                     for w in poly.windows(2) {
-                        g.line(
+                        g.edge(
                             f32x3(pose.apply(f64x3(w[0]))),
                             f32x3(pose.apply(f64x3(w[1]))),
                             EDGE_COLOR,
@@ -311,11 +312,11 @@ impl App {
             let Some(id) = s.component_of(r) else { return false };
             let Some(c) = s.doc.component(id) else { return false };
             if c.fixed {
-                self.status = format!("{} is fixed: float it to move it", c.name);
+                self.status = trf("{} is fixed: float it to move it", &[&c.name]);
                 return false;
             }
             if s.explode != 0.0 {
-                self.status = "Collapse the exploded view to move components".into();
+                self.status = tr("Collapse the exploded view to move components").into();
                 return false;
             }
             s.drags += 1;
@@ -458,7 +459,7 @@ impl App {
         let Some(s) = self.asm.as_ref() else { return };
         let Some(path) = rfd::FileDialog::new()
             .add_filter("CSV", &["csv"])
-            .set_file_name(format!("{} BOM.csv", s.doc.name))
+            .set_file_name(trf("{} BOM.csv", &[&s.doc.name]))
             .save_file()
         else {
             return;
@@ -466,7 +467,7 @@ impl App {
         let csv = assembly::bom_csv(&s.doc.bom(s.bom_indented));
         self.status = match std::fs::write(&path, csv) {
             Ok(()) => format!("Exported {}", path.display()),
-            Err(e) => format!("Export failed: {e}"),
+            Err(e) => trf("Export failed: {}", &[&e]),
         };
     }
 
@@ -480,7 +481,7 @@ impl App {
                 self.files.return_to = Some(me.clone());
                 self.request(crate::files::Pending::Open(file));
             }
-            None => self.status = "Save the assembly first, so 3BCAD can bring you back to it".into(),
+            None => self.status = tr("Save the assembly first, so 3BCAD can bring you back to it").into(),
         }
     }
 
@@ -495,7 +496,7 @@ impl App {
                 self.files.settings_changed = true;
                 format!("Inserted {name}")
             }
-            Err(e) => format!("Could not insert: {e:#}"),
+            Err(e) => trf("Could not insert: {}", &[&format!("{:#}", e)]),
         };
         self.sync_assembly();
         self.zoom_to_fit();

@@ -1,6 +1,7 @@
 //! Feature tree: reference planes, features with sketch status, rollback bar,
 //! rename (F2), suppress, drag-to-reorder.
 
+use crate::i18n::{tr, trf};
 use eframe::egui::{self, Color32, RichText, Sense};
 use threebcad_core::{FeatureId, FeatureKind};
 use threebcad_sketch::Status;
@@ -38,29 +39,29 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
         .resizable(true)
         .default_width(240.0)
         .show(ctx, |ui| {
-            ui.heading("Feature Tree");
+            ui.heading(tr("Feature Tree"));
             ui.separator();
             ui.label(RichText::new(&app.doc.name).strong());
             crate::ui::design::configuration_picker(app, ui);
             for rp in RefPlane::ALL {
                 ui.horizontal(|ui| {
                     let visible = app.plane_visible.get_mut(&rp).unwrap();
-                    ui.checkbox(visible, "").on_hover_text("Show / hide");
+                    ui.checkbox(visible, "").on_hover_text(tr("Show / hide"));
                     let selected = app.selection.contains(&ModelRef::Plane(rp));
                     let resp = ui
                         .horizontal(|ui| {
                             icons::inline(ui, "plane", true);
-                            ui.selectable_label(selected, rp.name())
+                            ui.selectable_label(selected, tr(rp.name()))
                         })
                         .inner
-                        .on_hover_text("Double-click to sketch on it");
+                        .on_hover_text(tr("Double-click to sketch on it"));
                     if resp.clicked() {
                         app.selection = vec![ModelRef::Plane(rp)];
                         app.selected = None;
                     }
                     let mut sketch = resp.double_clicked();
                     resp.context_menu(|ui| {
-                        if ui.button("✏ Sketch on it").clicked() {
+                        if ui.button(tr("✏ Sketch on it")).clicked() {
                             sketch = true;
                             ui.close_menu();
                         }
@@ -73,7 +74,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
             ui.horizontal(|ui| {
                 ui.add_space(22.0);
                 icons::inline(ui, "origin", true);
-                ui.label("Origin");
+                ui.label(tr("Origin"));
             });
             solid_bodies(app, ui);
 
@@ -127,7 +128,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                 }
                 let mut label = RichText::new(&row.text);
                 if i >= rollback || row.suppressed {
-                    label = label.color(theme::MUTED).italics();
+                    label = label.color(theme::muted()).italics();
                 } else if row.error.is_some() {
                     label = label.color(theme::ERROR);
                 } else if row.warning.is_some() {
@@ -185,26 +186,26 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                     );
                 }
                 resp.context_menu(|ui| {
-                    if ui.button("Edit Feature").clicked() {
+                    if ui.button(tr("Edit Feature")).clicked() {
                         app.selected = Some(id);
                         ui.close_menu();
                     }
-                    if row.is_plane && ui.button("✏ Sketch on it").clicked() {
+                    if row.is_plane && ui.button(tr("✏ Sketch on it")).clicked() {
                         action = Some(Action::SketchOn(id));
                         ui.close_menu();
                     }
-                    if row.is_sketch && ui.button("Edit Sketch").clicked() {
+                    if row.is_sketch && ui.button(tr("Edit Sketch")).clicked() {
                         action = Some(Action::EditSketch(id));
                         ui.close_menu();
                     }
-                    if ui.button("Rename (F2)").clicked() {
+                    if ui.button(tr("Rename (F2)")).clicked() {
                         app.renaming = Some((
                             id,
                             app.doc.history().get(id).map(|f| f.name.clone()).unwrap_or_default(),
                         ));
                         ui.close_menu();
                     }
-                    if ui.button("Appearance…").clicked() {
+                    if ui.button(tr("Appearance…")).clicked() {
                         app.appearance = crate::ui::design::Appearance::of(app, None, Some(id), false);
                         ui.close_menu();
                     }
@@ -214,20 +215,20 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                         ui.close_menu();
                     }
                     ui.separator();
-                    if i > 0 && ui.button("Move Up").clicked() {
+                    if i > 0 && ui.button(tr("Move Up")).clicked() {
                         action = Some(Action::Move(id, i - 1));
                         ui.close_menu();
                     }
-                    if i + 1 < rows.len() && ui.button("Move Down").clicked() {
+                    if i + 1 < rows.len() && ui.button(tr("Move Down")).clicked() {
                         action = Some(Action::Move(id, i + 1));
                         ui.close_menu();
                     }
-                    if ui.button("Roll Back to Here").clicked() {
+                    if ui.button(tr("Roll Back to Here")).clicked() {
                         action = Some(Action::Rollback(i));
                         ui.close_menu();
                     }
                     ui.separator();
-                    if ui.button("Delete (with children)").clicked() {
+                    if ui.button(tr("Delete (with children)")).clicked() {
                         action = Some(Action::Delete(id));
                         ui.close_menu();
                     }
@@ -291,7 +292,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
 /// the body commands; Ctrl+click adds more.
 fn solid_bodies(app: &mut App, ui: &mut egui::Ui) {
     let n = app.doc.bodies().len();
-    egui::CollapsingHeader::new(format!("Solid Bodies ({n})"))
+    egui::CollapsingHeader::new(trf("Solid Bodies ({})", &[&n]))
         .id_salt("solid_bodies")
         .default_open(n > 1)
         .show(ui, |ui| {
@@ -312,9 +313,9 @@ fn solid_bodies(app: &mut App, ui: &mut egui::Ui) {
                         ui.selectable_label(picked, format!("Body {}{made_by}", body + 1))
                     })
                     .inner
-                    .on_hover_text("Click to select the body, Ctrl+click to add it");
+                    .on_hover_text(tr("Click to select the body, Ctrl+click to add it"));
                 resp.context_menu(|ui| {
-                    if ui.button("Appearance…").clicked() {
+                    if ui.button(tr("Appearance…")).clicked() {
                         app.appearance = crate::ui::design::Appearance::of(app, Some((body, 0)), None, true);
                         ui.close_menu();
                     }
@@ -380,7 +381,7 @@ fn rollback_bar(ui: &mut egui::Ui) -> egui::Response {
     };
     ui.painter().rect_filled(rect.shrink2(egui::vec2(0.0, 2.0)), 2.0, color);
     resp.on_hover_cursor(egui::CursorIcon::ResizeVertical)
-        .on_hover_text("Rollback bar: drag to build the part only up to here")
+        .on_hover_text(tr("Rollback bar: drag to build the part only up to here"))
 }
 
 #[cfg(test)]

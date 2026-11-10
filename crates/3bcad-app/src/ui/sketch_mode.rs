@@ -1,6 +1,7 @@
 //! Sketch mode: drawing tools with live previews, inferencing, Smart Dimension, relations,
 //! definition-status colours and dragging with live solving.
 
+use crate::i18n::trf;
 use std::collections::HashMap;
 
 use eframe::egui::{self, Align2, Color32, FontId, Painter, PointerButton, Pos2, Rect, Response, Shape, Stroke};
@@ -16,13 +17,24 @@ use threebcad_sketch::{Analysis, Constraint, EntityId, PointId, Sketch, Status};
 use crate::ui::properties::units;
 
 const UNDER: Color32 = Color32::from_rgb(20, 70, 230);
-const FULL: Color32 = Color32::from_rgb(15, 15, 20);
+/// Fully defined geometry and dimensions: black on the light background, light on the dark ones.
+fn full() -> Color32 {
+    match crate::ui::theme::look() {
+        crate::ui::theme::Look::Light => Color32::from_rgb(15, 15, 20),
+        _ => Color32::from_rgb(235, 235, 240),
+    }
+}
 const OVER: Color32 = Color32::from_rgb(220, 30, 30);
 const HOVER: Color32 = Color32::from_rgb(255, 140, 20);
 const SELECTED: Color32 = Color32::from_rgb(20, 160, 255);
 const PREVIEW: Color32 = Color32::from_rgb(230, 120, 0);
 const INFER: Color32 = Color32::from_rgb(230, 170, 0);
-const DIM: Color32 = Color32::from_rgb(40, 40, 50);
+fn dim() -> Color32 {
+    match crate::ui::theme::look() {
+        crate::ui::theme::Look::Light => Color32::from_rgb(40, 40, 50),
+        _ => Color32::from_rgb(220, 220, 228),
+    }
+}
 const RELATION: Color32 = Color32::from_rgb(20, 120, 60);
 /// Snap radius and pick tolerance, screen pixels.
 const SNAP_PX: f64 = 8.0;
@@ -491,9 +503,9 @@ impl SketchSession {
 
     pub fn status_text(&self) -> (String, Color32) {
         match self.analysis.status {
-            Status::UnderDefined => (format!("Under Defined ({} DOF)", self.analysis.dof), UNDER),
-            Status::FullyDefined => ("Fully Defined".into(), FULL),
-            Status::OverDefined => ("Over Defined".into(), OVER),
+            Status::UnderDefined => (trf("Under Defined ({} DOF)", &[&self.analysis.dof]), UNDER),
+            Status::FullyDefined => (crate::i18n::tr("Fully Defined").into(), full()),
+            Status::OverDefined => (crate::i18n::tr("Over Defined").into(), OVER),
         }
     }
 
@@ -862,7 +874,7 @@ impl SketchSession {
         } else if self.analysis.free_entities.get(e.0).copied().unwrap_or(true) {
             UNDER
         } else {
-            FULL
+            full()
         }
     }
 
@@ -882,7 +894,7 @@ impl SketchSession {
             } else if self.analysis.free_points.get(p.0).copied().unwrap_or(true) {
                 (UNDER, 2.5)
             } else {
-                (FULL, 2.5)
+                (full(), 2.5)
             };
             painter.circle_filled(s, r, color);
         }
@@ -909,7 +921,7 @@ impl SketchSession {
             } else if self.analysis.over_constraints.get(i).copied().unwrap_or(false) {
                 OVER
             } else {
-                DIM
+                dim()
             };
             self.paint_dimension(painter, view, i, color);
         }
@@ -1188,7 +1200,7 @@ impl SketchSession {
                 egui::Frame::popup(ui.style()).show(ui, |ui| {
                     ui.horizontal(|ui| {
                         ui.weak(&name)
-                            .on_hover_text(format!("In Equations: {name}@ and the sketch's name"));
+                            .on_hover_text(trf("In Equations: {}@ and the sketch's name", &[&name]));
                         let r = ui.add(egui::TextEdit::singleline(&mut text).desired_width(70.0));
                         if !r.has_focus() && !r.lost_focus() {
                             r.request_focus();
@@ -1223,7 +1235,7 @@ impl SketchSession {
                             self.set_dimension(i, value);
                         }
                     }
-                    None => self.message = Some(format!("\"{text}\" is not a number or a length")),
+                    None => self.message = Some(trf("\"{}\" is not a number or a length", &[&text])),
                 }
             }
             Some(false) => self.editing = None,

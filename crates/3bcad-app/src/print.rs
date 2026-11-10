@@ -124,7 +124,7 @@ pub fn lay_out(g: &mut SceneGeometry, v: &PrintView) -> PrintReport {
         t.pos = moved(t.pos);
         t.nor = f32x3(checks::rotate(&r, t.nor.map(f64::from)));
     }
-    for l in &mut g.lines {
+    for l in g.lines.iter_mut().chain(&mut g.edges) {
         l.pos = moved(l.pos);
     }
     for p in &mut g.points {

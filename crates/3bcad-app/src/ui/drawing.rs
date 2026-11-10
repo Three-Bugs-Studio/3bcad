@@ -1,6 +1,7 @@
 //! Drawing mode: the Drawing ribbon tab, the sheet tree, the Properties panel for what is picked,
 //! and the sheet itself, panned and zoomed like paper on a desk.
 
+use crate::i18n::{tr, trf};
 use std::time::Duration;
 
 use eframe::egui::{
@@ -30,7 +31,7 @@ pub fn frame(app: &mut App, ctx: &egui::Context) {
     shortcuts(app, ctx);
     if let Some(s) = &mut app.drw {
         if s.refresh() {
-            app.status = "The part changed on disk: the views show it as it is now".into();
+            app.status = tr("The part changed on disk: the views show it as it is now").into();
         }
     }
     // Keep looking for the part changing in another window.
@@ -121,7 +122,7 @@ fn delete_selected(app: &mut App) {
 fn view_name(kind: &ViewKind) -> String {
     match kind {
         ViewKind::Model(o) => format!("{} View", o.name()),
-        ViewKind::Projected { dir, .. } => format!("Projected View ({})", dir.name().to_lowercase()),
+        ViewKind::Projected { dir, .. } => trf("Projected View ({})", &[&dir.name().to_lowercase()]),
         ViewKind::Section { label, .. } => format!("Section {label}-{label}"),
         ViewKind::Detail { label, .. } => format!("Detail {label}"),
     }
@@ -150,16 +151,16 @@ pub fn tab(app: &mut App, ui: &mut egui::Ui) {
     let Some(s) = &mut app.drw else { return };
     let has_part = s.doc.part().is_some();
     if icons::tile(ui, "insert", "Model", true, false)
-        .on_hover_text("Choose the part this drawing shows")
+        .on_hover_text(tr("Choose the part this drawing shows"))
         .clicked()
     {
         action = Some(Action::Model);
     }
     ui.vertical(|ui| {
         ui.spacing_mut().item_spacing.y = 1.0;
-        ui.menu_button("Recent", |ui| {
+        ui.menu_button(tr("Recent"), |ui| {
             if recent.is_empty() {
-                ui.weak("No recent parts");
+                ui.weak(tr("No recent parts"));
             }
             for p in &recent {
                 let name = p
@@ -172,9 +173,11 @@ pub fn tab(app: &mut App, ui: &mut egui::Ui) {
             }
         })
         .response
-        .on_hover_text("Show a part opened recently");
+        .on_hover_text(tr("Show a part opened recently"));
         if icons::small(ui, "edit_part", "Edit Part", has_part, false)
-            .on_hover_text("Open the part to change it; the drawing shows the change when you come back")
+            .on_hover_text(tr(
+                "Open the part to change it; the drawing shows the change when you come back",
+            ))
             .clicked()
         {
             action = Some(Action::EditPart);
@@ -184,7 +187,7 @@ pub fn tab(app: &mut App, ui: &mut egui::Ui) {
     let sheet = s.sheet();
     let [w, h] = s.doc.contents().sheets[sheet].size.size();
     if icons::tile(ui, "std_views", "Standard Views", has_part, false)
-        .on_hover_text("The front view with the top and side views projected from it")
+        .on_hover_text(tr("The front view with the top and side views projected from it"))
         .clicked()
     {
         s.doc.standard_views(sheet);
@@ -192,7 +195,7 @@ pub fn tab(app: &mut App, ui: &mut egui::Ui) {
     ui.vertical(|ui| {
         ui.spacing_mut().item_spacing.y = 1.0;
         ui.add_enabled_ui(has_part, |ui| {
-            ui.menu_button("Model View", |ui| {
+            ui.menu_button(tr("Model View"), |ui| {
                 for o in Orientation::ALL {
                     if ui.button(o.name()).clicked() {
                         ui.close_menu();
@@ -203,7 +206,7 @@ pub fn tab(app: &mut App, ui: &mut egui::Ui) {
                 }
             })
             .response
-            .on_hover_text("A view of the part from one side, or isometric");
+            .on_hover_text(tr("A view of the part from one side, or isometric"));
         });
         let base = match s.selected {
             Item::View(id) => s.doc.contents().sheets[sheet]
@@ -214,13 +217,13 @@ pub fn tab(app: &mut App, ui: &mut egui::Ui) {
         };
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 1.0;
-            ui.label("Projected");
+            ui.label(tr("Projected"));
             for (d, glyph) in [(Dir::Left, "⬅"), (Dir::Up, "⬆"), (Dir::Down, "⬇"), (Dir::Right, "➡")] {
                 if ui
                     .add_enabled(base.is_some(), egui::Button::new(glyph).small())
-                    .on_hover_text(format!(
+                    .on_hover_text(trf(
                         "Project the selected view and place it {}",
-                        d.name().to_lowercase()
+                        &[&d.name().to_lowercase()],
                     ))
                     .clicked()
                 {
@@ -251,7 +254,7 @@ pub fn tab(app: &mut App, ui: &mut egui::Ui) {
     }
     let on = tool == Tool::Detail;
     if icons::tile(ui, "detail_view", "Detail", has_part, on)
-        .on_hover_text("Show a circle of a view larger: click its middle")
+        .on_hover_text(tr("Show a circle of a view larger: click its middle"))
         .clicked()
     {
         s.tool = if on { Tool::Select } else { Tool::Detail };
@@ -259,25 +262,25 @@ pub fn tab(app: &mut App, ui: &mut egui::Ui) {
     ui.separator();
     let on = matches!(tool, Tool::Dimension(_));
     if icons::tile(ui, "dimension", "Smart Dimension", has_part, on)
-        .on_hover_text("Click an edge, a circle, or two vertices of a view")
+        .on_hover_text(tr("Click an edge, a circle, or two vertices of a view"))
         .clicked()
     {
         s.tool = if on { Tool::Select } else { Tool::Dimension(Vec::new()) };
     }
     if icons::tile(ui, "model_items", "Model Items", has_part, false)
-        .on_hover_text("Bring in the dimensions of the part's sketches and extrusions")
+        .on_hover_text(tr("Bring in the dimensions of the part's sketches and extrusions"))
         .clicked()
     {
         let n = s.doc.import_model_dimensions(sheet);
         app.status = match n {
             0 => "No more model dimensions fit the views on this sheet".into(),
             1 => "Added 1 model dimension".into(),
-            n => format!("Added {n} model dimensions"),
+            n => trf("Added {} model dimensions", &[&n]),
         };
     }
     let on = tool == Tool::Note;
     if icons::tile(ui, "note", "Note", true, on)
-        .on_hover_text("Add a note: click what it points at, or empty sheet")
+        .on_hover_text(tr("Add a note: click what it points at, or empty sheet"))
         .clicked()
     {
         s.tool = if on { Tool::Select } else { Tool::Note };
@@ -286,7 +289,7 @@ pub fn tab(app: &mut App, ui: &mut egui::Ui) {
     ui.vertical(|ui| {
         ui.spacing_mut().item_spacing.y = 1.0;
         if icons::small(ui, "sheet", "Add Sheet", true, false)
-            .on_hover_text("A new sheet with the same size, scale and title block")
+            .on_hover_text(tr("A new sheet with the same size, scale and title block"))
             .clicked()
         {
             s.sheet = s.doc.add_sheet();
@@ -294,7 +297,7 @@ pub fn tab(app: &mut App, ui: &mut egui::Ui) {
             s.fit = true;
         }
         if icons::small(ui, "delete_body", "Delete", s.selected != Item::Sheet, false)
-            .on_hover_text("Delete the selected view, dimension or note (Delete)")
+            .on_hover_text(tr("Delete the selected view, dimension or note (Delete)"))
             .clicked()
         {
             action = Some(Action::Delete);
@@ -339,13 +342,13 @@ fn status_bar(app: &mut App, ctx: &egui::Context) {
                     crate::files::units_ui(app, ui)
                 })
                 .response
-                .on_hover_text("Unit system for dimensions");
+                .on_hover_text(tr("Unit system for dimensions"));
                 let Some(s) = &mut app.drw else { return };
                 let n = s.doc.contents().sheets.len();
                 ui.label(format!("Sheet {} of {n}", s.sheet() + 1));
                 if let Some(why) = s.doc.part_error() {
                     ui.separator();
-                    ui.colored_label(ERROR, "⚠ The part could not be read")
+                    ui.colored_label(ERROR, tr("⚠ The part could not be read"))
                         .on_hover_text(why);
                 }
             });
@@ -358,13 +361,13 @@ pub fn tree(app: &mut App, ctx: &egui::Context) {
         .resizable(true)
         .default_width(240.0)
         .show(ctx, |ui| {
-            ui.heading("Drawing Tree");
+            ui.heading(tr("Drawing Tree"));
             ui.separator();
             let Some(s) = &mut app.drw else { return };
             ui.label(RichText::new(&s.doc.name).strong());
             match (&s.doc.contents().model, s.doc.part_error()) {
                 (None, _) => {
-                    ui.weak("No part yet: Drawing tab > Model");
+                    ui.weak(tr("No part yet: Drawing tab > Model"));
                 }
                 (Some(m), err) => {
                     let name = m
@@ -407,7 +410,7 @@ pub fn tree(app: &mut App, ctx: &egui::Context) {
                                 s.selected = Item::View(v.id);
                             }
                             r.inner.context_menu(|ui| {
-                                if ui.button("Delete").clicked() {
+                                if ui.button(tr("Delete")).clicked() {
                                     s.doc.remove_view(current, v.id);
                                     s.selected = Item::Sheet;
                                     ui.close_menu();
@@ -492,11 +495,11 @@ fn sheet_panel(s: &mut Session, ui: &mut egui::Ui, i: usize) {
     ui.heading(&sh.name);
     ui.separator();
     ui.horizontal(|ui| {
-        ui.label("Name");
+        ui.label(tr("Name"));
         ui.text_edit_singleline(&mut sh.name);
     });
     ui.horizontal(|ui| {
-        ui.label("Size");
+        ui.label(tr("Size"));
         egui::ComboBox::from_id_salt("sheet_size")
             .selected_text(sh.size.name())
             .show_ui(ui, |ui| {
@@ -507,23 +510,23 @@ fn sheet_panel(s: &mut Session, ui: &mut egui::Ui, i: usize) {
             });
     });
     ui.horizontal(|ui| {
-        ui.label("Scale");
+        ui.label(tr("Scale"));
         scale_combo(ui, "sheet_scale", &mut sh.scale);
     });
-    ui.label("Projection");
-    ui.radio_value(&mut sh.third_angle, false, "First angle (ISO)")
-        .on_hover_text("The view seen from the left goes on the right, the top view below");
-    ui.radio_value(&mut sh.third_angle, true, "Third angle (ANSI)")
-        .on_hover_text("The view seen from the right goes on the right, the top view above");
+    ui.label(tr("Projection"));
+    ui.radio_value(&mut sh.third_angle, false, tr("First angle (ISO)"))
+        .on_hover_text(tr("The view seen from the left goes on the right, the top view below"));
+    ui.radio_value(&mut sh.third_angle, true, tr("Third angle (ANSI)"))
+        .on_hover_text(tr("The view seen from the right goes on the right, the top view above"));
     ui.add_space(6.0);
-    ui.strong("Title block");
-    ui.weak("{Name} fills in from File > Properties of the drawing or the part, or {Sheet}, {Scale}, {Projection}, {Model}, {Material}.");
+    ui.strong(tr("Title block"));
+    ui.weak(tr("{Name} fills in from File > Properties of the drawing or the part, or {Sheet}, {Scale}, {Projection}, {Model}, {Material}."));
     let mut gone = None;
     for (k, (label, text)) in cells.iter_mut().enumerate() {
         ui.horizontal(|ui| {
             ui.add_sized([78.0, 20.0], egui::TextEdit::singleline(label));
             ui.add_sized([130.0, 20.0], egui::TextEdit::singleline(text));
-            if ui.small_button("✖").on_hover_text("Remove").clicked() {
+            if ui.small_button("✖").on_hover_text(tr("Remove")).clicked() {
                 gone = Some(k);
             }
         });
@@ -531,7 +534,7 @@ fn sheet_panel(s: &mut Session, ui: &mut egui::Ui, i: usize) {
     if let Some(k) = gone {
         cells.remove(k);
     }
-    if ui.button("+ Cell").clicked() {
+    if ui.button(tr("+ Cell")).clicked() {
         cells.push(("Label".into(), String::new()));
     }
     let c = s.doc.contents();
@@ -545,7 +548,7 @@ fn sheet_panel(s: &mut Session, ui: &mut egui::Ui, i: usize) {
         s.fit |= fit;
     }
     ui.add_space(6.0);
-    if many && ui.button("Delete Sheet").clicked() {
+    if many && ui.button(tr("Delete Sheet")).clicked() {
         s.doc.remove_sheet(i);
         (s.selected, s.fit) = (Item::Sheet, true);
     }
@@ -563,7 +566,7 @@ fn view_panel(s: &mut Session, ui: &mut egui::Ui, sheet: usize, id: u32) {
     match &mut e.kind {
         ViewKind::Model(o) => {
             ui.horizontal(|ui| {
-                ui.label("Looks at");
+                ui.label(tr("Looks at"));
                 egui::ComboBox::from_id_salt("orientation")
                     .selected_text(o.name())
                     .show_ui(ui, |ui| {
@@ -573,12 +576,12 @@ fn view_panel(s: &mut Session, ui: &mut egui::Ui, sheet: usize, id: u32) {
                     });
             });
             let mut own = e.scale.is_some();
-            ui.checkbox(&mut own, "Own scale")
-                .on_hover_text("Else the sheet's scale");
+            ui.checkbox(&mut own, tr("Own scale"))
+                .on_hover_text(tr("Else the sheet's scale"));
             match (own, &mut e.scale) {
                 (true, Some(sc)) => {
                     ui.horizontal(|ui| {
-                        ui.label("Scale");
+                        ui.label(tr("Scale"));
                         scale_combo(ui, "view_scale", sc);
                     });
                 }
@@ -587,7 +590,9 @@ fn view_panel(s: &mut Session, ui: &mut egui::Ui, sheet: usize, id: u32) {
             }
         }
         ViewKind::Projected { .. } => {
-            ui.weak("Projected from its parent and lined up with it, at the parent's scale.");
+            ui.weak(tr(
+                "Projected from its parent and lined up with it, at the parent's scale.",
+            ));
         }
         ViewKind::Section {
             label,
@@ -597,48 +602,48 @@ fn view_panel(s: &mut Session, ui: &mut egui::Ui, sheet: usize, id: u32) {
             ..
         } => {
             ui.horizontal(|ui| {
-                ui.label("Label");
+                ui.label(tr("Label"));
                 ui.add(egui::TextEdit::singleline(label).desired_width(40.0));
             });
             ui.horizontal(|ui| {
-                ui.radio_value(vertical, true, "Vertical line");
-                ui.radio_value(vertical, false, "Horizontal line");
+                ui.radio_value(vertical, true, tr("Vertical line"));
+                ui.radio_value(vertical, false, tr("Horizontal line"));
             });
             ui.horizontal(|ui| {
-                ui.label("Line at");
+                ui.label(tr("Line at"));
                 ui.add(length(at).speed(0.2));
             });
-            ui.checkbox(flip, "Look the other way");
-            ui.weak(format!("Hatch: {}, from the part's material", s.doc.hatch().name()));
+            ui.checkbox(flip, tr("Look the other way"));
+            ui.weak(trf("Hatch: {}, from the part's material", &[&s.doc.hatch().name()]));
         }
         ViewKind::Detail {
             label, center, radius, ..
         } => {
             ui.horizontal(|ui| {
-                ui.label("Label");
+                ui.label(tr("Label"));
                 ui.add(egui::TextEdit::singleline(label).desired_width(40.0));
             });
             ui.horizontal(|ui| {
-                ui.label("Radius");
+                ui.label(tr("Radius"));
                 ui.add(length(radius).speed(0.1).range(0.1..=10_000.0));
             });
             ui.horizontal(|ui| {
-                ui.label("Centre");
+                ui.label(tr("Centre"));
                 ui.add(length(&mut center[0]).speed(0.2));
                 ui.add(length(&mut center[1]).speed(0.2));
             });
             if let Some(sc) = &mut e.scale {
                 ui.horizontal(|ui| {
-                    ui.label("Scale");
+                    ui.label(tr("Scale"));
                     scale_combo(ui, "detail_scale", sc);
                 });
             }
         }
     }
     if !matches!(e.kind, ViewKind::Section { .. }) {
-        ui.checkbox(&mut e.hidden, "Hidden lines (dashed)");
+        ui.checkbox(&mut e.hidden, tr("Hidden lines (dashed)"));
     }
-    ui.checkbox(&mut e.marks, "Centre marks and centrelines");
+    ui.checkbox(&mut e.marks, tr("Centre marks and centrelines"));
     if e != v {
         let key = panel_key(ui, 1 << 20 | u64::from(id));
         s.doc.edit(key, |c| {
@@ -648,7 +653,7 @@ fn view_panel(s: &mut Session, ui: &mut egui::Ui, sheet: usize, id: u32) {
         });
     }
     ui.add_space(6.0);
-    if ui.button("Delete View").clicked() {
+    if ui.button(tr("Delete View")).clicked() {
         s.doc.remove_view(sheet, id);
         s.selected = Item::Sheet;
     }
@@ -659,11 +664,11 @@ fn dim_panel(s: &mut Session, ui: &mut egui::Ui, sheet: usize, i: usize) {
         s.selected = Item::Sheet;
         return;
     };
-    ui.heading("Dimension");
+    ui.heading(tr("Dimension"));
     ui.separator();
     match s.doc.dimension_text(&d) {
         Some(t) => ui.label(RichText::new(t).size(18.0)),
-        None => ui.colored_label(ERROR, "What it measures is gone from the part"),
+        None => ui.colored_label(ERROR, tr("What it measures is gone from the part")),
     };
     ui.weak(if d.model {
         "From the part's sketch or feature: change it in the part."
@@ -682,7 +687,7 @@ fn dim_panel(s: &mut Session, ui: &mut egui::Ui, sheet: usize, i: usize) {
         s.doc.edit(None, |c| c.sheets[sheet].dims[i].kind = kind);
     }
     ui.add_space(6.0);
-    if ui.button("Delete Dimension").clicked() {
+    if ui.button(tr("Delete Dimension")).clicked() {
         s.doc.edit(None, |c| {
             c.sheets[sheet].dims.remove(i);
         });
@@ -696,7 +701,7 @@ fn note_panel(s: &mut Session, ui: &mut egui::Ui, sheet: usize, i: usize) {
         return;
     };
     let mut e = n.clone();
-    ui.heading("Note");
+    ui.heading(tr("Note"));
     ui.separator();
     ui.add(
         egui::TextEdit::multiline(&mut e.text)
@@ -704,18 +709,20 @@ fn note_panel(s: &mut Session, ui: &mut egui::Ui, sheet: usize, i: usize) {
             .desired_width(f32::INFINITY),
     );
     if e.leader.is_some() {
-        if ui.button("Remove Leader").clicked() {
+        if ui.button(tr("Remove Leader")).clicked() {
             e.leader = None;
         }
     } else {
-        ui.weak("No leader: add the note with the Note tool on a view to point at it.");
+        ui.weak(tr(
+            "No leader: add the note with the Note tool on a view to point at it.",
+        ));
     }
     if e != n {
         let key = panel_key(ui, 2 << 20 | i as u64);
         s.doc.edit(key, |c| c.sheets[sheet].notes[i] = e);
     }
     ui.add_space(6.0);
-    if ui.button("Delete Note").clicked() {
+    if ui.button(tr("Delete Note")).clicked() {
         s.doc.edit(None, |c| {
             c.sheets[sheet].notes.remove(i);
         });

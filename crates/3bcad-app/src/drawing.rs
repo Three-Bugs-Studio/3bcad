@@ -1,6 +1,7 @@
 //! The open drawing: which sheet is on screen and how it is panned and zoomed, what is picked,
 //! the tool in use, and the drawing exports.
 
+use crate::i18n::{tr, trf};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
@@ -156,10 +157,10 @@ impl App {
                     s.doc.standard_views(sheet);
                     "Placed the front view and two projected views: drag them, or add more from the Drawing tab".into()
                 } else {
-                    format!("The views now show {}", file.display())
+                    trf("The views now show {}", &[&file.display()])
                 }
             }
-            Err(e) => format!("Could not use the part: {e:#}"),
+            Err(e) => trf("Could not use the part: {}", &[&format!("{:#}", e)]),
         };
     }
 
@@ -182,7 +183,7 @@ impl App {
                 self.files.return_to = Some(me.clone());
                 self.request(crate::files::Pending::Open(model));
             }
-            None => self.status = "Save the drawing first, so 3BCAD can bring you back to it".into(),
+            None => self.status = tr("Save the drawing first, so 3BCAD can bring you back to it").into(),
         }
     }
 
@@ -204,8 +205,11 @@ impl App {
         let pages = s.doc.pages();
         self.status = match threebcad_io::drawing::export(&path, &pages) {
             Ok(files) if files.len() == 1 => format!("Exported {what}: {}", files[0].display()),
-            Ok(files) => format!("Exported {} {what} files next to {}", files.len(), path.display()),
-            Err(e) => format!("Export failed: {e}"),
+            Ok(files) => trf(
+                "Exported {} {} files next to {}",
+                &[&files.len(), &what, &path.display()],
+            ),
+            Err(e) => trf("Export failed: {}", &[&e]),
         };
     }
 }

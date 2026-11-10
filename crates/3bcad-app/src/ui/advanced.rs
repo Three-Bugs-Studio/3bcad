@@ -2,6 +2,7 @@
 //! Sweeps, lofts, helices, threads, variable and face fillets, multibody tools, sketch- and
 //! curve-driven patterns, domes and wraps.
 
+use crate::i18n::{tr, trf};
 use eframe::egui;
 use threebcad_core::holes;
 use threebcad_core::*;
@@ -66,13 +67,13 @@ fn sketch_list(ed: &mut Ed, ui: &mut egui::Ui, salt: &str, h: &History, me: Feat
     for (i, id) in list.iter().enumerate() {
         ui.horizontal(|ui| {
             ui.label(format!("{}. {}", i + 1, name_of(h, *id)));
-            if ui.small_button("⬆").on_hover_text("Move up").clicked() && i > 0 {
+            if ui.small_button("⬆").on_hover_text(tr("Move up")).clicked() && i > 0 {
                 action = Some((i, 0));
             }
-            if ui.small_button("⬇").on_hover_text("Move down").clicked() && i + 1 < list.len() {
+            if ui.small_button("⬇").on_hover_text(tr("Move down")).clicked() && i + 1 < list.len() {
                 action = Some((i, 1));
             }
-            if ui.small_button("✖").on_hover_text("Remove").clicked() {
+            if ui.small_button("✖").on_hover_text(tr("Remove")).clicked() {
                 action = Some((i, 2));
             }
         });
@@ -89,7 +90,7 @@ fn sketch_list(ed: &mut Ed, ui: &mut egui::Ui, salt: &str, h: &History, me: Feat
         ed.changed = true;
     }
     egui::ComboBox::from_id_salt(salt)
-        .selected_text("Add…")
+        .selected_text(tr("Add…"))
         .show_ui(ui, |ui| {
             for (id, name) in above(h, me, FeatureKind::is_sketch) {
                 if !list.contains(&id) && ui.selectable_label(false, name).clicked() {
@@ -118,9 +119,9 @@ fn face_line(ed: &mut Ed, ui: &mut egui::Ui, what: &str, face: &mut FaceRef, p: 
 fn bodies_line(ed: &mut Ed, ui: &mut egui::Ui, list: &mut Vec<FaceRef>, p: &Picks) {
     ui.horizontal(|ui| {
         if list.is_empty() {
-            ui.label("All bodies");
+            ui.label(tr("All bodies"));
         } else {
-            ui.label(format!("{} bodies (picked by a face)", list.len()));
+            ui.label(trf("{} bodies (picked by a face)", &[&list.len()]));
         }
         if ed.button(ui, "Use selection", !p.faces.is_empty()) {
             *list = p.faces.clone();
@@ -141,8 +142,8 @@ fn signed(ed: &mut Ed, ui: &mut egui::Ui, label: &str, v: &mut f64) {
 fn size_editor(ed: &mut Ed, ui: &mut egui::Ui, salt: &str, standard: &mut HoleStandard, size: &mut String) {
     ui.horizontal(|ui| {
         let before = *standard;
-        ed.track(ui.radio_value(standard, HoleStandard::Iso, "ISO metric"));
-        ed.track(ui.radio_value(standard, HoleStandard::Ansi, "ANSI Inch"));
+        ed.track(ui.radio_value(standard, HoleStandard::Iso, tr("ISO metric")));
+        ed.track(ui.radio_value(standard, HoleStandard::Ansi, tr("ANSI Inch")));
         if before != *standard {
             *size = holes::table(*standard)[4].name.into();
         }
@@ -163,11 +164,11 @@ fn size_editor(ed: &mut Ed, ui: &mut egui::Ui, salt: &str, standard: &mut HoleSt
 pub(crate) fn editor(ed: &mut Ed, ui: &mut egui::Ui, h: &History, me: FeatureId, kind: &mut FeatureKind, p: &Picks) {
     match kind {
         FeatureKind::Sweep(w) => {
-            ui.label("Profile");
+            ui.label(tr("Profile"));
             let mut circle = matches!(w.profile, SweepProfile::Circle(_));
             ui.horizontal(|ui| {
-                ed.track(ui.radio_value(&mut circle, false, "Sketch profile"));
-                ed.track(ui.radio_value(&mut circle, true, "Circular profile"));
+                ed.track(ui.radio_value(&mut circle, false, tr("Sketch profile")));
+                ed.track(ui.radio_value(&mut circle, true, tr("Circular profile")));
             });
             if circle != matches!(w.profile, SweepProfile::Circle(_)) {
                 w.profile = if circle {
@@ -183,36 +184,40 @@ pub(crate) fn editor(ed: &mut Ed, ui: &mut egui::Ui, h: &History, me: FeatureId,
                 SweepProfile::Circle(d) => ed.length(ui, "Diameter", d, 0.001),
                 SweepProfile::Sketch(id) => sketch_combo(ed, ui, "sweep_profile", h, me, id),
             }
-            ui.label("Path");
+            ui.label(tr("Path"));
             curve_combo(ed, ui, "sweep_path", h, me, &mut w.path);
             ed.angle(ui, "Twist", &mut w.twist, -3600.0..=3600.0);
             ed.check(ui, &mut w.cut, "Cut (remove material)");
             if !w.cut {
                 ed.check(ui, &mut w.merge, "Merge result");
             }
-            ui.weak("The profile is carried along the path, square to it. A circular profile needs no sketch.");
+            ui.weak(tr(
+                "The profile is carried along the path, square to it. A circular profile needs no sketch.",
+            ));
         }
         FeatureKind::Loft(l) => {
-            ui.label("Profiles, in order");
+            ui.label(tr("Profiles, in order"));
             sketch_list(ed, ui, "loft_add", h, me, &mut l.profiles);
-            ui.label("Guide curves");
+            ui.label(tr("Guide curves"));
             sketch_list(ed, ui, "loft_guide", h, me, &mut l.guides);
             ui.horizontal(|ui| {
-                ui.label("Start tangency");
+                ui.label(tr("Start tangency"));
                 ed.track(ui.add(number(&mut l.start_tangent).speed(0.05).range(0.0..=5.0)));
             });
             ui.horizontal(|ui| {
-                ui.label("End tangency");
+                ui.label(tr("End tangency"));
                 ed.track(ui.add(number(&mut l.end_tangent).speed(0.05).range(0.0..=5.0)));
             });
             ed.check(ui, &mut l.cut, "Cut (remove material)");
             if !l.cut {
                 ed.check(ui, &mut l.merge, "Merge result");
             }
-            ui.weak("Tangency 0 leaves the end free; larger values pull the surface square out of the profile.");
+            ui.weak(tr(
+                "Tangency 0 leaves the end free; larger values pull the surface square out of the profile.",
+            ));
         }
         FeatureKind::Helix(d) => {
-            ui.label(format!("Circle from: {}", name_of(h, d.sketch)));
+            ui.label(trf("Circle from: {}", &[&name_of(h, d.sketch)]));
             let kinds = [
                 HelixSize::PitchTurns { pitch: 5.0, turns: 4.0 },
                 HelixSize::HeightPitch {
@@ -253,7 +258,7 @@ pub(crate) fn editor(ed: &mut Ed, ui: &mut egui::Ui, h: &History, me: FeatureId,
                 });
             let turns = |ed: &mut Ed, ui: &mut egui::Ui, t: &mut f64| {
                 ui.horizontal(|ui| {
-                    ui.label("Revolutions");
+                    ui.label(tr("Revolutions"));
                     ed.track(ui.add(number(t).speed(0.05).range(0.01..=500.0)));
                 });
             };
@@ -280,19 +285,25 @@ pub(crate) fn editor(ed: &mut Ed, ui: &mut egui::Ui, h: &History, me: FeatureId,
             }
             ed.angle(ui, "Start angle", &mut d.start, -360.0..=360.0);
             ui.horizontal(|ui| {
-                ed.track(ui.radio_value(&mut d.ccw, false, "Clockwise"));
-                ed.track(ui.radio_value(&mut d.ccw, true, "Counterclockwise"));
+                ed.track(ui.radio_value(&mut d.ccw, false, tr("Clockwise")));
+                ed.track(ui.radio_value(&mut d.ccw, true, tr("Counterclockwise")));
             });
             ed.check(ui, &mut d.reverse, "Reverse direction");
-            ui.weak("Use the helix as the path of a sweep (a spring) or of a curve pattern.");
+            ui.weak(tr(
+                "Use the helix as the path of a sweep (a spring) or of a curve pattern.",
+            ));
         }
         FeatureKind::Thread(t) => {
             face_line(ed, ui, "Cylindrical face (a rod or a hole)", &mut t.face, p);
             size_editor(ed, ui, "thread_size", &mut t.standard, &mut t.size);
             if let Some(s) = holes::find(t.standard, &t.size) {
-                ui.weak(format!(
-                    "Major Ø{:.2} mm, pitch {:.3} mm, tap drill Ø{:.2} mm",
-                    s.major, s.pitch, s.tap_drill
+                ui.weak(trf(
+                    "Major Ø{} mm, pitch {} mm, tap drill Ø{} mm",
+                    &[
+                        &format!("{:.2}", s.major),
+                        &format!("{:.3}", s.pitch),
+                        &format!("{:.2}", s.tap_drill),
+                    ],
                 ));
             }
             let mut full = t.length.is_none();
@@ -306,16 +317,18 @@ pub(crate) fn editor(ed: &mut Ed, ui: &mut egui::Ui, h: &History, me: FeatureId,
             ed.length(ui, "Offset from the start", &mut t.offset, 0.0);
             ed.check(ui, &mut t.flip, "Start from the other end");
             ed.check(ui, &mut t.right, "Right-handed");
-            ui.weak("A modelled ISO 68 thread: printable, and watertight. Rods are threaded outside, holes inside.");
+            ui.weak(tr(
+                "A modelled ISO 68 thread: printable, and watertight. Rods are threaded outside, holes inside.",
+            ));
         }
         FeatureKind::VariableFillet { edge, radii } => {
             ui.horizontal(|ui| {
-                ui.label("Edge");
+                ui.label(tr("Edge"));
                 if ed.button(ui, "Use selection", !p.edges.is_empty()) {
                     *edge = p.edges[0].clone();
                 }
             });
-            ui.label("Radius at points along the edge (0 = start, 1 = end)");
+            ui.label(tr("Radius at points along the edge (0 = start, 1 = end)"));
             let mut remove = None;
             for (i, r) in radii.iter_mut().enumerate() {
                 ui.horizontal(|ui| {
@@ -340,7 +353,7 @@ pub(crate) fn editor(ed: &mut Ed, ui: &mut egui::Ui, h: &History, me: FeatureId,
             faces_line(ed, ui, "faces in set 1", a, p);
             faces_line(ed, ui, "faces in set 2", b, p);
             ed.length(ui, "Radius", radius, 0.001);
-            ui.weak("Rounds every edge where a face of set 1 meets a face of set 2.");
+            ui.weak(tr("Rounds every edge where a face of set 1 meets a face of set 2."));
         }
         FeatureKind::Combine { op, main, tools } => {
             egui::ComboBox::from_id_salt("combine_op")
@@ -356,8 +369,8 @@ pub(crate) fn editor(ed: &mut Ed, ui: &mut egui::Ui, h: &History, me: FeatureId,
         FeatureKind::Split { tool, bodies } => {
             let mut sketch = matches!(tool, SplitTool::Sketch(_));
             ui.horizontal(|ui| {
-                ed.track(ui.radio_value(&mut sketch, false, "By a plane"));
-                ed.track(ui.radio_value(&mut sketch, true, "By a sketch"));
+                ed.track(ui.radio_value(&mut sketch, false, tr("By a plane")));
+                ed.track(ui.radio_value(&mut sketch, true, tr("By a sketch")));
             });
             if sketch != matches!(tool, SplitTool::Sketch(_)) {
                 *tool = match (sketch, above(h, me, FeatureKind::is_sketch).first()) {
@@ -370,18 +383,20 @@ pub(crate) fn editor(ed: &mut Ed, ui: &mut egui::Ui, h: &History, me: FeatureId,
                 SplitTool::Sketch(id) => sketch_combo(ed, ui, "split_sketch", h, me, id),
             }
             bodies_line(ed, ui, bodies, p);
-            ui.weak("A sketch splits off what lies inside its outlines, straight through the part.");
+            ui.weak(tr(
+                "A sketch splits off what lies inside its outlines, straight through the part.",
+            ));
         }
         FeatureKind::DeleteBody { bodies, keep } => {
             faces_line(ed, ui, "bodies (one face each)", bodies, p);
             ui.horizontal(|ui| {
-                ed.track(ui.radio_value(keep, false, "Delete these"));
-                ed.track(ui.radio_value(keep, true, "Keep only these"));
+                ed.track(ui.radio_value(keep, false, tr("Delete these")));
+                ed.track(ui.radio_value(keep, true, tr("Keep only these")));
             });
         }
         FeatureKind::MoveBody(m) => {
             bodies_line(ed, ui, &mut m.bodies, p);
-            ui.label("Translate");
+            ui.label(tr("Translate"));
             for (i, n) in ["ΔX", "ΔY", "ΔZ"].iter().enumerate() {
                 signed(ed, ui, n, &mut m.translate[i]);
             }
@@ -402,7 +417,7 @@ pub(crate) fn editor(ed: &mut Ed, ui: &mut egui::Ui, h: &History, me: FeatureId,
                     _ => None,
                 };
                 if mate && m.mate.is_none() {
-                    ui.weak("Select the flat face to mate first.");
+                    ui.weak(tr("Select the flat face to mate first."));
                 }
             }
             if let Some((face, plane)) = &mut m.mate {
@@ -446,9 +461,11 @@ pub(crate) fn editor(ed: &mut Ed, ui: &mut egui::Ui, h: &History, me: FeatureId,
         }
         FeatureKind::SketchPattern { seeds, sketch } => {
             seeds_editor(ed, ui, h, me, seeds);
-            ui.label("Points from");
+            ui.label(tr("Points from"));
             sketch_combo(ed, ui, "pattern_sketch", h, me, sketch);
-            ui.weak("A copy goes at every sketch point, placed as the seed sits relative to its center.");
+            ui.weak(tr(
+                "A copy goes at every sketch point, placed as the seed sits relative to its center.",
+            ));
         }
         FeatureKind::CurvePattern {
             seeds,
@@ -458,7 +475,7 @@ pub(crate) fn editor(ed: &mut Ed, ui: &mut egui::Ui, h: &History, me: FeatureId,
             align,
         } => {
             seeds_editor(ed, ui, h, me, seeds);
-            ui.label("Along");
+            ui.label(tr("Along"));
             curve_combo(ed, ui, "pattern_curve", h, me, curve);
             ed.count(ui, "Instances", count);
             let mut equal = spacing.is_none();
@@ -475,7 +492,9 @@ pub(crate) fn editor(ed: &mut Ed, ui: &mut egui::Ui, h: &History, me: FeatureId,
             face_line(ed, ui, "Flat face", face, p);
             ed.length(ui, "Height", height, 0.001);
             ed.check(ui, reverse, "Reverse (sink into the part)");
-            ui.weak("A round face gets a spherical cap; other faces a smooth elliptical one.");
+            ui.weak(tr(
+                "A round face gets a spherical cap; other faces a smooth elliptical one.",
+            ));
         }
         FeatureKind::Wrap {
             sketch,
@@ -483,7 +502,7 @@ pub(crate) fn editor(ed: &mut Ed, ui: &mut egui::Ui, h: &History, me: FeatureId,
             kind,
             depth,
         } => {
-            ui.label("Sketch");
+            ui.label(tr("Sketch"));
             sketch_combo(ed, ui, "wrap_sketch", h, me, sketch);
             face_line(ed, ui, "Cylindrical face", face, p);
             ui.horizontal(|ui| {
@@ -492,12 +511,12 @@ pub(crate) fn editor(ed: &mut Ed, ui: &mut egui::Ui, h: &History, me: FeatureId,
                 }
             });
             ed.length(ui, "Depth", depth, 0.001);
-            ui.weak("Sketch on a plane parallel to the cylinder's axis; the sketch rolls onto the surface without stretching.");
+            ui.weak(tr("Sketch on a plane parallel to the cylinder's axis; the sketch rolls onto the surface without stretching."));
         }
         FeatureKind::Fit { faces, clearance } => {
             faces_line(ed, ui, "faces to move", faces, p);
             ed.length(ui, "Clearance", clearance, 0.001);
-            ui.label("Presets (per side)");
+            ui.label(tr("Presets (per side)"));
             egui::Grid::new("fit_presets").show(ui, |ui| {
                 ui.label("");
                 for fit in ["Press", "Slip", "Loose"] {
@@ -514,10 +533,12 @@ pub(crate) fn editor(ed: &mut Ed, ui: &mut egui::Ui, h: &History, me: FeatureId,
                     ui.end_row();
                 }
             });
-            ui.weak("Holes grow and pins, tabs and slots' walls move in by the clearance. Fit one part of each pair.");
+            ui.weak(tr(
+                "Holes grow and pins, tabs and slots' walls move in by the clearance. Fit one part of each pair.",
+            ));
         }
         other => {
-            ui.label(format!("{} has no properties to edit.", other.prefix()));
+            ui.label(trf("{} has no properties to edit.", &[&other.prefix()]));
         }
     }
 }
@@ -676,7 +697,7 @@ fn sweep(app: &mut App, cut: bool) {
         [a, b, ..] if is_profile(app, a) => (SweepProfile::Sketch(a), as_curve(app, b)),
         [a, b, ..] if is_profile(app, b) => (SweepProfile::Sketch(b), as_curve(app, a)),
         _ => {
-            app.status = "Sweep: select the profile sketch, then Ctrl+click the path (a sketch or a helix)".into();
+            app.status = tr("Sweep: select the profile sketch, then Ctrl+click the path (a sketch or a helix)").into();
             return;
         }
     };
@@ -699,7 +720,7 @@ fn loft(app: &mut App, cut: bool) {
     let chosen = picked(app, FeatureKind::is_sketch);
     let (profiles, guides): (Vec<FeatureId>, Vec<FeatureId>) = chosen.into_iter().partition(|&id| is_profile(app, id));
     if profiles.len() < 2 {
-        app.status = "Loft: select two or more closed profile sketches (Ctrl+click), in order".into();
+        app.status = tr("Loft: select two or more closed profile sketches (Ctrl+click), in order").into();
         return;
     }
     create(
@@ -720,7 +741,7 @@ fn helix(app: &mut App) {
         app.exit_sketch(true);
     }
     let Some(&s) = picked(app, FeatureKind::is_sketch).first() else {
-        app.status = "Helix: select a sketch with a circle first".into();
+        app.status = tr("Helix: select a sketch with a circle first").into();
         return;
     };
     create(
@@ -746,7 +767,7 @@ pub(crate) fn shaping(app: &mut App, ui: &mut egui::Ui) {
             "Select one straight edge: its radius runs from 1 to 3 mm",
         ) {
             let Some(edge) = app.selected_edges(false).into_iter().next() else {
-                app.status = "Variable Fillet: select a straight edge first".into();
+                app.status = tr("Variable Fillet: select a straight edge first").into();
                 return;
             };
             create(
@@ -765,7 +786,7 @@ pub(crate) fn shaping(app: &mut App, ui: &mut egui::Ui) {
         ) {
             let faces = app.selected_faces();
             if faces.len() < 2 {
-                app.status = "Face Fillet: select two faces or more (Ctrl+click)".into();
+                app.status = tr("Face Fillet: select two faces or more (Ctrl+click)").into();
                 return;
             }
             create(
@@ -786,7 +807,7 @@ pub(crate) fn shaping(app: &mut App, ui: &mut egui::Ui) {
             "Select a cylindrical face: a rod gets an outside thread, a hole an inside one",
         ) {
             let Some(face) = first_face(app, |f| f.cylinder.is_some()) else {
-                app.status = "Thread: select a cylindrical face (a rod or a hole) first".into();
+                app.status = tr("Thread: select a cylindrical face (a rod or a hole) first").into();
                 return;
             };
             // The nearest standard size to the cylinder.
@@ -820,7 +841,7 @@ pub(crate) fn shaping(app: &mut App, ui: &mut egui::Ui) {
         }
         if small(ui, "dome", "Dome", "Select a flat face to raise into a smooth cap") {
             let Some(face) = first_face(app, |f| f.plane.is_some()) else {
-                app.status = "Dome: select a flat face first".into();
+                app.status = tr("Dome: select a flat face first").into();
                 return;
             };
             create(
@@ -850,7 +871,7 @@ pub(crate) fn shaping(app: &mut App, ui: &mut egui::Ui) {
                         depth: 1.0,
                     },
                 ),
-                _ => app.status = "Wrap: select a sketch, then Ctrl+click the cylindrical face to wrap onto".into(),
+                _ => app.status = tr("Wrap: select a sketch, then Ctrl+click the cylindrical face to wrap onto").into(),
             }
         }
     });
@@ -863,7 +884,7 @@ pub(crate) fn shaping(app: &mut App, ui: &mut egui::Ui) {
         ) {
             let faces = app.selected_faces();
             if faces.is_empty() {
-                app.status = "Fit: select the faces of a hole, pin, tab or slot (Ctrl+click for more)".into();
+                app.status = tr("Fit: select the faces of a hole, pin, tab or slot (Ctrl+click for more)").into();
                 return;
             }
             let clearance = slip_fit(&app.doc.material().name);
@@ -883,7 +904,7 @@ pub(crate) fn patterns(app: &mut App, ui: &mut egui::Ui) {
         ) {
             let seeds = seeds(app);
             let Some(&sketch) = picked(app, FeatureKind::is_sketch).first() else {
-                app.status = "Sketch Pattern: select the feature, then Ctrl+click a sketch of points".into();
+                app.status = tr("Sketch Pattern: select the feature, then Ctrl+click a sketch of points").into();
                 return;
             };
             create(app, FeatureKind::SketchPattern { seeds, sketch });
@@ -896,7 +917,7 @@ pub(crate) fn patterns(app: &mut App, ui: &mut egui::Ui) {
         ) {
             let seeds = seeds(app);
             let Some(&c) = picked(app, |k| k.is_sketch() || matches!(k, FeatureKind::Helix(_))).first() else {
-                app.status = "Curve Pattern: select the feature, then Ctrl+click a curve (sketch or helix)".into();
+                app.status = tr("Curve Pattern: select the feature, then Ctrl+click a curve (sketch or helix)").into();
                 return;
             };
             let curve = as_curve(app, c);
@@ -924,7 +945,7 @@ pub(crate) fn bodies(app: &mut App, ui: &mut egui::Ui) {
     ) {
         let faces = app.selected_faces();
         if faces.len() < 2 {
-            app.status = "Combine: select a face on each body (Ctrl+click), the main body first".into();
+            app.status = tr("Combine: select a face on each body (Ctrl+click), the main body first").into();
         } else {
             create(
                 app,
@@ -966,7 +987,7 @@ pub(crate) fn bodies(app: &mut App, ui: &mut egui::Ui) {
         ) {
             let faces = app.selected_faces();
             if faces.is_empty() {
-                app.status = "Delete/Keep Body: select a face on each body first".into();
+                app.status = tr("Delete/Keep Body: select a face on each body first").into();
             } else {
                 create(
                     app,

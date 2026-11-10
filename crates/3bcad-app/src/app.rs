@@ -1,3 +1,4 @@
+use crate::i18n::{tr, trf};
 use std::collections::HashMap;
 use std::io;
 use std::path::Path;
@@ -38,7 +39,6 @@ const PLANE_COLOR: [f32; 3] = [0.25, 0.45, 0.85];
 const REF_COLOR: [f32; 3] = [0.85, 0.5, 0.1];
 /// Helices and other 3D curves, drawn like sketch geometry.
 const SKETCH_CURVE_COLOR: [f32; 3] = [0.1, 0.35, 0.8];
-pub const VIEWPORT_BG: egui::Color32 = ui::theme::SKY_BOTTOM;
 
 pub use threebcad_core::StdPlane as RefPlane;
 
@@ -116,6 +116,14 @@ pub struct App {
     pub show_mass: bool,
     pub show_shortcuts: bool,
     pub show_about: bool,
+    /// The crash report the last run left, until the user closes the notice.
+    pub crashed: Option<std::path::PathBuf>,
+    /// File > Settings, while open.
+    pub settings_window: Option<crate::ui::settings::SettingsWindow>,
+    /// The theme, interface size and language last handed to egui.
+    pub settings_applied: Option<(crate::ui::theme::Theme, f32, crate::i18n::Language)>,
+    /// Display style, section view and the viewport's other state.
+    pub view: crate::ui::viewport::ViewState,
     /// The Equations window (and configurations), while open.
     pub equations: Option<crate::ui::design::Equations>,
     /// The Appearance window, while open.
@@ -132,16 +140,37 @@ pub struct App {
     pub update: crate::update::Updater,
     known_problems: usize,
     built_for: Option<(u64, Vec<bool>, Option<PrintView>)>,
+    /// The bodies' display meshes and the part revision they are for.
+    body_meshes: Option<(u64, Arc<Vec<mesher::RenderMesh>>)>,
+    /// Meshes being made on a worker thread (large parts take seconds; the UI keeps running).
+    meshing: Option<Meshing>,
+    /// Zoom to fit once the meshes being made arrive.
+    fit_when_meshed: bool,
+    egui_ctx: egui::Context,
 }
+
+/// Display meshes made on a worker thread for one part revision.
+struct Meshing {
+    revision: u64,
+    result: std::sync::mpsc::Receiver<Vec<mesher::RenderMesh>>,
+    /// Bodies done, and how many there are.
+    done: Arc<std::sync::atomic::AtomicUsize>,
+    bodies: usize,
+    started: std::time::Instant,
+}
+
+/// Parts with more triangles than this draw a coarse copy while the view moves.
+const LOD_TRIANGLES: usize = 300_000;
 
 /// What export meshes are made for: the part's name (the objects carry it), its revision, and the chord and angle tolerance.
 type ExportKey = (String, u64, [f64; 2]);
 
 impl App {
-    pub fn new(cc: &eframe::CreationContext<'_>) -> Result<Self, &'static str> {
+    /// `crashed`: the crash report the last run left, to offer it to the user.
+    pub fn new(cc: &eframe::CreationContext<'_>, crashed: Option<std::path::PathBuf>) -> Result<Self, &'static str> {
         let rs = cc.wgpu_render_state.as_ref().ok_or("3BCAD needs the wgpu renderer")?;
         threebcad_render::install(rs, eframe::egui_wgpu::depth_format_from_bits(DEPTH_BITS, 0), MSAA);
-        ui::theme::apply(&cc.egui_ctx);
+        // The theme, size and language come from the settings on the first frame.
         let mut app = Self {
             doc: PartDocument::demo(),
             asm: None,
@@ -170,6 +199,10 @@ impl App {
             show_mass: false,
             show_shortcuts: false,
             show_about: false,
+            settings_window: None,
+            crashed,
+            settings_applied: None,
+            view: Default::default(),
             equations: None,
             appearance: None,
             export_config: None,
@@ -180,7 +213,15 @@ impl App {
             update: crate::update::Updater::new(),
             known_problems: 0,
             built_for: None,
+            body_meshes: None,
+            meshing: None,
+            fit_when_meshed: false,
+            egui_ctx: cc.egui_ctx.clone(),
         };
+        // Status lines made while starting (opening a file) are in the user's language.
+        crate::i18n::set(app.files.settings.language);
+        app.camera.ortho = !app.files.settings.perspective;
+        app.view.style = app.files.settings.display_style;
         app.sync_geometry();
         app.zoom_to_fit();
         // `3bcad <file>`: what a file association or "Open with" passes.
@@ -202,9 +243,9 @@ impl App {
             return s.describe(r);
         }
         match r {
-            ModelRef::Face { body, face } => format!("Face {} of body {}", face + 1, body + 1),
-            ModelRef::Edge { body, edge } => format!("Edge {} of body {}", edge + 1, body + 1),
-            ModelRef::Vertex { body, vertex } => format!("Vertex {} of body {}", vertex + 1, body + 1),
+            ModelRef::Face { body, face } => trf("Face {} of body {}", &[&(face + 1), &(body + 1)]),
+            ModelRef::Edge { body, edge } => trf("Edge {} of body {}", &[&(edge + 1), &(body + 1)]),
+            ModelRef::Vertex { body, vertex } => trf("Vertex {} of body {}", &[&(vertex + 1), &(body + 1)]),
             ModelRef::Plane(p) => p.name().to_string(),
             ModelRef::Feature(id) => self.doc.history().get(id).map_or("?".into(), |f| f.name.clone()),
         }
@@ -236,14 +277,17 @@ impl App {
         if self.built_for.as_ref() == Some(&key) {
             return;
         }
+        let Some(meshes) = self.body_meshes() else {
+            // Still meshing: the last geometry stays until the new one is ready.
+            return;
+        };
         let refit = self.built_for.as_ref().is_some_and(|k| k.2.is_some() != view.is_some());
         let mut g = SceneGeometry::default();
         if view.is_none() {
             g.add_grid(100.0, 5.0);
         }
         let mut refs = Vec::new();
-        for (body, b) in self.doc.bodies().iter().enumerate() {
-            let m = mesher::render_mesh(&b.solid, DISPLAY_TOL);
+        for (body, m) in meshes.iter().enumerate() {
             let colors = self.doc.face_colors(body);
             let base = refs.len() as u32;
             refs.extend((0..m.faces.len()).map(|face| ModelRef::Face { body, face }));
@@ -266,7 +310,7 @@ impl App {
                 let id = refs.len() as u32;
                 refs.push(ModelRef::Edge { body, edge });
                 for w in poly.windows(2) {
-                    g.line(w[0], w[1], EDGE_COLOR, id);
+                    g.edge(w[0], w[1], EDGE_COLOR, id);
                 }
             }
             for (vertex, &p) in m.vertices.iter().enumerate() {
@@ -295,6 +339,9 @@ impl App {
                 }));
             }
         }
+        if self.files.settings.lod {
+            g.build_lod(LOD_TRIANGLES);
+        }
         match view {
             // On the bed the part moves, so the model-space planes and references stay hidden.
             Some(v) => self.print = crate::print::lay_out(&mut g, &v),
@@ -315,9 +362,73 @@ impl App {
             self.show_whats_wrong = true;
         }
         self.known_problems = problems;
-        if refit {
+        if refit || std::mem::take(&mut self.fit_when_meshed) {
             self.zoom_to_fit();
         }
+    }
+
+    /// The bodies' display meshes for this revision, or `None` while a worker thread makes them.
+    fn body_meshes(&mut self) -> Option<Arc<Vec<mesher::RenderMesh>>> {
+        let revision = self.doc.revision();
+        if let Some((r, m)) = &self.body_meshes {
+            if *r == revision {
+                return Some(m.clone());
+            }
+        }
+        if self.meshing.as_ref().is_none_or(|m| m.revision != revision) {
+            let solids: Vec<_> = self.doc.bodies().iter().map(|b| b.solid.clone()).collect();
+            let (tx, result) = std::sync::mpsc::channel();
+            let done = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+            let (count, ctx) = (done.clone(), self.egui_ctx.clone());
+            let bodies = solids.len();
+            std::thread::spawn(move || {
+                let meshes = solids
+                    .iter()
+                    .map(|s| {
+                        let m = mesher::render_mesh(s, DISPLAY_TOL);
+                        count.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                        m
+                    })
+                    .collect();
+                // The UI may have moved on to another revision: then nobody listens.
+                let _ = tx.send(meshes);
+                ctx.request_repaint();
+            });
+            self.meshing = Some(Meshing {
+                revision,
+                result,
+                done,
+                bodies,
+                started: std::time::Instant::now(),
+            });
+        }
+        let m = self.meshing.as_ref()?;
+        match m.result.try_recv() {
+            Ok(meshes) => {
+                let meshes = Arc::new(meshes);
+                self.body_meshes = Some((revision, meshes.clone()));
+                self.meshing = None;
+                Some(meshes)
+            }
+            Err(std::sync::mpsc::TryRecvError::Empty) => None,
+            // The worker panicked (a face truck cannot mesh): show the part without it.
+            Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                log::error!("meshing revision {revision} failed");
+                self.meshing = None;
+                self.body_meshes = Some((revision, Arc::default()));
+                self.status = crate::i18n::tr("The part could not be meshed for display").into();
+                self.body_meshes.as_ref().map(|(_, m)| m.clone())
+            }
+        }
+    }
+
+    /// "Meshing 3 / 12 bodies", when a worker has been at it for a moment.
+    pub fn meshing_progress(&self) -> Option<String> {
+        let m = self.meshing.as_ref()?;
+        (m.started.elapsed().as_millis() > 300).then(|| {
+            let done = m.done.load(std::sync::atomic::Ordering::Relaxed);
+            crate::i18n::trf("Meshing {} / {} bodies…", &[&done, &m.bodies])
+        })
     }
 
     /// Reference planes and the reference geometry features above the rollback bar.
@@ -401,6 +512,9 @@ impl App {
     }
 
     pub fn zoom_to_fit(&mut self) {
+        if self.meshing.is_some() {
+            self.fit_when_meshed = true;
+        }
         if let Some((min, max)) = self.geometry.bounds() {
             self.camera.fit(min, max);
         } else {
@@ -513,7 +627,7 @@ impl App {
             self.edit_sketch(id);
             return;
         } else {
-            self.status = "Select a plane or a planar face to sketch on".into();
+            self.status = tr("Select a plane or a planar face to sketch on").into();
             return;
         }
         self.enter_sketch_view();
@@ -526,7 +640,7 @@ impl App {
             ..
         }) = self.doc.history().get(id)
         else {
-            self.status = "Select a plane, a planar face or a sketch".into();
+            self.status = tr("Select a plane, a planar face or a sketch").into();
             return;
         };
         self.sketch = Some(SketchSession::new(Some(id), sketch.clone(), *plane, name.clone()));
@@ -542,7 +656,7 @@ impl App {
         );
         self.tab = RibbonTab::Sketch;
         self.selection.clear();
-        self.status = format!("Editing sketch on {}", s.plane_name);
+        self.status = trf("Editing sketch on {}", &[&s.plane_name]);
     }
 
     /// Leaves sketch mode, keeping (OK) or discarding (Cancel) the edits as one undo step.
@@ -551,7 +665,7 @@ impl App {
         self.tab = RibbonTab::Features;
         let on = self.sketch_on.take();
         if !keep || !session.changed() {
-            self.status = "Sketch closed".into();
+            self.status = tr("Sketch closed").into();
             return;
         }
         let new_sketch = session.sketch;
@@ -577,12 +691,12 @@ impl App {
                 });
                 self.selected = Some(id);
                 if let Some(e) = refused {
-                    self.status = format!("Sketch saved, but not linked to its face: {e}");
+                    self.status = trf("Sketch saved, but not linked to its face: {}", &[&e]);
                     return;
                 }
             }
         }
-        self.status = "Sketch saved".into();
+        self.status = tr("Sketch saved").into();
     }
 
     /// The face the open sketch lies on, if any.
@@ -604,7 +718,7 @@ impl App {
     /// into the sketch as fixed geometry.
     pub fn convert_entities(&mut self) {
         let Some((body, face)) = self.sketch_face() else {
-            self.status = "Convert Entities: sketch on a model face first".into();
+            self.status = tr("Convert Entities: sketch on a model face first").into();
             return;
         };
         let Some(b) = self.doc.bodies().get(body) else { return };
@@ -613,7 +727,7 @@ impl App {
         s.checkpoint();
         let added = add_edges(&mut s.sketch, &edges, s.plane);
         s.refresh();
-        self.status = format!("Converted {added} edges of the face");
+        self.status = trf("Converted {} edges of the face", &[&added]);
     }
 
     /// A planar face's outline as a sketch on the face's plane.
@@ -636,7 +750,7 @@ impl App {
         };
         self.status = match self.write(format, &path) {
             Ok(()) => format!("Exported {}", path.display()),
-            Err(e) => format!("Export failed: {e}"),
+            Err(e) => trf("Export failed: {}", &[&e]),
         };
     }
 
@@ -646,14 +760,14 @@ impl App {
         let located = self.files.settings.slicer_paths[slicer as usize].clone();
         let name = slicer.name();
         self.status = match self.write(ExportFormat::ThreeMf, &path) {
-            Err(e) => format!("Could not write {}: {e}", path.display()),
+            Err(e) => trf("Could not write {}: {}", &[&path.display(), &e]),
             Ok(()) => match slicer.launch(&path, located.as_deref()) {
                 Ok(()) => format!("Opened {} in {name}", path.display()),
                 Err(e) => {
                     if e.kind() == io::ErrorKind::NotFound {
                         self.slicer_missing = Some(slicer);
                     }
-                    format!("Could not open {name}: {e}")
+                    trf("Could not open {}: {}", &[&name, &e])
                 }
             },
         };
@@ -692,6 +806,9 @@ impl App {
         self.appearance = None;
         self.export_config = None;
         self.built_for = None;
+        // Another document's revision numbers mean nothing for this one.
+        self.body_meshes = None;
+        self.meshing = None;
         self.export_cache = None;
         self.mass = None;
         self.measured = None;
@@ -769,61 +886,199 @@ impl App {
         self.mass.as_ref().map(|(_, m)| m)
     }
 
+    /// Hands the theme, interface size and language to egui when they change, and keeps the
+    /// interface size egui's own Ctrl + plus / minus set.
+    fn apply_settings(&mut self, ctx: &egui::Context) {
+        let s = &mut self.files.settings;
+        if self.settings_applied.is_some() && (ctx.zoom_factor() - s.ui_scale).abs() > 1e-3 {
+            s.ui_scale = ctx.zoom_factor();
+            self.files.settings_changed = true;
+            self.settings_applied = Some((s.theme, s.ui_scale, s.language));
+        }
+        let want = (s.theme, s.ui_scale, s.language);
+        if self.settings_applied != Some(want) {
+            ui::theme::apply(ctx, s.theme);
+            ctx.set_zoom_factor(s.ui_scale);
+            if self.settings_applied.is_none_or(|(_, _, lang)| lang != s.language) {
+                crate::i18n::set(s.language);
+                crate::i18n::install_fonts(ctx, s.language);
+            }
+            self.settings_applied = Some(want);
+        }
+        ui::theme::track(ctx, s.theme);
+    }
+
+    /// The commands whose shortcuts were pressed this frame, and the fixed keys: Esc, Delete,
+    /// Ctrl+Q (also a rebuild) and the arrow keys, which turn the view.
     fn shortcuts(&mut self, ctx: &egui::Context) {
-        let (undo, redo) = undo_keys(ctx);
-        let (escape, delete, rebuild, rename) = ctx.input_mut(|i| {
+        if self.settings_window.as_ref().is_some_and(|w| w.capture.is_some()) {
+            return;
+        }
+        use crate::commands::Command;
+        let typing = ctx.wants_keyboard_input();
+        for c in pressed_commands(ctx, &self.files.settings.keys) {
+            self.run(ctx, c);
+        }
+        let (escape, delete, rebuild) = ctx.input_mut(|i| {
             (
                 i.key_pressed(Key::Escape),
                 i.key_pressed(Key::Delete),
-                i.consume_shortcut(&KeyboardShortcut::new(Modifiers::COMMAND, Key::Q))
-                    || i.consume_shortcut(&KeyboardShortcut::new(Modifiers::COMMAND, Key::B)),
-                i.key_pressed(Key::F2),
+                i.consume_shortcut(&KeyboardShortcut::new(Modifiers::COMMAND, Key::Q)),
             )
         });
-        let typing = ctx.wants_keyboard_input();
-        if let Some(s) = &mut self.sketch {
-            if undo {
-                s.undo();
+        if rebuild {
+            self.run(ctx, Command::Rebuild);
+        }
+        if self.drw.is_none() && !typing && ctx.memory(|m| m.focused().is_none()) {
+            self.arrow_keys(ctx);
+        }
+        if self.asm.is_some() || self.drw.is_some() || typing {
+            return;
+        }
+        match &mut self.sketch {
+            Some(s) => {
+                if escape {
+                    s.escape();
+                }
+                if delete {
+                    s.delete_selection();
+                }
             }
-            if redo {
-                s.redo();
+            None => {
+                if escape {
+                    self.selection.clear();
+                    self.renaming = None;
+                    self.view.shortcut_bar = None;
+                }
             }
-            if escape && !typing {
-                s.escape();
+        }
+    }
+
+    /// Arrows turn the view 15 degrees (Shift: 90), Ctrl+arrows pan, Page Up / Down zoom.
+    fn arrow_keys(&mut self, ctx: &egui::Context) {
+        let (step, pan) = ctx.input(|i| {
+            let quarter = if i.modifiers.shift {
+                std::f32::consts::FRAC_PI_2
+            } else {
+                15f32.to_radians()
+            };
+            (quarter, i.modifiers.command)
+        });
+        for (key, x, y) in [
+            (Key::ArrowLeft, -1.0, 0.0),
+            (Key::ArrowRight, 1.0, 0.0),
+            (Key::ArrowUp, 0.0, -1.0),
+            (Key::ArrowDown, 0.0, 1.0),
+        ] {
+            if ctx.input(|i| i.key_pressed(key)) {
+                if pan {
+                    self.camera.pan(x * 60.0, y * 60.0, 600.0);
+                } else {
+                    self.camera.turn(x * step, y * step);
+                }
+                ctx.request_repaint();
             }
-            if delete && !typing {
-                s.delete_selection();
+        }
+        for (key, scroll) in [(Key::PageUp, 240.0), (Key::PageDown, -240.0)] {
+            if ctx.input(|i| i.key_pressed(key)) {
+                self.camera.zoom(scroll);
+                ctx.request_repaint();
             }
-        } else {
-            if undo {
-                self.doc.undo();
-                self.status = "Undone".into();
+        }
+    }
+
+    /// Runs a command (a shortcut, the shortcut bar or a gesture).
+    pub fn run(&mut self, ctx: &egui::Context, c: crate::commands::Command) {
+        use crate::commands::Command;
+        use threebcad_render::StandardView as V;
+        let view = |app: &mut Self, v: V| {
+            let (from, up) = v.direction();
+            app.camera.look_from(from, up);
+            ctx.request_repaint();
+        };
+        let in_3d = self.drw.is_none();
+        match c {
+            Command::New => self.request(crate::files::Pending::New),
+            Command::Open => self.open_dialog(),
+            Command::Save => {
+                self.save();
             }
-            if redo {
-                self.doc.redo();
-                self.status = "Redone".into();
+            Command::SaveAs => {
+                self.save_as();
             }
-            if escape && !typing {
-                self.selection.clear();
-                self.renaming = None;
-            }
-            if rebuild {
+            Command::Undo => match &mut self.sketch {
+                Some(s) => s.undo(),
+                None => {
+                    self.undo();
+                    self.status = crate::i18n::tr("Undone").into();
+                }
+            },
+            Command::Redo => match &mut self.sketch {
+                Some(s) => s.redo(),
+                None => {
+                    self.redo();
+                    self.status = crate::i18n::tr("Redone").into();
+                }
+            },
+            Command::Rebuild if self.asm.is_none() && self.drw.is_none() && self.sketch.is_none() => {
                 self.doc.force_rebuild();
-                self.status = format!("Rebuilt {} features", self.doc.built().evaluated);
+                self.status = crate::i18n::trf("Rebuilt {} features", &[&self.doc.built().evaluated]);
             }
-            if rename && !typing {
+            Command::Rename if self.asm.is_none() && self.drw.is_none() => {
                 if let Some(id) = self.selected {
                     let name = self.doc.history().get(id).map(|f| f.name.clone()).unwrap_or_default();
                     self.renaming = Some((id, name));
                 }
             }
+            Command::ZoomToFit if in_3d => self.zoom_to_fit(),
+            Command::Front if in_3d => view(self, V::Front),
+            Command::Back if in_3d => view(self, V::Back),
+            Command::Left if in_3d => view(self, V::Left),
+            Command::Right if in_3d => view(self, V::Right),
+            Command::Top if in_3d => view(self, V::Top),
+            Command::Bottom if in_3d => view(self, V::Bottom),
+            Command::Isometric if in_3d => view(self, V::Isometric),
+            Command::NormalTo if in_3d => self.normal_to_selection(),
+            Command::Perspective if in_3d => self.camera.ortho = !self.camera.ortho,
+            Command::DisplayStyle if in_3d => {
+                self.view.style = self.view.style.next();
+                self.status = crate::i18n::tr(self.view.style.name()).into();
+            }
+            Command::SectionView if in_3d => self.toggle_section(),
+            Command::ShortcutBar if in_3d => self.view.shortcut_bar = ctx.pointer_hover_pos(),
+            Command::Settings => {
+                if self.settings_window.take().is_none() {
+                    self.settings_window = Some(Default::default());
+                }
+            }
+            Command::ShortcutsWindow => self.show_shortcuts = !self.show_shortcuts,
+            _ => {}
         }
-        if !typing && ctx.input(|i| i.key_pressed(Key::F)) {
-            self.zoom_to_fit();
+    }
+
+    /// Normal To: looks straight at the selected planar face or plane, else the sketch's plane.
+    pub fn normal_to_selection(&mut self) {
+        let plane = match &self.sketch {
+            Some(s) => Some(s.plane),
+            None => self
+                .selection
+                .iter()
+                .find_map(|r| self.plane_ref_of(*r).map(|(p, _)| p)),
+        };
+        match plane {
+            Some(p) => {
+                let f = |v: [f64; 3]| Vec3::new(v[0] as f32, v[1] as f32, v[2] as f32);
+                self.camera.normal_to(f(p.normal()), f(p.x));
+            }
+            None => self.status = crate::i18n::tr("Select a planar face or a plane first").into(),
         }
-        if ctx.input(|i| i.key_pressed(Key::F1)) {
-            self.show_shortcuts = !self.show_shortcuts;
-        }
+    }
+
+    pub fn toggle_section(&mut self) {
+        self.view.section = match self.view.section {
+            Some(_) => None,
+            None => Some(crate::ui::viewport::Section::through(self.geometry.bounds())),
+        };
     }
 
     /// Starts a sketch on a plane, a planar face or a reference plane, closing any open sketch first.
@@ -915,32 +1170,37 @@ fn add_edges(sk: &mut Sketch, edges: &[TopoEdge], plane: Plane) -> usize {
     added
 }
 
-/// Ctrl+Z and Ctrl+Y, unless a text field is focused: then they are that field's own undo.
-fn undo_keys(ctx: &egui::Context) -> (bool, bool) {
-    if ctx.wants_keyboard_input() {
-        return (false, false);
-    }
+/// The commands whose shortcuts were pressed this frame. While a text field is being typed in,
+/// its own keys stay its own: letters, and Ctrl+Z / Ctrl+Y (its undo).
+fn pressed_commands(ctx: &egui::Context, overrides: &crate::commands::Overrides) -> Vec<crate::commands::Command> {
+    use crate::commands::Command;
+    let typing = ctx.wants_keyboard_input();
+    let keys = crate::commands::in_order(overrides);
     ctx.input_mut(|i| {
-        (
-            i.consume_shortcut(&KeyboardShortcut::new(Modifiers::COMMAND, Key::Z)),
-            i.consume_shortcut(&KeyboardShortcut::new(Modifiers::COMMAND, Key::Y)),
-        )
+        keys.iter()
+            .filter(|(c, k)| !typing || (k.modifiers.command && !matches!(c, Command::Undo | Command::Redo)))
+            .filter(|(_, k)| i.consume_shortcut(k))
+            .map(|(c, _)| *c)
+            .collect()
     })
 }
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.apply_settings(ctx);
+        self.shortcuts(ctx);
         self.files_frame(ctx);
         crate::files::properties_window(self, ctx);
+        ui::settings::window(self, ctx);
         ui::update::window(self, ctx);
         ui::help::about(self, ctx);
+        ui::help::crash_notice(self, ctx);
         if self.asm.is_some() {
             return ui::assembly::frame(self, ctx);
         }
         if self.drw.is_some() {
             return ui::drawing::frame(self, ctx);
         }
-        self.shortcuts(ctx);
         if self.selected.is_some_and(|id| self.doc.history().get(id).is_none()) {
             self.selected = None;
         }
@@ -954,15 +1214,26 @@ impl eframe::App for App {
         ui::ribbon::show(self, ctx);
         egui::TopBottomPanel::bottom("status").show(ctx, |ui| {
             ui.horizontal(|ui| {
-                ui.label(&self.status);
+                match self.meshing_progress() {
+                    Some(progress) => {
+                        ui.spinner();
+                        ui.label(progress);
+                    }
+                    None => {
+                        ui.label(&self.status);
+                    }
+                }
+                if self.meshing.is_some() {
+                    ui.ctx().request_repaint_after(std::time::Duration::from_millis(100));
+                }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     let u = self.doc.units().system;
                     ui.menu_button(format!("{} ({})", u.short(), u.length_unit()), |ui| {
                         crate::files::units_ui(self, ui)
                     })
                     .response
-                    .on_hover_text("Unit system");
-                    ui.label(format!("{} bodies", self.doc.bodies().len()));
+                    .on_hover_text(tr("Unit system"));
+                    ui.label(crate::i18n::trf("{} bodies", &[&self.doc.bodies().len()]));
                     let (errs, warns) = (self.doc.errors().len(), self.doc.warnings().len());
                     if errs + warns > 0 {
                         ui.separator();
@@ -974,7 +1245,7 @@ impl eframe::App for App {
                                 )
                                 .frame(false),
                             )
-                            .on_hover_text("What's Wrong")
+                            .on_hover_text(tr("What's Wrong"))
                             .clicked()
                         {
                             self.show_whats_wrong = true;
@@ -997,7 +1268,7 @@ impl eframe::App for App {
         ui::help::window(self, ctx);
         ui::print::slicer_prompt(self, ctx);
         egui::CentralPanel::default()
-            .frame(egui::Frame::new().fill(VIEWPORT_BG))
+            .frame(egui::Frame::new().fill(crate::ui::theme::sky().1))
             .show(ctx, |ui| ui::viewport::show(self, ui));
         // Hover is found while painting the viewport, so show its highlight on the next frame.
         if self.sync_states() || picked_before != (self.selected, self.selection.clone()) {
@@ -1008,6 +1279,7 @@ impl eframe::App for App {
     /// A normal exit (saved, or the user chose not to save) leaves nothing to recover.
     fn on_exit(&mut self) {
         self.files.clear_recovery();
+        crate::logfile::closed_normally();
         // Restart into an update that was just installed.
         if let Some(exe) = self.files.restart.take() {
             if let Err(e) = std::process::Command::new(&exe).spawn() {
@@ -1021,21 +1293,23 @@ impl eframe::App for App {
 mod tests {
     use super::*;
 
-    fn frame(ctx: &egui::Context, focused: bool, text: &mut String) -> (bool, bool) {
-        let ctrl_z = egui::Event::Key {
-            key: Key::Z,
+    use crate::commands::Command;
+
+    fn frame(ctx: &egui::Context, focused: bool, text: &mut String, key: Key, modifiers: Modifiers) -> Vec<Command> {
+        let press = egui::Event::Key {
+            key,
             physical_key: None,
             pressed: true,
             repeat: false,
-            modifiers: Modifiers::COMMAND,
+            modifiers,
         };
         let input = egui::RawInput {
-            events: vec![ctrl_z],
+            events: vec![press],
             ..Default::default()
         };
-        let mut keys = (false, false);
+        let mut commands = Vec::new();
         let _ = ctx.run(input, |ctx| {
-            keys = undo_keys(ctx);
+            commands = pressed_commands(ctx, &Default::default());
             egui::CentralPanel::default().show(ctx, |ui| {
                 let r = ui.text_edit_singleline(text);
                 if focused {
@@ -1043,15 +1317,31 @@ mod tests {
                 }
             });
         });
-        keys
+        commands
     }
 
     #[test]
-    fn ctrl_z_belongs_to_the_text_field_being_typed_in() {
+    fn a_text_field_keeps_its_own_keys() {
         let ctx = egui::Context::default();
         let mut text = String::new();
-        assert_eq!(frame(&ctx, false, &mut text), (true, false));
-        frame(&ctx, true, &mut text);
-        assert_eq!(frame(&ctx, true, &mut text), (false, false));
+        assert_eq!(
+            frame(&ctx, false, &mut text, Key::Z, Modifiers::COMMAND),
+            [Command::Undo]
+        );
+        assert_eq!(
+            frame(&ctx, false, &mut text, Key::F, Modifiers::NONE),
+            [Command::ZoomToFit]
+        );
+        frame(&ctx, true, &mut text, Key::A, Modifiers::NONE);
+        // Typing: Ctrl+Z is the field's undo and F is a letter, but Ctrl+S still saves.
+        assert!(frame(&ctx, true, &mut text, Key::Z, Modifiers::COMMAND).is_empty());
+        assert!(frame(&ctx, true, &mut text, Key::F, Modifiers::NONE).is_empty());
+        assert_eq!(
+            frame(&ctx, true, &mut text, Key::S, Modifiers::COMMAND),
+            [Command::Save]
+        );
+        // Ctrl+Shift+S is Save As, not Save.
+        let both = Modifiers::COMMAND.plus(Modifiers::SHIFT);
+        assert_eq!(frame(&ctx, false, &mut text, Key::S, both), [Command::SaveAs]);
     }
 }
