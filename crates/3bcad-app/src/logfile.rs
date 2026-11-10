@@ -170,7 +170,11 @@ pub fn init() -> Option<PathBuf> {
         log::logger().flush();
         default(info);
     }));
-    log::info!("3BCAD {VERSION} on {} {}", std::env::consts::OS, std::env::consts::ARCH);
+    log::info!(
+        "3BCAD {VERSION} on {} {} (times in this log are UTC)",
+        std::env::consts::OS,
+        std::env::consts::ARCH
+    );
     crashed
 }
 

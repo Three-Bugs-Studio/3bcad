@@ -331,6 +331,7 @@ fn shortcuts(ui: &mut egui::Ui, w: &mut SettingsWindow, s: &mut crate::files::Se
     });
     if ui.button(tr("Reset all shortcuts")).clicked() {
         s.keys.clear();
+        w.message = None;
         *changed = true;
     }
 }
