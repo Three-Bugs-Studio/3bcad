@@ -478,7 +478,8 @@ fn check_reach(
 ) -> Result<()> {
     for s in [a, b] {
         let p = [0, 1, 2].map(|i| mid[i] + s.inward[i] * reach);
-        let tol = 1e-3 * (1.0 + reach);
+        // The face is measured on its mesh, whose chords sit up to `topo.tol` off a curved face.
+        let tol = 1e-3 * (1.0 + reach) + topo.tol;
         ensure!(
             topo.faces[s.face].distance(p) < tol,
             "the size is too large: the {} mm band does not fit on face {}",
@@ -553,6 +554,36 @@ mod tests {
                 "{d}: {removed} vs {expected}"
             );
         }
+    }
+
+    #[test]
+    fn a_tube_rim_chamfers_at_the_apps_mesh_tolerance() {
+        // Exercise 173: the app meshes at ~0.065 mm for a 130 mm part; a 1 mm chamfer on the
+        // rim of a R17 tube with a R12.5 bore was refused as "does not fit".
+        let tube = subtract(
+            &extrude_circle([0.0, 0.0], 17.0, 76.0).unwrap(),
+            &extrude_circle([0.0, 0.0], 12.5, 80.0).unwrap(),
+        )
+        .unwrap()
+        .remove(0);
+        let mut topo = analyze(&tube, 0.065);
+        let rims: Vec<usize> = (0..topo.edges.len())
+            .filter(
+                |&i| matches!(topo.edges[i].curve, EdgeCurve::Circle { center, .. } if (center[2] - 76.0).abs() < 1e-6),
+            )
+            .collect();
+        assert!(rims.len() >= 2, "outer and bore top rims");
+        let chamfer = |topo: &Topology, d: f64| {
+            rims.iter()
+                .map(|&e| edge_tool(topo, e, Treatment::Chamfer { d1: d, d2: d }, false))
+                .collect::<Result<Vec<_>>>()
+        };
+        for d in [1.0, 2.0] {
+            chamfer(&topo, d).unwrap();
+        }
+        // Without the mesh allowance the bore rim is refused: the bug this guards.
+        topo.tol = 0.0;
+        assert!(chamfer(&topo, 1.0).is_err());
     }
 
     #[test]

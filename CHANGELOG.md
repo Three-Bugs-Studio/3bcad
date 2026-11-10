@@ -7,6 +7,11 @@ saved files and workflows; patch versions (0.x.y) only fix bugs.
 
 ## [Unreleased]
 
+### Fixed
+
+- Chamfers and fillets on curved faces (such as the rim of a bore) no longer fail with "the size is too large"
+  when they fit: the fit check now allows for how far the face's mesh sits off the curved surface.
+
 ## [1.0.0] - 2026-11-10
 
 ### Added
