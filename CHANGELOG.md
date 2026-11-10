@@ -48,6 +48,10 @@ saved files and workflows; patch versions (0.x.y) only fix bugs.
 - Vietnamese (#108): the whole interface in Tiếng Việt (**Settings → General → Language**), with a guide to
   adding languages in `docs/guide/translating.md`. Vietnamese letters use the system's font (Segoe UI, Arial,
   DejaVu Sans), as egui's own has none.
+- User guide (#107): an mdBook published to GitHub Pages from `docs/` (**Help → User Guide and Tutorials**):
+  installing, getting started, view controls and settings, troubleshooting, a reference for every tab, and
+  tutorials for a phone stand, an enclosure with a lid and a threaded bottle cap, each rebuilt and checked by
+  `crates/3bcad-core/tests/tutorials.rs`.
 - Accessibility (#109): the interface size (50–300 %, also Ctrl + plus / minus), a high-contrast theme,
   keyboard control of the view, and screen-reader support through AccessKit.
 
