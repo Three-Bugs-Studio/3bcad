@@ -22,6 +22,41 @@ saved files and workflows; patch versions (0.x.y) only fix bugs.
   ID with notarization and stapling. It runs only when its secrets exist, and CI verifies the signatures
   (#101, see RELEASING.md).
 
+- View controls (#94): a View toolbar over the model (standard views, zoom to fit, display style, section view,
+  perspective), a clickable view cube (faces, edges and corners), SolidWorks keys Ctrl+1 … Ctrl+8 for Front, Back,
+  Left, Right, Top, Bottom, Isometric and Normal To, animated view changes, and an orthographic projection
+  (`P`). The arrow keys turn the view 15° (Shift: 90°), Ctrl+arrows pan, Page Up / Down zoom.
+- Display styles (#95): Shaded With Edges, Shaded, Hidden Lines Removed, Hidden Lines Visible and Wireframe, with
+  the outlines of curved faces in the line styles. `D` goes to the next style.
+- Section view (#96): cut the model open along a plane parallel to Front, Top or Right, with the cut capped in
+  orange, a slider and a drag arrow in the view, and Flip. The part does not change; clicking picks what lies
+  behind the cut.
+- Themes (#97): light, dark, high contrast, or the system's, with a matching background behind the model.
+- Keyboard shortcuts and mouse gestures (#98): change any command's shortcut in **Settings → Shortcuts** (a key
+  already in use is reported, not taken), `S` brings the current tab's commands to the mouse, and an optional
+  right-drag gesture wheel gives the Top, Front and Isometric views and zoom to fit.
+- **File → Settings…** (Ctrl+,) (#99): language, theme, interface size, units of new parts, autosave, update
+  check, the view 3BCAD starts with, mouse, shortcuts, slicers and performance, saved per user, with **Reset to
+  defaults**.
+- Log file and crash reports (#105): `3bcad.log` in the user folder (the last three runs kept), and a crash
+  report after a crash, offered at the next start. **Help → Open Log Folder**; the bug report form asks for
+  both. A new **Help** menu also links the user guide and the bug report form.
+- Large models (#106): parts are meshed for display in the background with a progress note (the window keeps
+  responding), models over 300 000 triangles draw a simplified copy while the view moves, and picking skips
+  most of a large mesh. An 800 000-triangle scan (NASA's Vesta) opens in a few seconds and drew at about
+  450 frames a second still and 800 while orbiting on the test machine. **Settings → Performance** can show the frame rate.
+- Vietnamese (#108): the whole interface in Tiếng Việt (**Settings → General → Language**), with a guide to
+  adding languages in `docs/guide/translating.md`. Vietnamese letters use the system's font (Segoe UI, Arial,
+  DejaVu Sans), as egui's own has none.
+- Accessibility (#109): the interface size (50–300 %, also Ctrl + plus / minus), a high-contrast theme,
+  keyboard control of the view, and screen-reader support through AccessKit.
+
+### Changed
+
+- **File → Settings…** replaces the File menu's autosave and update-check items; **Check for Updates…** and
+  **About** moved to the new **Help** menu.
+- New parts use the units chosen in Settings.
+
 ### Fixed
 
 - STEP import, checked against OpenCASCADE on files from SolidWorks, Fusion 360, Onshape, OCCT and the

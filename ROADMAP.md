@@ -147,22 +147,22 @@ Equations, global variables, configurations and appearances.
 
 Polished UX, installers, signing, performance, docs and accessibility.
 
-- [ ] #94 View controls: standard views, view cube and orthographic projection
-- [ ] #95 Display styles: shaded with edges, shaded, hidden lines removed/visible, wireframe
-- [ ] #96 Section view in the viewport
-- [ ] #97 Light and dark themes
-- [ ] #98 Customizable keyboard shortcuts and mouse gestures
-- [ ] #99 Settings / System Options dialog
+- [x] #94 View controls: standard views, view cube and orthographic projection
+- [x] #95 Display styles: shaded with edges, shaded, hidden lines removed/visible, wireframe
+- [x] #96 Section view in the viewport
+- [x] #97 Light and dark themes
+- [x] #98 Customizable keyboard shortcuts and mouse gestures
+- [x] #99 Settings / System Options dialog
 - [x] #100 Windows installer (MSI) with Start menu entry and file associations
 - [x] #101 Code signing: Windows Authenticode and macOS Developer ID + notarization
 - [x] #102 macOS DMG and Linux AppImage/Flatpak with desktop entry
 - [x] #103 App icon and branding
 - [x] #104 Update check: notify when a new release is available
-- [ ] #105 Log file and crash reports for release builds
-- [ ] #106 Performance: tessellate off the UI thread, LOD and large models
+- [x] #105 Log file and crash reports for release builds
+- [x] #106 Performance: tessellate off the UI thread, LOD and large models
 - [ ] #107 User guide and tutorials (mdBook)
-- [ ] #108 Localization framework (English, Vietnamese)
-- [ ] #109 Accessibility: UI scaling, high contrast and keyboard navigation
+- [x] #108 Localization framework (English, Vietnamese)
+- [x] #109 Accessibility: UI scaling, high contrast and keyboard navigation
 
 ## [Future](https://github.com/Three-Bugs-Studio/3bcad/milestone/10)
 
