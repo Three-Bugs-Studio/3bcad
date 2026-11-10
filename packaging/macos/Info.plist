@@ -10,6 +10,8 @@
   <string>studio.threebugs.3bcad</string>
   <key>CFBundleExecutable</key>
   <string>3bcad</string>
+  <key>CFBundleIconFile</key>
+  <string>3bcad.icns</string>
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>
