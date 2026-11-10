@@ -7,6 +7,11 @@ saved files and workflows; patch versions (0.x.y) only fix bugs.
 
 ## [Unreleased]
 
+### Fixed
+
+- A chamfer or fillet on one arc of a circular rim no longer silently treats only that arc when the rim's arcs
+  were fitted a few µm apart (common after a boolean): the arcs are recognised as one circle again.
+
 ## [1.0.1] - 2026-11-10
 
 ### Fixed
