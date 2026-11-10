@@ -66,7 +66,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.verify.outputs.version }}
         run: |
-          sh .github/scripts/changelog-section.sh "$VERSION" > notes.md
+          # Download links first, so nobody has to pick one of eight files from the asset list.
+          dl="https://github.com/$GITHUB_REPOSITORY/releases/download/v$VERSION"
+          {
+            echo "**Download:** [Windows](${dl}/3BCAD-windows-x64.msi) · [macOS](${dl}/3BCAD-macos-universal.dmg) ·" \
+              "[Linux](${dl}/3BCAD-linux-x86_64.AppImage). Portable archives and checksums are under *Assets*;" \
+              "see [Installing 3BCAD](https://three-bugs-studio.github.io/3bcad/guide/installing.html)."
+            echo
+            sh .github/scripts/changelog-section.sh "$VERSION"
+          } > notes.md
           (cd dist && sha256sum -- * > SHA256SUMS.txt)
           prerelease=""
           case "$VERSION" in *-*) prerelease="--prerelease" ;; esac

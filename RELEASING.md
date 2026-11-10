@@ -99,7 +99,9 @@ asset names, the folder inside each archive (`3bcad.exe`, `3BCAD.app`, `3bcad`) 
 copies of the app can no longer update. Pre-releases are not offered (`releases/latest` skips them).
 
 The installers' names (`-windows-x64.msi`, `-macos-universal.dmg`, `-linux-x86_64.AppImage`) never match those
-endings. The `.msi` installs per user into `%LOCALAPPDATA%\Programs\3BCAD`, without admin rights, so the updater can
+endings. From 1.0 on the file names carry no version (`3BCAD-windows-x64.msi`), so the links in README.md and
+`docs/guide/installing.md` (`releases/latest/download/<name>`) always fetch the newest release: keep the names
+fixed. The `.msi` installs per user into `%LOCALAPPDATA%\Programs\3BCAD`, without admin rights, so the updater can
 replace `3bcad.exe` there.
 
 ## Known limitations

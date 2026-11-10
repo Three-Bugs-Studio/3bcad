@@ -49,7 +49,9 @@ jobs:
           version=$(cargo metadata --no-deps --format-version 1 \
             | jq -r '.packages[] | select(.name == "threebcad-app") | .version')
           echo "VERSION=$version" >> "$GITHUB_ENV"
-          echo "PKG=3BCAD-$version-${{ matrix.name }}" >> "$GITHUB_ENV"
+          # No version in the names: releases/latest/download/<name> then always gets the newest one,
+          # which is what the download links in README.md and the user guide use.
+          echo "PKG=3BCAD-${{ matrix.name }}" >> "$GITHUB_ENV"
 
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
@@ -196,7 +198,7 @@ jobs:
           2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d  $RUNNER_TEMP/runtime
           EOF
           chmod +x "$RUNNER_TEMP/appimagetool"
-          appimage="$PWD/dist/3BCAD-$VERSION-linux-x86_64.AppImage"
+          appimage="$PWD/dist/3BCAD-linux-x86_64.AppImage"
           ARCH=x86_64 APPIMAGE_EXTRACT_AND_RUN=1 "$RUNNER_TEMP/appimagetool" \
             --runtime-file "$RUNNER_TEMP/runtime" "$d" "$appimage"
           # The AppImage starts and holds the program (unpacking it needs no FUSE).
