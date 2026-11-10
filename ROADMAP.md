@@ -153,10 +153,10 @@ Polished UX, installers, signing, performance, docs and accessibility.
 - [ ] #97 Light and dark themes
 - [ ] #98 Customizable keyboard shortcuts and mouse gestures
 - [ ] #99 Settings / System Options dialog
-- [ ] #100 Windows installer (MSI) with Start menu entry and file associations
-- [ ] #101 Code signing: Windows Authenticode and macOS Developer ID + notarization
-- [ ] #102 macOS DMG and Linux AppImage/Flatpak with desktop entry
-- [ ] #103 App icon and branding
+- [x] #100 Windows installer (MSI) with Start menu entry and file associations
+- [x] #101 Code signing: Windows Authenticode and macOS Developer ID + notarization
+- [x] #102 macOS DMG and Linux AppImage/Flatpak with desktop entry
+- [x] #103 App icon and branding
 - [x] #104 Update check: notify when a new release is available
 - [ ] #105 Log file and crash reports for release builds
 - [ ] #106 Performance: tessellate off the UI thread, LOD and large models

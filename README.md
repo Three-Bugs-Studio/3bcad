@@ -200,13 +200,15 @@ toolchain to install, and one `cargo run` builds the whole application on Window
 
 Get the desktop app from the [Releases page](https://github.com/Three-Bugs-Studio/3bcad/releases/latest):
 
-| Platform | File | How to run |
+| Platform | Installer | Or the portable build |
 | --- | --- | --- |
-| Windows 10/11 (x64) | `3BCAD-<version>-windows-x64.zip` | Unzip, run `3bcad.exe` |
-| macOS 11+ (Apple Silicon and Intel) | `3BCAD-<version>-macos-universal.zip` | Unzip, right-click `3BCAD.app` → **Open** |
-| Linux (x64) | `3BCAD-<version>-linux-x64.tar.gz` | Extract, run `./3bcad` |
+| Windows 10/11 (x64) | `3BCAD-<version>-windows-x64.msi`: installs for you (no admin rights), adds a Start menu entry, opens `.3bcad` files and appears under "Open with" for STEP, STL, 3MF, OBJ and DXF | `…-windows-x64.zip`: unzip, run `3bcad.exe` |
+| macOS 11+ (Apple Silicon and Intel) | `3BCAD-<version>-macos-universal.dmg`: drag `3BCAD.app` onto Applications | `…-macos-universal.zip` |
+| Linux (x64) | `3BCAD-<version>-linux-x86_64.AppImage`: `chmod +x` it and run it | `…-linux-x64.tar.gz`: extract, run `./3bcad` |
 
-Builds are not code-signed yet, so Windows SmartScreen and macOS Gatekeeper warn on first launch.
+Until the project has signing certificates, Windows SmartScreen ("More info → Run anyway") and macOS Gatekeeper
+(right-click `3BCAD.app` → **Open**) warn on first launch; [RELEASING.md](RELEASING.md#code-signing) describes the
+signing the release workflow does once they exist.
 The version you are running is shown in the title bar; see [CHANGELOG.md](CHANGELOG.md) for what changed in
 each release.
 

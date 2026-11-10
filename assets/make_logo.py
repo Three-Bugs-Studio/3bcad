@@ -1,7 +1,9 @@
 """Draws the 3 Bugs Studio logo: three bugs on the faces of an isometric CAD cube.
 
-Writes logo.svg (the mark), logo-wordmark.svg (mark + name, for the README) and icon-256.png
-(the app's window icon) from the same geometry. Needs Pillow: `python assets/make_logo.py`.
+Writes logo.svg (the mark), logo-wordmark.svg (mark + name, for the README), icon-<size>.png
+(icon-256.png is the app's window icon; the rest are for the Linux desktop entry), icon.ico (the
+Windows exe and installer) and icon.icns (the macOS bundle) from the same geometry.
+Needs Pillow: `uv run --no-project --with pillow python assets/make_logo.py`.
 """
 import math
 import pathlib
@@ -107,11 +109,11 @@ def write_svgs():
     )
 
 
-def write_png(size=256, oversample=4):
-    k = size * oversample / 256
-    img = Image.new("RGBA", (size * oversample,) * 2, (0, 0, 0, 0))
+def render(px=1024):
+    k = px / 256
+    img = Image.new("RGBA", (px, px), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
-    d.rounded_rectangle([0, 0, size * oversample - 1, size * oversample - 1], radius=52 * k, fill=NAVY)
+    d.rounded_rectangle([0, 0, px - 1, px - 1], radius=52 * k, fill=NAVY)
     for s in shapes():
         pts = [(x * k, y * k) for x, y in s[1]]
         if s[0] == "poly":
@@ -121,9 +123,17 @@ def write_png(size=256, oversample=4):
             d.line(pts, fill=s[2], width=w, joint="curve")
             for x, y in (pts[0], pts[-1]):
                 d.ellipse([x - w / 2, y - w / 2, x + w / 2, y + w / 2], fill=s[2])
-    img.resize((size, size), Image.LANCZOS).save(OUT / ("icon-%d.png" % size))
+    return img
+
+
+def write_icons():
+    big = render()
+    for size in (16, 32, 48, 64, 128, 256, 512):
+        big.resize((size, size), Image.LANCZOS).save(OUT / ("icon-%d.png" % size))
+    big.save(OUT / "icon.ico", sizes=[(s, s) for s in (16, 24, 32, 48, 64, 128, 256)])
+    big.save(OUT / "icon.icns")
 
 
 if __name__ == "__main__":
     write_svgs()
-    write_png()
+    write_icons()

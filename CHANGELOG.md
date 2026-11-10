@@ -12,6 +12,15 @@ saved files and workflows; patch versions (0.x.y) only fix bugs.
 - Open models from other apps and websites: **File → Open**, dragging a file onto the window and
   `3bcad <file>` (what "Open with" passes) open STEP, STL, 3MF, OBJ and DXF files as a new part, named
   after the file. File → Import still adds them to the open part.
+- Installers (#100, #102): a per-user Windows `.msi` (no admin rights, Start menu entry, uninstall entry; it opens
+  `.3bcad`, `.3bcasm` and `.3bcdrw` files and offers 3BCAD under "Open with" for STEP, STL, 3MF, OBJ and DXF),
+  a macOS `.dmg` with an Applications shortcut, and a Linux AppImage with a desktop entry, icons and file types.
+  The `.zip` and `.tar.gz` downloads stay, and in-app updates keep working for installed copies.
+- App icon in every size (ICO, ICNS, PNG 16–512), embedded in `3bcad.exe` with its name and version and used by
+  the installers, the macOS bundle and the Linux desktop entry (#103).
+- Release code signing, ready for when the project has certificates: Windows Authenticode, and macOS Developer
+  ID with notarization and stapling. It runs only when its secrets exist, and CI verifies the signatures
+  (#101, see RELEASING.md).
 
 ### Fixed
 

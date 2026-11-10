@@ -1,0 +1,56 @@
+<!--
+  The Windows installer, built with WiX 5 from the repository root by the Package workflow:
+    wix build packaging/windows/3bcad.wxs -arch x64 -d Version=0.9.0 -o 3BCAD-0.9.0-windows-x64.msi
+  Per-user, into %LOCALAPPDATA%\Programs\3BCAD: no admin rights needed, and the in-app updater
+  (crates/3bcad-app/src/update.rs) can replace 3bcad.exe there.
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package Name="3BCAD" Manufacturer="Three Bugs Studio" Version="$(var.Version)"
+           UpgradeCode="4A2AA05A-A67D-4D4A-91B8-D974483A9A9B" Scope="perUser">
+    <MajorUpgrade DowngradeErrorMessage="A newer version of 3BCAD is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+    <Icon Id="AppIcon.ico" SourceFile="assets/icon.ico" />
+    <Property Id="ARPPRODUCTICON" Value="AppIcon.ico" />
+
+    <StandardDirectory Id="LocalAppDataFolder">
+      <Directory Id="ProgramsDir" Name="Programs">
+        <Directory Id="INSTALLFOLDER" Name="3BCAD">
+          <Component Guid="EB2BB168-A8DF-424C-B9D3-0B24C17E3B24">
+            <!-- A per-user component is keyed by a registry value, not a file (ICE38). -->
+            <RegistryValue Root="HKCU" Key="Software\Three Bugs Studio\3BCAD" Name="Installed" Type="integer" Value="1" KeyPath="yes" />
+            <File Id="Exe" Source="target/release/3bcad.exe">
+              <Shortcut Name="3BCAD" Directory="ProgramMenuFolder" />
+            </File>
+            <File Source="LICENSE-MIT" />
+            <File Source="LICENSE-APACHE" />
+            <File Source="NOTICE" />
+            <!-- Left by an in-app update until 3BCAD next starts. -->
+            <RemoveFile Name="3bcad.exe.old" On="uninstall" />
+            <RemoveFolder On="uninstall" />
+            <RemoveFolder Id="RemoveProgramsDir" Directory="ProgramsDir" On="uninstall" />
+
+            <!-- 3BCAD's own files open in 3BCAD. -->
+            <ProgId Id="ThreeBCAD.Part" Description="3BCAD Part" Icon="Exe">
+              <Extension Id="3bcad"><Verb Id="open" TargetFile="Exe" Argument="&quot;%1&quot;" /></Extension>
+            </ProgId>
+            <ProgId Id="ThreeBCAD.Assembly" Description="3BCAD Assembly" Icon="Exe">
+              <Extension Id="3bcasm"><Verb Id="open" TargetFile="Exe" Argument="&quot;%1&quot;" /></Extension>
+            </ProgId>
+            <ProgId Id="ThreeBCAD.Drawing" Description="3BCAD Drawing" Icon="Exe">
+              <Extension Id="3bcdrw"><Verb Id="open" TargetFile="Exe" Argument="&quot;%1&quot;" /></Extension>
+            </ProgId>
+
+            <!-- Files it imports: offered under "Open with", never made the default. -->
+            <RegistryValue Root="HKCU" Key="Software\Classes\ThreeBCAD.Model\shell\open\command" Value="&quot;[#Exe]&quot; &quot;%1&quot;" />
+            <RegistryValue Root="HKCU" Key="Software\Classes\.step\OpenWithProgids" Name="ThreeBCAD.Model" Value="" />
+            <RegistryValue Root="HKCU" Key="Software\Classes\.stp\OpenWithProgids" Name="ThreeBCAD.Model" Value="" />
+            <RegistryValue Root="HKCU" Key="Software\Classes\.stl\OpenWithProgids" Name="ThreeBCAD.Model" Value="" />
+            <RegistryValue Root="HKCU" Key="Software\Classes\.3mf\OpenWithProgids" Name="ThreeBCAD.Model" Value="" />
+            <RegistryValue Root="HKCU" Key="Software\Classes\.obj\OpenWithProgids" Name="ThreeBCAD.Model" Value="" />
+            <RegistryValue Root="HKCU" Key="Software\Classes\.dxf\OpenWithProgids" Name="ThreeBCAD.Model" Value="" />
+          </Component>
+        </Directory>
+      </Directory>
+    </StandardDirectory>
+  </Package>
+</Wix>
