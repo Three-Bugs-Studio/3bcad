@@ -568,10 +568,16 @@ mod tests {
         .remove(0);
         let mut topo = analyze(&tube, 0.065);
         let rims: Vec<usize> = (0..topo.edges.len())
-            .filter(|&i| matches!(topo.edges[i].curve, EdgeCurve::Circle { center, .. } if (center[2] - 76.0).abs() < 1e-6))
+            .filter(
+                |&i| matches!(topo.edges[i].curve, EdgeCurve::Circle { center, .. } if (center[2] - 76.0).abs() < 1e-6),
+            )
             .collect();
         assert!(rims.len() >= 2, "outer and bore top rims");
-        let chamfer = |topo: &Topology, d: f64| rims.iter().map(|&e| edge_tool(topo, e, Treatment::Chamfer { d1: d, d2: d }, false)).collect::<Result<Vec<_>>>();
+        let chamfer = |topo: &Topology, d: f64| {
+            rims.iter()
+                .map(|&e| edge_tool(topo, e, Treatment::Chamfer { d1: d, d2: d }, false))
+                .collect::<Result<Vec<_>>>()
+        };
         for d in [1.0, 2.0] {
             chamfer(&topo, d).unwrap();
         }
