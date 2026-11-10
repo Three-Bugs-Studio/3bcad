@@ -160,7 +160,7 @@ Polished UX, installers, signing, performance, docs and accessibility.
 - [x] #104 Update check: notify when a new release is available
 - [x] #105 Log file and crash reports for release builds
 - [x] #106 Performance: tessellate off the UI thread, LOD and large models
-- [ ] #107 User guide and tutorials (mdBook)
+- [x] #107 User guide and tutorials (mdBook)
 - [x] #108 Localization framework (English, Vietnamese)
 - [x] #109 Accessibility: UI scaling, high contrast and keyboard navigation
 

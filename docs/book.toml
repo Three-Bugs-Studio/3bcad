@@ -1,0 +1,17 @@
+[book]
+title = "3BCAD User Guide"
+authors = ["Three Bugs Studio and the 3BCAD contributors"]
+description = "How to install and use 3BCAD, the open-source parametric CAD for makers and 3D printing."
+language = "en"
+# The book's pages live in docs/ itself, so docs/architecture.md keeps its path for the links to it.
+src = "."
+
+[build]
+build-dir = "book"
+# A page listed in SUMMARY.md that does not exist is an error, not an empty page.
+create-missing = false
+
+[output.html]
+git-repository-url = "https://github.com/Three-Bugs-Studio/3bcad"
+edit-url-template = "https://github.com/Three-Bugs-Studio/3bcad/edit/main/docs/{path}"
+site-url = "/3bcad/"

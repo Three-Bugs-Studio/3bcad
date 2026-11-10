@@ -36,6 +36,7 @@ toolchain to install, and one `cargo run` builds the whole application on Window
 - [Printing a part](#printing-a-part)
 - [Your first assembly](#your-first-assembly)
 - [Your first drawing](#your-first-drawing)
+- [User guide and tutorials](https://three-bugs-studio.github.io/3bcad/) (also in [`docs/`](docs/SUMMARY.md))
 - [Download](#download) and [build from source](#build-from-source)
 - [Controls](#controls)
 - [Files](#files)
