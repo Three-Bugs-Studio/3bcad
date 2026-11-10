@@ -183,6 +183,13 @@ impl App {
         };
         app.sync_geometry();
         app.zoom_to_fit();
+        // `3bcad <file>`: what a file association or "Open with" passes.
+        if let Some(path) = std::env::args_os()
+            .skip(1)
+            .find(|a| !a.to_string_lossy().starts_with('-'))
+        {
+            app.request(crate::files::Pending::Open(path.into()));
+        }
         crate::update::cleanup();
         if app.files.settings.check_updates {
             app.update.check(false);

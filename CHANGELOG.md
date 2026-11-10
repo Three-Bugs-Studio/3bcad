@@ -7,6 +7,27 @@ saved files and workflows; patch versions (0.x.y) only fix bugs.
 
 ## [Unreleased]
 
+### Added
+
+- Open models from other apps and websites: **File → Open**, dragging a file onto the window and
+  `3bcad <file>` (what "Open with" passes) open STEP, STL, 3MF, OBJ and DXF files as a new part, named
+  after the file. File → Import still adds them to the open part.
+
+### Fixed
+
+- STEP import, checked against OpenCASCADE on files from SolidWorks, Fusion 360, Onshape, OCCT and the
+  NIST AP203/AP242 test parts:
+  - AP242 files with PMI (tessellated annotation, annotation planes) no longer fail as "not a STEP file".
+  - Units come from the shape's own context: a part named "Foot" is no longer scaled 304.8×, and mm parts
+    with inch PMI no longer come in 25.4× too big. Cones in files that give angles in degrees are right.
+  - Holes, bosses, chamfers, fillets and ball ends no longer mesh halfway or balloon: cylinders and cones
+    bounded by two circles (SolidWorks, Parasolid), fillets on the inner side of a torus, sphere corners,
+    drill points and countersinks, and small holes in files written in metres (Onshape) now come in with
+    the right shape and volume.
+  - OpenCASCADE files with rounded corners (FreeCAD, CadQuery, KiCad models) no longer fall apart into
+    open faces.
+  - A file whose arcs cannot be read is refused with a message instead of running out of memory.
+
 ## [0.9.0] - 2026-11-08
 
 ### Added

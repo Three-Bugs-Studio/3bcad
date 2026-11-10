@@ -20,6 +20,8 @@ use crate::ui::ribbon::RibbonTab;
 
 const MAX_RECENT: usize = 8;
 pub const EXT: &str = "3bcad";
+/// Other apps' formats: File > Open reads them into a new part, File > Import adds them to this one.
+pub const IMPORT_EXTS: [&str; 6] = ["step", "stp", "stl", "3mf", "obj", "dxf"];
 
 /// Preferences kept between runs, in `settings.txt` in the user's config folder.
 #[derive(Clone, Debug, PartialEq)]
@@ -190,6 +192,62 @@ fn is_assembly(path: &Path) -> bool {
 
 fn is_drawing(path: &Path) -> bool {
     path.extension().is_some_and(|e| e.eq_ignore_ascii_case(DRAWING_EXT))
+}
+
+fn is_import(path: &Path) -> bool {
+    path.extension()
+        .is_some_and(|e| IMPORT_EXTS.iter().any(|x| e.eq_ignore_ascii_case(x)))
+}
+
+/// Adds a STEP, mesh or DXF file to `doc` as one feature: STEP as solid bodies, meshes as
+/// reference, DXF as a sketch on `on` (the Top plane when `None`). Returns it and a status line.
+fn import_into(
+    doc: &mut PartDocument,
+    path: &Path,
+    on: Option<(Plane, PlaneRef)>,
+) -> anyhow::Result<(threebcad_core::FeatureId, String)> {
+    let ext = path
+        .extension()
+        .map(|e| e.to_string_lossy().to_ascii_lowercase())
+        .unwrap_or_default();
+    let file = path
+        .file_name()
+        .map_or_else(String::new, |n| n.to_string_lossy().into_owned());
+    let mut msg = format!("Imported {file}");
+    let id = match ext.as_str() {
+        "step" | "stp" => {
+            let import = threebcad_io::read_step(&std::fs::read(path)?)?;
+            if !import.skipped.is_empty() {
+                msg = format!("Imported {file}; {} shells could not be read", import.skipped.len());
+                log::warn!("{file}: skipped {:?}", import.skipped);
+            }
+            doc.edit(|h| {
+                h.add(FeatureKind::Imported {
+                    file: file.clone(),
+                    solids: Shared::new(import.solids),
+                })
+            })?
+        }
+        "stl" | "3mf" | "obj" => {
+            let mesh = threebcad_io::read_mesh(path)?;
+            doc.edit(|h| {
+                h.add(FeatureKind::ImportedMesh {
+                    file: file.clone(),
+                    mesh: Shared::new(mesh),
+                })
+            })?
+        }
+        "dxf" => {
+            let sketch = threebcad_io::read_dxf(&std::fs::read(path)?, None)?;
+            doc.edit(|h| match on {
+                Some((plane, on @ (PlaneRef::Face(_) | PlaneRef::Feature(_)))) => h.add_sketch_on(sketch, plane, on),
+                Some((plane, _)) => Ok(h.add_sketch(sketch, plane)),
+                None => Ok(h.add_sketch(sketch, Plane::TOP)),
+            })?
+        }
+        _ => anyhow::bail!("3BCAD cannot import .{ext} files"),
+    };
+    Ok((id, msg))
 }
 
 /// The newest recovery file left behind by a run that did not close normally.
@@ -385,6 +443,7 @@ impl App {
         if open {
             self.open_dialog();
         }
+        self.dropped_files(ctx);
         if save_as {
             self.save_as();
         } else if save {
@@ -406,6 +465,38 @@ impl App {
         }
         self.unsaved_prompt(ctx);
         self.recovery_prompt(ctx);
+    }
+
+    /// Files dragged onto the window: the first one is opened like File > Open.
+    fn dropped_files(&mut self, ctx: &egui::Context) {
+        let (hovering, dropped) = ctx.input(|i| {
+            (
+                !i.raw.hovered_files.is_empty(),
+                i.raw
+                    .dropped_files
+                    .iter()
+                    .filter_map(|f| f.path.clone())
+                    .collect::<Vec<_>>(),
+            )
+        });
+        if hovering {
+            let rect = ctx.screen_rect();
+            let painter = ctx.layer_painter(egui::LayerId::new(egui::Order::Foreground, egui::Id::new("drop")));
+            painter.rect_filled(rect, 0.0, egui::Color32::from_black_alpha(120));
+            painter.text(
+                rect.center(),
+                egui::Align2::CENTER_CENTER,
+                "Drop to open (3BCAD, STEP, STL, 3MF, OBJ, DXF)",
+                egui::FontId::proportional(22.0),
+                egui::Color32::WHITE,
+            );
+        }
+        if let Some(path) = dropped.first() {
+            self.request(Pending::Open(path.clone()));
+            if dropped.len() > 1 {
+                self.status = format!("Opened the first of {} files; drop one file at a time", dropped.len());
+            }
+        }
     }
 
     fn autosave(&mut self, ctx: &egui::Context) {
@@ -519,6 +610,23 @@ impl App {
                     self.files.settings.recent.retain(|p| p != &path || p.exists());
                 }
             },
+            Pending::Open(path) if is_import(&path) => {
+                // A new part, so the open one survives a file that cannot be read.
+                let mut doc = PartDocument::new(stem(&path));
+                match import_into(&mut doc, &path, None) {
+                    Ok((id, msg)) => {
+                        self.files.settings.add_recent(&path);
+                        self.files.settings.save();
+                        self.set_doc(doc, None);
+                        self.selected = Some(id);
+                        self.status = msg.replacen("Imported", "Opened", 1);
+                    }
+                    Err(e) => {
+                        self.status = format!("Could not open {}: {e:#}", path.display());
+                        self.files.settings.recent.retain(|p| p != &path || p.exists());
+                    }
+                }
+            }
             Pending::Open(path) => match PartDocument::open(&path) {
                 Ok(mut doc) => {
                     doc.name = stem(&path);
@@ -590,7 +698,14 @@ impl App {
 
     pub fn open_dialog(&mut self) {
         if let Some(path) = rfd::FileDialog::new()
+            .add_filter(
+                "All supported",
+                &[&[EXT, ASSEMBLY_EXT, DRAWING_EXT][..], &IMPORT_EXTS[..]].concat(),
+            )
             .add_filter("3BCAD part, assembly or drawing", &[EXT, ASSEMBLY_EXT, DRAWING_EXT])
+            .add_filter("STEP", &["step", "stp"])
+            .add_filter("Mesh (STL, 3MF, OBJ)", &["stl", "3mf", "obj"])
+            .add_filter("DXF drawing", &["dxf"])
             .add_filter("3BCAD part", &[EXT])
             .add_filter("3BCAD assembly", &[ASSEMBLY_EXT])
             .add_filter("3BCAD drawing", &[DRAWING_EXT])
@@ -769,55 +884,12 @@ impl App {
 
     /// Adds a file to the part: STEP as solid bodies, meshes as reference, DXF as a sketch.
     pub fn import(&mut self, path: &Path) -> anyhow::Result<String> {
-        let ext = path
-            .extension()
-            .map(|e| e.to_string_lossy().to_ascii_lowercase())
-            .unwrap_or_default();
-        let file = path
-            .file_name()
-            .map_or_else(String::new, |n| n.to_string_lossy().into_owned());
-        let id = match ext.as_str() {
-            "step" | "stp" => {
-                let import = threebcad_io::read_step(&std::fs::read(path)?)?;
-                let skipped = import.skipped.len();
-                let id = self.doc.edit(|h| {
-                    h.add(FeatureKind::Imported {
-                        file: file.clone(),
-                        solids: Shared::new(import.solids),
-                    })
-                })?;
-                self.selected = Some(id);
-                if skipped > 0 {
-                    return Ok(format!("Imported {file}; {skipped} shells could not be read"));
-                }
-                id
-            }
-            "stl" | "3mf" | "obj" => {
-                let mesh = threebcad_io::read_mesh(path)?;
-                self.doc.edit(|h| {
-                    h.add(FeatureKind::ImportedMesh {
-                        file: file.clone(),
-                        mesh: Shared::new(mesh),
-                    })
-                })?
-            }
-            "dxf" => {
-                let sketch = threebcad_io::read_dxf(&std::fs::read(path)?, None)?;
-                let target = self.sketch_target();
-                self.doc.edit(|h| match target {
-                    Some((plane, _, on @ (PlaneRef::Face(_) | PlaneRef::Feature(_)))) => {
-                        h.add_sketch_on(sketch, plane, on)
-                    }
-                    Some((plane, ..)) => Ok(h.add_sketch(sketch, plane)),
-                    None => Ok(h.add_sketch(sketch, Plane::TOP)),
-                })?
-            }
-            _ => anyhow::bail!("3BCAD cannot import .{ext} files"),
-        };
+        let on = self.sketch_target().map(|(plane, _, on)| (plane, on));
+        let (id, msg) = import_into(&mut self.doc, path, on)?;
         self.selected = Some(id);
         self.sync_geometry();
         self.zoom_to_fit();
-        Ok(format!("Imported {file}"))
+        Ok(msg)
     }
 
     /// Exports the selected sketch, or the selected planar face's outline, as DXF.
@@ -877,7 +949,11 @@ pub fn menu(app: &mut App, ui: &mut egui::Ui) {
             ui.close_menu();
             app.request(Pending::NewDrawing);
         }
-        if ui.add(egui::Button::new("Open…").shortcut_text("Ctrl+O")).clicked() {
+        if ui
+            .add(egui::Button::new("Open…").shortcut_text("Ctrl+O"))
+            .on_hover_text("3BCAD files, or STEP, STL, 3MF, OBJ and DXF as a new part")
+            .clicked()
+        {
             ui.close_menu();
             app.open_dialog();
         }
@@ -1094,6 +1170,29 @@ mod tests {
         std::fs::write(&old, "{}").unwrap();
         std::fs::write(dir.join("notes.txt"), "").unwrap();
         assert_eq!(leftover_recovery(&dir, &own), Some(old));
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn other_apps_files_open_as_a_new_part() {
+        let dir = std::env::temp_dir().join(format!("3bcad-open-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let square = [[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 10.0]];
+        let solid = threebcad_kernel::operations::extrude_polygon(&square, 5.0).unwrap();
+        let stl = dir.join("cube.STL");
+        let mesh = threebcad_kernel::mesher::print_mesh(&solid, 0.01);
+        threebcad_io::write_stl(&stl, &[("cube", &mesh)]).unwrap();
+        let step = dir.join("cube.stp");
+        threebcad_io::write_step(&step, "cube", [&solid], &[]).unwrap();
+        assert!(is_import(&stl) && is_import(&step) && !is_import(&dir.join("cube.3bcad")));
+
+        let mut doc = PartDocument::new(stem(&step));
+        let (_, msg) = import_into(&mut doc, &step, None).unwrap();
+        assert_eq!((doc.bodies().len(), msg.as_str()), (1, "Imported cube.stp"));
+        let mut doc = PartDocument::new(stem(&stl));
+        import_into(&mut doc, &stl, None).unwrap();
+        assert_eq!(doc.built().meshes.len(), 1);
+        assert!(import_into(&mut doc, &dir.join("missing.obj"), None).is_err());
         std::fs::remove_dir_all(dir).ok();
     }
 
