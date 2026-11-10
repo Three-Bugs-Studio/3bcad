@@ -7,6 +7,8 @@ saved files and workflows; patch versions (0.x.y) only fix bugs.
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-11-10
+
 ### Fixed
 
 - Chamfers and fillets on curved faces (such as the rim of a bore) no longer fail with "the size is too large"
@@ -390,7 +392,8 @@ First public preview of 3BCAD.
 - Send to Slicer for OrcaSlicer, Bambu Studio and PrusaSlicer.
 - App version shown in the title bar and ribbon, linking to these release notes.
 
-[Unreleased]: https://github.com/Three-Bugs-Studio/3bcad/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/Three-Bugs-Studio/3bcad/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/Three-Bugs-Studio/3bcad/releases/tag/v1.0.1
 [1.0.0]: https://github.com/Three-Bugs-Studio/3bcad/releases/tag/v1.0.0
 [0.9.0]: https://github.com/Three-Bugs-Studio/3bcad/releases/tag/v0.9.0
 [0.8.0]: https://github.com/Three-Bugs-Studio/3bcad/releases/tag/v0.8.0
