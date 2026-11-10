@@ -236,7 +236,10 @@ mod tests {
             }
         }
         assert_eq!(text(&Command::SaveAs.default_key().unwrap()), "Ctrl+Shift+S");
-        assert_eq!(parse("ctrl + alt + F5").map(|k| text(&k)).as_deref(), Some("Ctrl+Alt+F5"));
+        assert_eq!(
+            parse("ctrl + alt + F5").map(|k| text(&k)).as_deref(),
+            Some("Ctrl+Alt+F5")
+        );
         assert_eq!(parse("Hyper+S"), None);
     }
 

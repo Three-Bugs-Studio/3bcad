@@ -2,8 +2,8 @@
 //! Sweeps, lofts, helices, threads, variable and face fillets, multibody tools, sketch- and
 //! curve-driven patterns, domes and wraps.
 
+use crate::i18n::{tr, trf};
 use eframe::egui;
-use crate::i18n::tr;
 use threebcad_core::holes;
 use threebcad_core::*;
 
@@ -121,7 +121,7 @@ fn bodies_line(ed: &mut Ed, ui: &mut egui::Ui, list: &mut Vec<FaceRef>, p: &Pick
         if list.is_empty() {
             ui.label(tr("All bodies"));
         } else {
-            ui.label(format!("{} bodies (picked by a face)", list.len()));
+            ui.label(trf("{} bodies (picked by a face)", &[&list.len()]));
         }
         if ed.button(ui, "Use selection", !p.faces.is_empty()) {
             *list = p.faces.clone();
@@ -191,7 +191,9 @@ pub(crate) fn editor(ed: &mut Ed, ui: &mut egui::Ui, h: &History, me: FeatureId,
             if !w.cut {
                 ed.check(ui, &mut w.merge, "Merge result");
             }
-            ui.weak(tr("The profile is carried along the path, square to it. A circular profile needs no sketch."));
+            ui.weak(tr(
+                "The profile is carried along the path, square to it. A circular profile needs no sketch.",
+            ));
         }
         FeatureKind::Loft(l) => {
             ui.label(tr("Profiles, in order"));
@@ -210,10 +212,12 @@ pub(crate) fn editor(ed: &mut Ed, ui: &mut egui::Ui, h: &History, me: FeatureId,
             if !l.cut {
                 ed.check(ui, &mut l.merge, "Merge result");
             }
-            ui.weak(tr("Tangency 0 leaves the end free; larger values pull the surface square out of the profile."));
+            ui.weak(tr(
+                "Tangency 0 leaves the end free; larger values pull the surface square out of the profile.",
+            ));
         }
         FeatureKind::Helix(d) => {
-            ui.label(format!("Circle from: {}", name_of(h, d.sketch)));
+            ui.label(trf("Circle from: {}", &[&name_of(h, d.sketch)]));
             let kinds = [
                 HelixSize::PitchTurns { pitch: 5.0, turns: 4.0 },
                 HelixSize::HeightPitch {
@@ -285,15 +289,21 @@ pub(crate) fn editor(ed: &mut Ed, ui: &mut egui::Ui, h: &History, me: FeatureId,
                 ed.track(ui.radio_value(&mut d.ccw, true, tr("Counterclockwise")));
             });
             ed.check(ui, &mut d.reverse, "Reverse direction");
-            ui.weak(tr("Use the helix as the path of a sweep (a spring) or of a curve pattern."));
+            ui.weak(tr(
+                "Use the helix as the path of a sweep (a spring) or of a curve pattern.",
+            ));
         }
         FeatureKind::Thread(t) => {
             face_line(ed, ui, "Cylindrical face (a rod or a hole)", &mut t.face, p);
             size_editor(ed, ui, "thread_size", &mut t.standard, &mut t.size);
             if let Some(s) = holes::find(t.standard, &t.size) {
-                ui.weak(format!(
-                    "Major Ø{:.2} mm, pitch {:.3} mm, tap drill Ø{:.2} mm",
-                    s.major, s.pitch, s.tap_drill
+                ui.weak(trf(
+                    "Major Ø{} mm, pitch {} mm, tap drill Ø{} mm",
+                    &[
+                        &format!("{:.2}", s.major),
+                        &format!("{:.3}", s.pitch),
+                        &format!("{:.2}", s.tap_drill),
+                    ],
                 ));
             }
             let mut full = t.length.is_none();
@@ -307,7 +317,9 @@ pub(crate) fn editor(ed: &mut Ed, ui: &mut egui::Ui, h: &History, me: FeatureId,
             ed.length(ui, "Offset from the start", &mut t.offset, 0.0);
             ed.check(ui, &mut t.flip, "Start from the other end");
             ed.check(ui, &mut t.right, "Right-handed");
-            ui.weak(tr("A modelled ISO 68 thread: printable, and watertight. Rods are threaded outside, holes inside."));
+            ui.weak(tr(
+                "A modelled ISO 68 thread: printable, and watertight. Rods are threaded outside, holes inside.",
+            ));
         }
         FeatureKind::VariableFillet { edge, radii } => {
             ui.horizontal(|ui| {
@@ -371,7 +383,9 @@ pub(crate) fn editor(ed: &mut Ed, ui: &mut egui::Ui, h: &History, me: FeatureId,
                 SplitTool::Sketch(id) => sketch_combo(ed, ui, "split_sketch", h, me, id),
             }
             bodies_line(ed, ui, bodies, p);
-            ui.weak(tr("A sketch splits off what lies inside its outlines, straight through the part."));
+            ui.weak(tr(
+                "A sketch splits off what lies inside its outlines, straight through the part.",
+            ));
         }
         FeatureKind::DeleteBody { bodies, keep } => {
             faces_line(ed, ui, "bodies (one face each)", bodies, p);
@@ -449,7 +463,9 @@ pub(crate) fn editor(ed: &mut Ed, ui: &mut egui::Ui, h: &History, me: FeatureId,
             seeds_editor(ed, ui, h, me, seeds);
             ui.label(tr("Points from"));
             sketch_combo(ed, ui, "pattern_sketch", h, me, sketch);
-            ui.weak(tr("A copy goes at every sketch point, placed as the seed sits relative to its center."));
+            ui.weak(tr(
+                "A copy goes at every sketch point, placed as the seed sits relative to its center.",
+            ));
         }
         FeatureKind::CurvePattern {
             seeds,
@@ -476,7 +492,9 @@ pub(crate) fn editor(ed: &mut Ed, ui: &mut egui::Ui, h: &History, me: FeatureId,
             face_line(ed, ui, "Flat face", face, p);
             ed.length(ui, "Height", height, 0.001);
             ed.check(ui, reverse, "Reverse (sink into the part)");
-            ui.weak(tr("A round face gets a spherical cap; other faces a smooth elliptical one."));
+            ui.weak(tr(
+                "A round face gets a spherical cap; other faces a smooth elliptical one.",
+            ));
         }
         FeatureKind::Wrap {
             sketch,
@@ -515,10 +533,12 @@ pub(crate) fn editor(ed: &mut Ed, ui: &mut egui::Ui, h: &History, me: FeatureId,
                     ui.end_row();
                 }
             });
-            ui.weak(tr("Holes grow and pins, tabs and slots' walls move in by the clearance. Fit one part of each pair."));
+            ui.weak(tr(
+                "Holes grow and pins, tabs and slots' walls move in by the clearance. Fit one part of each pair.",
+            ));
         }
         other => {
-            ui.label(format!("{} has no properties to edit.", other.prefix()));
+            ui.label(trf("{} has no properties to edit.", &[&other.prefix()]));
         }
     }
 }

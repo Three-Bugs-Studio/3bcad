@@ -26,7 +26,8 @@ threebcad-render = { path = "crates/3bcad-render" }
 threebcad-io = { path = "crates/3bcad-io" }
 
 # Rendering & windowing (eframe = winit + egui-winit + egui-wgpu; egui 0.31 pins wgpu 24 / winit 0.30)
-eframe = { version = "0.31", default-features = false, features = ["wgpu", "default_fonts", "x11", "wayland"] }
+# accesskit: screen readers and keyboard users reach the UI through the platform's accessibility API.
+eframe = { version = "0.31", default-features = false, features = ["wgpu", "default_fonts", "x11", "wayland", "accesskit"] }
 egui = { version = "0.31", default-features = false }
 egui-wgpu = "0.31"
 bytemuck = { version = "1", features = ["derive"] }
@@ -51,7 +52,6 @@ zip = { version = "2", default-features = false, features = ["deflate"] }
 
 # Utilities
 log = "0.4"
-env_logger = "0.11"
 anyhow = "1.0"
 
 # truck tessellation and the LM solver are painfully slow unoptimised.

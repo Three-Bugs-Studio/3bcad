@@ -1,8 +1,8 @@
 //! The open drawing: which sheet is on screen and how it is panned and zoomed, what is picked,
 //! the tool in use, and the drawing exports.
 
+use crate::i18n::{tr, trf};
 use std::path::{Path, PathBuf};
-use crate::i18n::tr;
 use std::time::{Duration, Instant};
 
 use eframe::egui::{Pos2, Rect};
@@ -157,10 +157,10 @@ impl App {
                     s.doc.standard_views(sheet);
                     "Placed the front view and two projected views: drag them, or add more from the Drawing tab".into()
                 } else {
-                    format!("The views now show {}", file.display())
+                    trf("The views now show {}", &[&file.display()])
                 }
             }
-            Err(e) => format!("Could not use the part: {e:#}"),
+            Err(e) => trf("Could not use the part: {}", &[&format!("{:#}", e)]),
         };
     }
 
@@ -205,8 +205,11 @@ impl App {
         let pages = s.doc.pages();
         self.status = match threebcad_io::drawing::export(&path, &pages) {
             Ok(files) if files.len() == 1 => format!("Exported {what}: {}", files[0].display()),
-            Ok(files) => format!("Exported {} {what} files next to {}", files.len(), path.display()),
-            Err(e) => format!("Export failed: {e}"),
+            Ok(files) => trf(
+                "Exported {} {} files next to {}",
+                &[&files.len(), &what, &path.display()],
+            ),
+            Err(e) => trf("Export failed: {}", &[&e]),
         };
     }
 }

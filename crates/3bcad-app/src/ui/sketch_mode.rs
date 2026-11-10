@@ -1,6 +1,7 @@
 //! Sketch mode: drawing tools with live previews, inferencing, Smart Dimension, relations,
 //! definition-status colours and dragging with live solving.
 
+use crate::i18n::trf;
 use std::collections::HashMap;
 
 use eframe::egui::{self, Align2, Color32, FontId, Painter, PointerButton, Pos2, Rect, Response, Shape, Stroke};
@@ -491,7 +492,7 @@ impl SketchSession {
 
     pub fn status_text(&self) -> (String, Color32) {
         match self.analysis.status {
-            Status::UnderDefined => (format!("Under Defined ({} DOF)", self.analysis.dof), UNDER),
+            Status::UnderDefined => (trf("Under Defined ({} DOF)", &[&self.analysis.dof]), UNDER),
             Status::FullyDefined => ("Fully Defined".into(), FULL),
             Status::OverDefined => ("Over Defined".into(), OVER),
         }
@@ -1188,7 +1189,7 @@ impl SketchSession {
                 egui::Frame::popup(ui.style()).show(ui, |ui| {
                     ui.horizontal(|ui| {
                         ui.weak(&name)
-                            .on_hover_text(format!("In Equations: {name}@ and the sketch's name"));
+                            .on_hover_text(trf("In Equations: {}@ and the sketch's name", &[&name]));
                         let r = ui.add(egui::TextEdit::singleline(&mut text).desired_width(70.0));
                         if !r.has_focus() && !r.lost_focus() {
                             r.request_focus();
@@ -1223,7 +1224,7 @@ impl SketchSession {
                             self.set_dimension(i, value);
                         }
                     }
-                    None => self.message = Some(format!("\"{text}\" is not a number or a length")),
+                    None => self.message = Some(trf("\"{}\" is not a number or a length", &[&text])),
                 }
             }
             Some(false) => self.editing = None,

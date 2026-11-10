@@ -1,8 +1,8 @@
 //! Assembly mode: the Assembly ribbon tab, the component tree with its mates and exploded view,
 //! the Properties panel for what is picked, and the interference and bill of materials windows.
 
+use crate::i18n::{tr, trf};
 use std::time::Duration;
-use crate::i18n::tr;
 
 use eframe::egui::{self, Color32, Key, KeyboardShortcut, Modifiers, RichText};
 use threebcad_kernel::mate::{Geom, MateKind, Pose};
@@ -143,7 +143,7 @@ fn mate_buttons(app: &mut App, ui: &mut egui::Ui) {
             ui.spacing_mut().item_spacing.y = 1.0;
             for &kind in kinds {
                 let fits = pair.as_ref().is_some_and(|[a, b]| kind.fits(&a.1, &b.1));
-                let tip = format!("{} mate between the two picked faces", kind.name());
+                let tip = trf("{} mate between the two picked faces", &[&kind.name()]);
                 if icons::small(ui, "mate", kind.name(), fits, false)
                     .on_hover_text(tip)
                     .clicked()
@@ -166,11 +166,11 @@ fn add_mate(app: &mut App, kind: MateKind) {
             s.mate = Some(m);
             s.selected = None;
             match s.doc.problem(m) {
-                Some(why) => format!("{} added, but {why}", s.doc.contents().mates[m].name),
+                Some(why) => trf("{} added, but {}", &[&s.doc.contents().mates[m].name, &why]),
                 None => format!("{} added", s.doc.contents().mates[m].name),
             }
         }
-        Err(e) => format!("Cannot mate: {e:#}"),
+        Err(e) => trf("Cannot mate: {}", &[&format!("{:#}", e)]),
     };
     app.selection.clear();
 }
@@ -245,7 +245,7 @@ pub fn tab(app: &mut App, ui: &mut egui::Ui) {
             app.status = match n {
                 0 => "No interference".into(),
                 1 => "1 pair of parts interferes".into(),
-                n => format!("{n} pairs of parts interfere"),
+                n => trf("{} pairs of parts interfere", &[&n]),
             };
         }
     }
@@ -262,7 +262,9 @@ pub fn tab(app: &mut App, ui: &mut egui::Ui) {
     ui.vertical(|ui| {
         ui.spacing_mut().item_spacing.y = 1.0;
         if icons::small(ui, "export", "STEP", true, false)
-            .on_hover_text(tr("Export the assembly as STEP: each part once, every component placed and named"))
+            .on_hover_text(tr(
+                "Export the assembly as STEP: each part once, every component placed and named",
+            ))
             .clicked()
         {
             app.export(ExportFormat::Step);
@@ -275,7 +277,7 @@ pub fn tab(app: &mut App, ui: &mut egui::Ui) {
         }
         let slicer = app.files.settings.slicer.name();
         if icons::small(ui, "slicer", "Send to Slicer", true, false)
-            .on_hover_text(format!("Open the parts in {slicer}, laid out on the bed"))
+            .on_hover_text(trf("Open the parts in {}, laid out on the bed", &[&slicer]))
             .clicked()
         {
             app.send_to_slicer();
@@ -343,7 +345,7 @@ fn status_bar(app: &mut App, ctx: &egui::Context) {
                     ui.separator();
                     let text = match problems {
                         1 => "⚠ 1 mate does not hold".to_string(),
-                        n => format!("⚠ {n} mates do not hold"),
+                        n => trf("⚠ {} mates do not hold", &[&n]),
                     };
                     ui.colored_label(ERROR, text);
                 }
@@ -388,7 +390,7 @@ pub fn tree(app: &mut App, ctx: &egui::Context) {
                     });
                     let mut resp = resp.inner;
                     resp = match &error {
-                        Some(why) => resp.on_hover_text(format!("Could not read {}: {why}", c.file.display())),
+                        Some(why) => resp.on_hover_text(trf("Could not read {}: {}", &[&c.file.display(), &why])),
                         None => resp.on_hover_text(c.file.display().to_string()),
                     };
                     if resp.clicked() {
@@ -454,7 +456,7 @@ pub fn tree(app: &mut App, ctx: &egui::Context) {
                         }
                     });
                 let steps = s.doc.contents().explode.clone();
-                egui::CollapsingHeader::new(format!("Exploded View ({} steps)", steps.len()))
+                egui::CollapsingHeader::new(trf("Exploded View ({} steps)", &[&steps.len()]))
                     .default_open(true)
                     .show(ui, |ui| {
                         if steps.is_empty() {
@@ -539,7 +541,7 @@ fn mate_panel(s: &mut Session, ui: &mut egui::Ui, i: usize) {
     ui.label(format!("{} mate", m.kind.name()));
     for f in [&m.a, &m.b] {
         let name = s.doc.component(f.component).map_or("?", |c| c.name.as_str());
-        ui.weak(format!("Face of {name}"));
+        ui.weak(trf("Face of {}", &[&name]));
     }
     let (mut value, mut flip) = (m.value, m.flip);
     match m.kind {
@@ -566,7 +568,7 @@ fn mate_panel(s: &mut Session, ui: &mut egui::Ui, i: usize) {
         s.doc.set_mate(i, value, flip, dragging.then_some(key(1, i)));
     }
     if let Some(why) = s.doc.problem(i) {
-        ui.colored_label(ERROR, format!("Does not hold: {why}"));
+        ui.colored_label(ERROR, trf("Does not hold: {}", &[&why]));
     }
     ui.add_space(6.0);
     if ui.button(tr("Delete Mate")).clicked() {
@@ -579,7 +581,7 @@ fn step_panel(s: &mut Session, ui: &mut egui::Ui, k: usize) {
     let Some(st) = s.doc.contents().explode.get(k).cloned() else {
         return;
     };
-    ui.heading(format!("Explode Step {}", k + 1));
+    ui.heading(trf("Explode Step {}", &[&(k + 1)]));
     ui.separator();
     for id in &st.components {
         ui.weak(s.doc.component(*id).map_or("?", |c| c.name.as_str()).to_string());
@@ -627,7 +629,7 @@ fn component_panel(s: &mut Session, ui: &mut egui::Ui, id: u32) -> bool {
     ui.separator();
     ui.weak(c.file.display().to_string());
     if let Some(why) = s.doc.file_error(id) {
-        ui.colored_label(ERROR, format!("Could not read it: {why}"));
+        ui.colored_label(ERROR, trf("Could not read it: {}", &[&why]));
     }
     let mut name = c.name.clone();
     ui.horizontal(|ui| {
@@ -720,7 +722,7 @@ fn windows(app: &mut App, ctx: &egui::Context) {
         app.status = match s.check_interference() {
             0 => "No interference".into(),
             1 => "1 pair of parts interferes".into(),
-            n => format!("{n} pairs of parts interfere"),
+            n => trf("{} pairs of parts interfere", &[&n]),
         };
     }
     let mut open = s.show_bom;
@@ -750,7 +752,9 @@ fn windows(app: &mut App, ctx: &egui::Context) {
                     ui.end_row();
                 }
             });
-            ui.weak(tr("Part number and description come from each part's File > Properties."));
+            ui.weak(tr(
+                "Part number and description come from each part's File > Properties.",
+            ));
         });
     s.show_bom = open;
     if export {

@@ -29,5 +29,9 @@ fn main() -> eframe::Result {
         multisampling: app::MSAA as u16,
         ..Default::default()
     };
-    eframe::run_native("3BCAD", options, Box::new(move |cc| Ok(Box::new(app::App::new(cc, crashed)?))))
+    eframe::run_native(
+        "3BCAD",
+        options,
+        Box::new(move |cc| Ok(Box::new(app::App::new(cc, crashed)?))),
+    )
 }

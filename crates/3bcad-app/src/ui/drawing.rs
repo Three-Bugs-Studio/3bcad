@@ -1,8 +1,8 @@
 //! Drawing mode: the Drawing ribbon tab, the sheet tree, the Properties panel for what is picked,
 //! and the sheet itself, panned and zoomed like paper on a desk.
 
+use crate::i18n::{tr, trf};
 use std::time::Duration;
-use crate::i18n::tr;
 
 use eframe::egui::{
     self, Align2, Color32, FontId, Key, KeyboardShortcut, Modifiers, Pos2, Rect, RichText, Sense, Stroke,
@@ -122,7 +122,7 @@ fn delete_selected(app: &mut App) {
 fn view_name(kind: &ViewKind) -> String {
     match kind {
         ViewKind::Model(o) => format!("{} View", o.name()),
-        ViewKind::Projected { dir, .. } => format!("Projected View ({})", dir.name().to_lowercase()),
+        ViewKind::Projected { dir, .. } => trf("Projected View ({})", &[&dir.name().to_lowercase()]),
         ViewKind::Section { label, .. } => format!("Section {label}-{label}"),
         ViewKind::Detail { label, .. } => format!("Detail {label}"),
     }
@@ -175,7 +175,9 @@ pub fn tab(app: &mut App, ui: &mut egui::Ui) {
         .response
         .on_hover_text(tr("Show a part opened recently"));
         if icons::small(ui, "edit_part", "Edit Part", has_part, false)
-            .on_hover_text(tr("Open the part to change it; the drawing shows the change when you come back"))
+            .on_hover_text(tr(
+                "Open the part to change it; the drawing shows the change when you come back",
+            ))
             .clicked()
         {
             action = Some(Action::EditPart);
@@ -219,9 +221,9 @@ pub fn tab(app: &mut App, ui: &mut egui::Ui) {
             for (d, glyph) in [(Dir::Left, "⬅"), (Dir::Up, "⬆"), (Dir::Down, "⬇"), (Dir::Right, "➡")] {
                 if ui
                     .add_enabled(base.is_some(), egui::Button::new(glyph).small())
-                    .on_hover_text(format!(
+                    .on_hover_text(trf(
                         "Project the selected view and place it {}",
-                        d.name().to_lowercase()
+                        &[&d.name().to_lowercase()],
                     ))
                     .clicked()
                 {
@@ -273,7 +275,7 @@ pub fn tab(app: &mut App, ui: &mut egui::Ui) {
         app.status = match n {
             0 => "No more model dimensions fit the views on this sheet".into(),
             1 => "Added 1 model dimension".into(),
-            n => format!("Added {n} model dimensions"),
+            n => trf("Added {} model dimensions", &[&n]),
         };
     }
     let on = tool == Tool::Note;
@@ -588,7 +590,9 @@ fn view_panel(s: &mut Session, ui: &mut egui::Ui, sheet: usize, id: u32) {
             }
         }
         ViewKind::Projected { .. } => {
-            ui.weak(tr("Projected from its parent and lined up with it, at the parent's scale."));
+            ui.weak(tr(
+                "Projected from its parent and lined up with it, at the parent's scale.",
+            ));
         }
         ViewKind::Section {
             label,
@@ -610,7 +614,7 @@ fn view_panel(s: &mut Session, ui: &mut egui::Ui, sheet: usize, id: u32) {
                 ui.add(length(at).speed(0.2));
             });
             ui.checkbox(flip, tr("Look the other way"));
-            ui.weak(format!("Hatch: {}, from the part's material", s.doc.hatch().name()));
+            ui.weak(trf("Hatch: {}, from the part's material", &[&s.doc.hatch().name()]));
         }
         ViewKind::Detail {
             label, center, radius, ..
@@ -709,7 +713,9 @@ fn note_panel(s: &mut Session, ui: &mut egui::Ui, sheet: usize, i: usize) {
             e.leader = None;
         }
     } else {
-        ui.weak(tr("No leader: add the note with the Note tool on a view to point at it."));
+        ui.weak(tr(
+            "No leader: add the note with the Note tool on a view to point at it.",
+        ));
     }
     if e != n {
         let key = panel_key(ui, 2 << 20 | i as u64);

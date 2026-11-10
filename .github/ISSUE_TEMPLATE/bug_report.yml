@@ -35,6 +35,8 @@ body:
   - type: textarea
     id: logs
     attributes:
-      label: Logs
-      description: Run with `RUST_LOG=warn` and paste relevant output.
-      render: text
+      label: Log file and crash report
+      description: >-
+        In 3BCAD, click **Help → Open Log Folder**. Drag `3bcad.log` (and any `crash-*.txt`, written when
+        3BCAD crashed) into this box, or paste the lines around the problem. `3bcad.1.log` is the run before.
+      placeholder: Drop 3bcad.log and crash-*.txt here

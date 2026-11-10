@@ -61,14 +61,21 @@ struct FileLog {
 impl log::Log for FileLog {
     fn enabled(&self, m: &log::Metadata) -> bool {
         // Our own crates in detail; the libraries' chatter only when it is a warning or worse.
-        m.level() <= self.level && (m.target().starts_with("threebcad") || m.target().starts_with("3bcad") || m.level() <= log::Level::Warn)
+        m.level() <= self.level
+            && (m.target().starts_with("threebcad") || m.target().starts_with("3bcad") || m.level() <= log::Level::Warn)
     }
 
     fn log(&self, r: &log::Record) {
         if !self.enabled(r.metadata()) {
             return;
         }
-        let line = format!("{} {:<5} {}: {}\n", timestamp(SystemTime::now()), r.level(), r.target(), r.args());
+        let line = format!(
+            "{} {:<5} {}: {}\n",
+            timestamp(SystemTime::now()),
+            r.level(),
+            r.target(),
+            r.args()
+        );
         if cfg!(debug_assertions) {
             eprint!("{line}");
         }
@@ -132,7 +139,11 @@ pub fn init() -> Option<PathBuf> {
             .ok()
             .map(|f| (f, 0));
     }
-    let level = if cfg!(debug_assertions) { log::LevelFilter::Debug } else { log::LevelFilter::Info };
+    let level = if cfg!(debug_assertions) {
+        log::LevelFilter::Debug
+    } else {
+        log::LevelFilter::Info
+    };
     let logger = Box::new(FileLog {
         file: Mutex::new(file),
         level,

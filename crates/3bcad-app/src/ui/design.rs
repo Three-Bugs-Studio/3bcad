@@ -1,8 +1,8 @@
 //! Design intent: the Equations window (global variables, equations and configurations), the
 //! configuration picker in the feature tree, and the Appearance window.
 
+use crate::i18n::{tr, trf};
 use std::collections::HashMap;
-use crate::i18n::tr;
 
 use eframe::egui::{self, TextEdit};
 use threebcad_core::{Equation, FaceRef, FeatureId, History, Paint};
@@ -247,7 +247,7 @@ pub fn equations_window(app: &mut App, ctx: &egui::Context) {
             let failed = doc.equation_results().iter().filter(|r| r.is_err()).count();
             app.status = match failed {
                 0 => "Equations applied".into(),
-                n => format!("{n} equations have errors"),
+                n => trf("{} equations have errors", &[&n]),
             };
         }
         // Edits not applied yet go with the configuration they were typed in.
@@ -293,7 +293,9 @@ pub fn configuration_picker(app: &mut App, ui: &mut egui::Ui) {
                 edit = ui.button(tr("New / Edit Configurations…")).clicked();
             })
             .response
-            .on_hover_text(tr("Variants of the part with their own dimensions and suppressed features"));
+            .on_hover_text(tr(
+                "Variants of the part with their own dimensions and suppressed features",
+            ));
     });
     if let Some(i) = pick.filter(|&i| i != active) {
         app.doc.activate(i);

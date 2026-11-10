@@ -1,8 +1,8 @@
 //! Feature tree: reference planes, features with sketch status, rollback bar,
 //! rename (F2), suppress, drag-to-reorder.
 
+use crate::i18n::{tr, trf};
 use eframe::egui::{self, Color32, RichText, Sense};
-use crate::i18n::tr;
 use threebcad_core::{FeatureId, FeatureKind};
 use threebcad_sketch::Status;
 
@@ -292,7 +292,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
 /// the body commands; Ctrl+click adds more.
 fn solid_bodies(app: &mut App, ui: &mut egui::Ui) {
     let n = app.doc.bodies().len();
-    egui::CollapsingHeader::new(format!("Solid Bodies ({n})"))
+    egui::CollapsingHeader::new(trf("Solid Bodies ({})", &[&n]))
         .id_salt("solid_bodies")
         .default_open(n > 1)
         .show(ui, |ui| {

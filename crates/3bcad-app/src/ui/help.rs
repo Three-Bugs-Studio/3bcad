@@ -16,7 +16,10 @@ pub fn menu(app: &mut App, ui: &mut egui::Ui) {
     let key = |c| key_of(&app.files.settings.keys, c).map_or_else(String::new, |k| text(&k));
     let f1 = key(Command::ShortcutsWindow);
     ui.menu_button(tr("Help"), |ui| {
-        if ui.add(egui::Button::new(tr("Keyboard Shortcuts")).shortcut_text(f1)).clicked() {
+        if ui
+            .add(egui::Button::new(tr("Keyboard Shortcuts")).shortcut_text(f1))
+            .clicked()
+        {
             ui.close_menu();
             app.show_shortcuts = true;
         }
@@ -85,6 +88,21 @@ const SHORTCUTS: &[(&str, &[(&str, &str)])] = &[
             ("Right drag (or Ctrl + middle drag)", "Pan"),
             ("Mouse wheel", "Zoom"),
             ("F, or double-click empty space", "Zoom to fit"),
+            (
+                "Ctrl+1 … Ctrl+7",
+                "Front, Back, Left, Right, Top, Bottom, Isometric view",
+            ),
+            ("Ctrl+8", "Normal to the selected face or plane"),
+            ("Click the view cube", "Look from that face, edge or corner"),
+            ("P", "Perspective / orthographic"),
+            ("D", "Next display style"),
+            ("S", "The tab's commands at the mouse"),
+            ("Arrow keys (Shift: 90°)", "Turn the view 15°"),
+            ("Ctrl + arrow keys, Page Up / Down", "Pan, zoom"),
+            (
+                "Ctrl+, (File > Settings)",
+                "Settings, where every shortcut can be changed",
+            ),
         ],
     ),
     (
@@ -157,14 +175,14 @@ pub fn window(app: &mut App, ctx: &egui::Context) {
         .default_width(460.0)
         .show(ctx, |ui| {
             for (section, rows) in SHORTCUTS {
-                ui.label(RichText::new(*section).strong());
+                ui.label(RichText::new(tr(section)).strong());
                 egui::Grid::new(*section)
                     .num_columns(2)
                     .spacing([16.0, 4.0])
                     .show(ui, |ui| {
                         for (keys, what) in *rows {
-                            ui.label(RichText::new(*keys).monospace());
-                            ui.label(*what);
+                            ui.label(RichText::new(tr(keys)).monospace());
+                            ui.label(tr(what));
                             ui.end_row();
                         }
                     });
@@ -189,14 +207,18 @@ pub fn about(app: &mut App, ctx: &egui::Context) {
         .default_width(400.0)
         .show(ctx, |ui| {
             ui.heading(format!("3BCAD {VERSION}"));
-            ui.label(tr("Open-source parametric CAD for parts, assemblies, drawings and 3D printing."));
+            ui.label(tr(
+                "Open-source parametric CAD for parts, assemblies, drawings and 3D printing.",
+            ));
             ui.add_space(6.0);
             ui.label(RichText::new(tr("Made by Three Bugs Studio")).strong());
             ui.label(tr("Created by Duong Phu Dong, with the 3BCAD contributors."));
             ui.hyperlink_to(REPOSITORY, REPOSITORY);
             ui.add_space(6.0);
             ui.label(tr("Copyright © 2026 Three Bugs Studio and the 3BCAD contributors."));
-            ui.label(tr("Licensed under the MIT license or the Apache License 2.0, at your option."));
+            ui.label(tr(
+                "Licensed under the MIT license or the Apache License 2.0, at your option.",
+            ));
             ui.weak(
                 "Building on 3BCAD? Keep the license files and NOTICE, give your version its own name, and \
                  say it is based on 3BCAD by Three Bugs Studio (see TRADEMARKS.md).",

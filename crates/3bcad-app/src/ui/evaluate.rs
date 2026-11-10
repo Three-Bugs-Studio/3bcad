@@ -1,7 +1,7 @@
 //! Evaluate windows: What's Wrong, Measure and Mass Properties.
 
+use crate::i18n::{tr, trf};
 use eframe::egui::{self, Color32, RichText};
-use crate::i18n::tr;
 use threebcad_kernel::topology::{cross, dot, norm, point_triangle, sub, unit, EdgeCurve, P3};
 
 use threebcad_core::material;
@@ -189,7 +189,7 @@ pub fn measurements(app: &App) -> Vec<String> {
                                 out.push(format!("Length {}", len(norm(sub(b, a)))));
                             }
                             EdgeCurve::Circle { center, radius, .. } => {
-                                out.push(format!("Arc length {}", len(e.length)));
+                                out.push(trf("Arc length {}", &[&len(e.length)]));
                                 out.push(format!("Radius {}, diameter {}", len(radius), len(2.0 * radius)));
                                 out.push(format!("Center {}", pt(center)));
                             }
@@ -201,11 +201,9 @@ pub fn measurements(app: &App) -> Vec<String> {
                     if let Some(f) = app.doc.bodies().get(body).and_then(|b| b.topo.faces.get(face)) {
                         out.push(format!("Area {}", u.area(f.area)));
                         if let Some((_, axis, r)) = f.cylinder {
-                            out.push(format!(
+                            out.push(trf(
                                 "Cylinder radius {}, diameter {}, axis {}",
-                                len(r),
-                                len(2.0 * r),
-                                fmt3(axis)
+                                &[&len(r), &(len(2.0 * r)), &fmt3(axis)],
                             ));
                         }
                         if let Some(p) = f.plane {
@@ -220,7 +218,7 @@ pub fn measurements(app: &App) -> Vec<String> {
             out.push(format!("{} to {}", app.describe(*a), app.describe(*b)));
             if let (Some(ga), Some(gb)) = (geometry(app, *a), geometry(app, *b)) {
                 let center = norm(sub(gb.2, ga.2));
-                out.push(format!("Center distance {}", len(center)));
+                out.push(trf("Center distance {}", &[&len(center)]));
                 let d = sub(gb.2, ga.2);
                 out.push(format!("dX {}  dY {}  dZ {}", len(d[0]), len(d[1]), len(d[2])));
                 // Two parallel flat faces: exact gap between the planes.
@@ -239,12 +237,12 @@ pub fn measurements(app: &App) -> Vec<String> {
                 };
                 match planes {
                     Some((p, q)) if norm(cross(p.normal(), q.normal())) < 1e-9 => {
-                        out.push(format!(
+                        out.push(trf(
                             "Normal distance {}",
-                            len(dot(sub(q.origin, p.origin), p.normal()).abs())
+                            &[&len(dot(sub(q.origin, p.origin), p.normal()).abs())],
                         ));
                     }
-                    _ => out.push(format!("Minimum distance ≈ {}", len(min_distance(&ga, &gb)))),
+                    _ => out.push(trf("Minimum distance ≈ {}", &[&len(min_distance(&ga, &gb))])),
                 }
             }
             if let (Some((u, pu)), Some((v, pv))) = (direction(app, *a), direction(app, *b)) {
@@ -347,17 +345,22 @@ fn mass(app: &mut App, ctx: &egui::Context) {
                 format!("Material {}", m.name),
                 format!("Mass {}", u.mass(m.mass(p.volume))),
                 format!("Volume {}", u.volume(p.volume)),
-                format!("Surface area {}", u.area(p.area)),
-                format!("Center of mass {}", fmt3(p.center.map(|v| v / u.system.mm_per_unit()))),
-                format!(
-                    "Principal moments ({}·{}²) {:.1}, {:.1}, {:.1}",
-                    u.system.mass_unit(),
-                    u.system.length_unit(),
-                    p.principal[0] * g / k,
-                    p.principal[1] * g / k,
-                    p.principal[2] * g / k
+                trf("Surface area {}", &[&u.area(p.area)]),
+                trf(
+                    "Center of mass {}",
+                    &[&(fmt3(p.center.map(|v| v / u.system.mm_per_unit())))],
                 ),
-                format!("Units: {}. From a {MASS_TOL} mm tessellation.", u.system.name()),
+                trf(
+                    "Principal moments ({}·{}²) {}, {}, {}",
+                    &[
+                        &u.system.mass_unit(),
+                        &u.system.length_unit(),
+                        &format!("{:.1}", p.principal[0] * g / k),
+                        &format!("{:.1}", p.principal[1] * g / k),
+                        &format!("{:.1}", p.principal[2] * g / k),
+                    ],
+                ),
+                trf("Units: {}. From a {} mm tessellation.", &[&u.system.name(), &MASS_TOL]),
             ];
             for l in &lines {
                 ui.label(l);

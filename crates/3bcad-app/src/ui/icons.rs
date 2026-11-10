@@ -1249,7 +1249,12 @@ pub fn tile(ui: &mut Ui, icon: &str, label: &str, enabled: bool, selected: bool)
     } else {
         theme::muted()
     };
-    let mut job = egui::text::LayoutJob::simple(crate::i18n::tr(label).to_owned(), FontId::proportional(11.5), color, 74.0);
+    let mut job = egui::text::LayoutJob::simple(
+        crate::i18n::tr(label).to_owned(),
+        FontId::proportional(11.5),
+        color,
+        74.0,
+    );
     job.halign = egui::Align::Center;
     let galley = ui.fonts(|f| f.layout_job(job));
     let size = vec2(galley.size().x.max(40.0) + 10.0, 30.0 + galley.size().y + 10.0);
@@ -1308,7 +1313,7 @@ pub fn tab(ui: &mut Ui, label: &str, selected: bool) -> Response {
                 sw: 3,
                 se: 3,
             },
-            Color32::WHITE,
+            theme::raised().0,
         );
         painter.line_segment(
             [rect.left_bottom(), rect.right_bottom()],
@@ -1317,11 +1322,8 @@ pub fn tab(ui: &mut Ui, label: &str, selected: bool) -> Response {
     } else if resp.hovered() {
         painter.rect_filled(rect, 3.0, theme::hover_fill());
     }
-    painter.galley(
-        rect.min + vec2(9.0, (22.0 - galley.size().y) / 2.0),
-        galley,
-        Color32::from_rgb(30, 30, 30),
-    );
+    let color = ui.visuals().strong_text_color();
+    painter.galley(rect.min + vec2(9.0, (22.0 - galley.size().y) / 2.0), galley, color);
     resp
 }
 

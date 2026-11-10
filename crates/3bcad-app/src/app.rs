@@ -1,4 +1,4 @@
-use crate::i18n::tr;
+use crate::i18n::{tr, trf};
 use std::collections::HashMap;
 use std::io;
 use std::path::Path;
@@ -39,7 +39,6 @@ const PLANE_COLOR: [f32; 3] = [0.25, 0.45, 0.85];
 const REF_COLOR: [f32; 3] = [0.85, 0.5, 0.1];
 /// Helices and other 3D curves, drawn like sketch geometry.
 const SKETCH_CURVE_COLOR: [f32; 3] = [0.1, 0.35, 0.8];
-
 
 pub use threebcad_core::StdPlane as RefPlane;
 
@@ -242,9 +241,9 @@ impl App {
             return s.describe(r);
         }
         match r {
-            ModelRef::Face { body, face } => format!("Face {} of body {}", face + 1, body + 1),
-            ModelRef::Edge { body, edge } => format!("Edge {} of body {}", edge + 1, body + 1),
-            ModelRef::Vertex { body, vertex } => format!("Vertex {} of body {}", vertex + 1, body + 1),
+            ModelRef::Face { body, face } => trf("Face {} of body {}", &[&(face + 1), &(body + 1)]),
+            ModelRef::Edge { body, edge } => trf("Edge {} of body {}", &[&(edge + 1), &(body + 1)]),
+            ModelRef::Vertex { body, vertex } => trf("Vertex {} of body {}", &[&(vertex + 1), &(body + 1)]),
             ModelRef::Plane(p) => p.name().to_string(),
             ModelRef::Feature(id) => self.doc.history().get(id).map_or("?".into(), |f| f.name.clone()),
         }
@@ -655,7 +654,7 @@ impl App {
         );
         self.tab = RibbonTab::Sketch;
         self.selection.clear();
-        self.status = format!("Editing sketch on {}", s.plane_name);
+        self.status = trf("Editing sketch on {}", &[&s.plane_name]);
     }
 
     /// Leaves sketch mode, keeping (OK) or discarding (Cancel) the edits as one undo step.
@@ -690,7 +689,7 @@ impl App {
                 });
                 self.selected = Some(id);
                 if let Some(e) = refused {
-                    self.status = format!("Sketch saved, but not linked to its face: {e}");
+                    self.status = trf("Sketch saved, but not linked to its face: {}", &[&e]);
                     return;
                 }
             }
@@ -726,7 +725,7 @@ impl App {
         s.checkpoint();
         let added = add_edges(&mut s.sketch, &edges, s.plane);
         s.refresh();
-        self.status = format!("Converted {added} edges of the face");
+        self.status = trf("Converted {} edges of the face", &[&added]);
     }
 
     /// A planar face's outline as a sketch on the face's plane.
@@ -749,7 +748,7 @@ impl App {
         };
         self.status = match self.write(format, &path) {
             Ok(()) => format!("Exported {}", path.display()),
-            Err(e) => format!("Export failed: {e}"),
+            Err(e) => trf("Export failed: {}", &[&e]),
         };
     }
 
@@ -759,14 +758,14 @@ impl App {
         let located = self.files.settings.slicer_paths[slicer as usize].clone();
         let name = slicer.name();
         self.status = match self.write(ExportFormat::ThreeMf, &path) {
-            Err(e) => format!("Could not write {}: {e}", path.display()),
+            Err(e) => trf("Could not write {}: {}", &[&path.display(), &e]),
             Ok(()) => match slicer.launch(&path, located.as_deref()) {
                 Ok(()) => format!("Opened {} in {name}", path.display()),
                 Err(e) => {
                     if e.kind() == io::ErrorKind::NotFound {
                         self.slicer_missing = Some(slicer);
                     }
-                    format!("Could not open {name}: {e}")
+                    trf("Could not open {}: {}", &[&name, &e])
                 }
             },
         };
@@ -898,7 +897,10 @@ impl App {
         if self.settings_applied != Some(want) {
             ui::theme::apply(ctx, s.theme);
             ctx.set_zoom_factor(s.ui_scale);
-            crate::i18n::set(s.language);
+            if self.settings_applied.is_none_or(|(_, _, lang)| lang != s.language) {
+                crate::i18n::set(s.language);
+                crate::i18n::install_fonts(ctx, s.language);
+            }
             self.settings_applied = Some(want);
         }
         ui::theme::track(ctx, s.theme);
@@ -953,7 +955,11 @@ impl App {
     /// Arrows turn the view 15 degrees (Shift: 90), Ctrl+arrows pan, Page Up / Down zoom.
     fn arrow_keys(&mut self, ctx: &egui::Context) {
         let (step, pan) = ctx.input(|i| {
-            let quarter = if i.modifiers.shift { std::f32::consts::FRAC_PI_2 } else { 15f32.to_radians() };
+            let quarter = if i.modifiers.shift {
+                std::f32::consts::FRAC_PI_2
+            } else {
+                15f32.to_radians()
+            };
             (quarter, i.modifiers.command)
         });
         for (key, x, y) in [
@@ -1052,7 +1058,10 @@ impl App {
     pub fn normal_to_selection(&mut self) {
         let plane = match &self.sketch {
             Some(s) => Some(s.plane),
-            None => self.selection.iter().find_map(|r| self.plane_ref_of(*r).map(|(p, _)| p)),
+            None => self
+                .selection
+                .iter()
+                .find_map(|r| self.plane_ref_of(*r).map(|(p, _)| p)),
         };
         match plane {
             Some(p) => {
@@ -1313,13 +1322,22 @@ mod tests {
     fn a_text_field_keeps_its_own_keys() {
         let ctx = egui::Context::default();
         let mut text = String::new();
-        assert_eq!(frame(&ctx, false, &mut text, Key::Z, Modifiers::COMMAND), [Command::Undo]);
-        assert_eq!(frame(&ctx, false, &mut text, Key::F, Modifiers::NONE), [Command::ZoomToFit]);
+        assert_eq!(
+            frame(&ctx, false, &mut text, Key::Z, Modifiers::COMMAND),
+            [Command::Undo]
+        );
+        assert_eq!(
+            frame(&ctx, false, &mut text, Key::F, Modifiers::NONE),
+            [Command::ZoomToFit]
+        );
         frame(&ctx, true, &mut text, Key::A, Modifiers::NONE);
         // Typing: Ctrl+Z is the field's undo and F is a letter, but Ctrl+S still saves.
         assert!(frame(&ctx, true, &mut text, Key::Z, Modifiers::COMMAND).is_empty());
         assert!(frame(&ctx, true, &mut text, Key::F, Modifiers::NONE).is_empty());
-        assert_eq!(frame(&ctx, true, &mut text, Key::S, Modifiers::COMMAND), [Command::Save]);
+        assert_eq!(
+            frame(&ctx, true, &mut text, Key::S, Modifiers::COMMAND),
+            [Command::Save]
+        );
         // Ctrl+Shift+S is Save As, not Save.
         let both = Modifiers::COMMAND.plus(Modifiers::SHIFT);
         assert_eq!(frame(&ctx, false, &mut text, Key::S, both), [Command::SaveAs]);

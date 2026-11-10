@@ -1,7 +1,7 @@
 //! Command ribbon. Each command creates its feature from the current selection with
 //! sensible defaults; the Properties panel then edits it.
 
-use crate::i18n::tr;
+use crate::i18n::{tr, trf};
 use eframe::egui;
 use threebcad_core::*;
 use threebcad_kernel::Plane;
@@ -41,7 +41,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                     .on_hover_text(tr("What's new in this version"));
                 if let Some(v) = app.update.available().map(str::to_string) {
                     if ui
-                        .button(format!("⬆ Update to v{v}"))
+                        .button(trf("⬆ Update to v{}", &[&v]))
                         .on_hover_text(tr("What's new in it, and install it"))
                         .clicked()
                     {
@@ -58,7 +58,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                         .file_stem()
                         .map_or_else(String::new, |n| n.to_string_lossy().into_owned());
                     if ui
-                        .button(format!("◀ Back to {name}"))
+                        .button(trf("◀ Back to {}", &[&name]))
                         .on_hover_text(tr("Save the part and go back, to see the change there"))
                         .clicked()
                     {
@@ -678,7 +678,7 @@ fn tool_icon(t: Tool) -> &'static str {
 fn plane_chooser(app: &mut App, ui: &mut egui::Ui) {
     let target = app.sketch_target().map(|(_, name, _)| name);
     let tip = match &target {
-        Some(name) => format!("Sketch on {name}"),
+        Some(name) => trf("Sketch on {}", &[&name]),
         None => "Select a flat face or a plane first, or pick a plane on the right".into(),
     };
     if tile(ui, "sketch", "Sketch", target.is_some(), &tip) {

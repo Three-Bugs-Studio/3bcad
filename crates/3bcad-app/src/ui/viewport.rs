@@ -274,7 +274,10 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
         painter.text(
             rect.left_bottom() + egui::vec2(100.0, -10.0),
             egui::Align2::LEFT_BOTTOM,
-            trf("{} FPS · {} triangles", &[&format!("{:.0}", 1.0 / dt), &(app.geometry.triangles.len() / 3)]),
+            trf(
+                "{} FPS · {} triangles",
+                &[&format!("{:.0}", 1.0 / dt), &(app.geometry.triangles.len() / 3)],
+            ),
             egui::FontId::monospace(12.0),
             text_color,
         );
@@ -328,74 +331,84 @@ fn view_toolbar(app: &mut App, ctx: &egui::Context, rect: egui::Rect) {
         .fixed_pos(rect.center_top() + egui::vec2(-170.0, 6.0))
         .order(egui::Order::Middle)
         .show(ctx, |ui| {
-            egui::Frame::popup(ui.style()).inner_margin(egui::Margin::symmetric(4, 2)).show(ui, |ui| {
-                ui.horizontal(|ui| {
-                    ui.menu_button(tr("Views"), |ui| {
-                        let views = [
-                            (StandardView::Front, Command::Front),
-                            (StandardView::Back, Command::Back),
-                            (StandardView::Left, Command::Left),
-                            (StandardView::Right, Command::Right),
-                            (StandardView::Top, Command::Top),
-                            (StandardView::Bottom, Command::Bottom),
-                            (StandardView::Isometric, Command::Isometric),
-                        ];
-                        for (v, c) in views {
-                            if ui.add(egui::Button::new(tr(v.name())).shortcut_text(key(app, c))).clicked() {
-                                ui.close_menu();
-                                app.run(ui.ctx(), c);
+            egui::Frame::popup(ui.style())
+                .inner_margin(egui::Margin::symmetric(4, 2))
+                .show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.menu_button(tr("Views"), |ui| {
+                            let views = [
+                                (StandardView::Front, Command::Front),
+                                (StandardView::Back, Command::Back),
+                                (StandardView::Left, Command::Left),
+                                (StandardView::Right, Command::Right),
+                                (StandardView::Top, Command::Top),
+                                (StandardView::Bottom, Command::Bottom),
+                                (StandardView::Isometric, Command::Isometric),
+                            ];
+                            for (v, c) in views {
+                                if ui
+                                    .add(egui::Button::new(tr(v.name())).shortcut_text(key(app, c)))
+                                    .clicked()
+                                {
+                                    ui.close_menu();
+                                    app.run(ui.ctx(), c);
+                                }
                             }
-                        }
-                        ui.separator();
+                            ui.separator();
+                            if ui
+                                .add(egui::Button::new(tr("Normal To")).shortcut_text(key(app, Command::NormalTo)))
+                                .on_hover_text(tr("Look straight at the selected planar face or plane"))
+                                .clicked()
+                            {
+                                ui.close_menu();
+                                app.run(ui.ctx(), Command::NormalTo);
+                            }
+                        })
+                        .response
+                        .on_hover_text(tr("Standard views (Ctrl+1 … Ctrl+8)"));
                         if ui
-                            .add(egui::Button::new(tr("Normal To")).shortcut_text(key(app, Command::NormalTo)))
-                            .on_hover_text(tr("Look straight at the selected planar face or plane"))
+                            .button(tr("Fit"))
+                            .on_hover_text(format!("{} ({})", tr("Zoom to fit"), key(app, Command::ZoomToFit)))
                             .clicked()
                         {
-                            ui.close_menu();
-                            app.run(ui.ctx(), Command::NormalTo);
+                            app.zoom_to_fit();
                         }
-                    })
-                    .response
-                    .on_hover_text(tr("Standard views (Ctrl+1 … Ctrl+8)"));
-                    if ui
-                        .button(tr("Fit"))
-                        .on_hover_text(format!("{} ({})", tr("Zoom to fit"), key(app, Command::ZoomToFit)))
-                        .clicked()
-                    {
-                        app.zoom_to_fit();
-                    }
-                    ui.menu_button(tr(app.view.style.name()), |ui| {
-                        for s in DisplayStyle::ALL {
-                            if ui.selectable_label(app.view.style == s, tr(s.name())).clicked() {
-                                ui.close_menu();
-                                app.view.style = s;
+                        // A fixed label, so the bar does not shift when the style changes.
+                        ui.menu_button(tr("Display"), |ui| {
+                            for s in DisplayStyle::ALL {
+                                if ui.selectable_label(app.view.style == s, tr(s.name())).clicked() {
+                                    ui.close_menu();
+                                    app.view.style = s;
+                                }
                             }
-                        }
-                    })
-                    .response
-                    .on_hover_text(format!("{} ({})", tr("Display style"), key(app, Command::DisplayStyle)));
-                    if ui
-                        .selectable_label(app.view.section.is_some(), tr("Section"))
-                        .on_hover_text(tr("Cut the model open to look inside (the part does not change)"))
-                        .clicked()
-                    {
-                        app.toggle_section();
-                    }
-                    let mut persp = !app.camera.ortho;
-                    if ui
-                        .toggle_value(&mut persp, tr("Perspective"))
+                        })
+                        .response
                         .on_hover_text(format!(
                             "{} ({})",
-                            tr("Off: orthographic, parallel lines stay parallel"),
-                            key(app, Command::Perspective)
-                        ))
-                        .changed()
-                    {
-                        app.camera.ortho = !persp;
-                    }
+                            tr("Display style"),
+                            key(app, Command::DisplayStyle)
+                        ));
+                        if ui
+                            .selectable_label(app.view.section.is_some(), tr("Section"))
+                            .on_hover_text(tr("Cut the model open to look inside (the part does not change)"))
+                            .clicked()
+                        {
+                            app.toggle_section();
+                        }
+                        let mut persp = !app.camera.ortho;
+                        if ui
+                            .toggle_value(&mut persp, tr("Perspective"))
+                            .on_hover_text(format!(
+                                "{} ({})",
+                                tr("Off: orthographic, parallel lines stay parallel"),
+                                key(app, Command::Perspective)
+                            ))
+                            .changed()
+                        {
+                            app.camera.ortho = !persp;
+                        }
+                    });
                 });
-            });
         });
 }
 
@@ -438,11 +451,21 @@ fn view_cube(app: &mut App, ui: &mut egui::Ui, rect: egui::Rect) {
                     picked = Some((f, i, j));
                 }
                 let c = if inside { crate::ui::theme::ACCENT } else { fill };
-                painter.add(egui::Shape::convex_polygon(quad.to_vec(), c, egui::Stroke::new(0.5_f32, line)));
+                painter.add(egui::Shape::convex_polygon(
+                    quad.to_vec(),
+                    c,
+                    egui::Stroke::new(0.5_f32, line),
+                ));
             }
         }
         if facing > 0.35 {
-            painter.text(to_screen(n), egui::Align2::CENTER_CENTER, tr(name), egui::FontId::proportional(10.0), text);
+            painter.text(
+                to_screen(n),
+                egui::Align2::CENTER_CENTER,
+                tr(name),
+                egui::FontId::proportional(10.0),
+                text,
+            );
         }
     }
     if let (Some((f, i, j)), true) = (picked, clicked) {
@@ -477,7 +500,9 @@ fn section_tools(app: &mut App, ui: &mut egui::Ui, ctx: &egui::Context, rect: eg
             if k & 4 == 0 { bounds.0.z } else { bounds.1.z },
         )
     });
-    let (lo, hi) = corners.fold((f32::MAX, f32::MIN), |(a, b), c| (a.min(base.dot(c)), b.max(base.dot(c))));
+    let (lo, hi) = corners.fold((f32::MAX, f32::MIN), |(a, b), c| {
+        (a.min(base.dot(c)), b.max(base.dot(c)))
+    });
     let mut open = true;
     egui::Window::new(tr("Section View"))
         .open(&mut open)
@@ -491,20 +516,33 @@ fn section_tools(app: &mut App, ui: &mut egui::Ui, ctx: &egui::Context, rect: eg
                     }
                 }
             });
-            ui.add(egui::Slider::new(&mut s.offset, lo..=hi).text(tr("position")).suffix(" mm"));
+            ui.add(
+                egui::Slider::new(&mut s.offset, lo..=hi)
+                    .text(tr("position"))
+                    .suffix(" mm"),
+            );
             ui.checkbox(&mut s.flip, tr("Flip: keep the other side"));
-            ui.weak(tr("Drag the arrow in the view to move the plane. The part does not change."));
+            ui.weak(tr(
+                "Drag the arrow in the view to move the plane. The part does not change.",
+            ));
         });
     // The arrow: from the plane, in the middle of the model, along the side cut away.
     let mid = (bounds.0 + bounds.1) * 0.5;
     let on_plane = mid - base * (base.dot(mid) - s.offset);
     let n = s.normal();
     let len = (bounds.1 - bounds.0).length().max(1.0) * 0.15;
-    if let (Some(a), Some(b)) = (app.camera.project(on_plane, size), app.camera.project(on_plane + n * len, size)) {
+    if let (Some(a), Some(b)) = (
+        app.camera.project(on_plane, size),
+        app.camera.project(on_plane + n * len, size),
+    ) {
         let (a, b) = (rect.min + egui::vec2(a.x, a.y), rect.min + egui::vec2(b.x, b.y));
         let knob = egui::Rect::from_center_size(b, egui::vec2(18.0, 18.0));
         let r = ui.interact(knob, egui::Id::new("section_handle"), Sense::drag());
-        let color = if r.hovered() || r.dragged() { crate::ui::theme::ACCENT } else { Color32::from_rgb(220, 110, 40) };
+        let color = if r.hovered() || r.dragged() {
+            crate::ui::theme::ACCENT
+        } else {
+            Color32::from_rgb(220, 110, 40)
+        };
         let painter = ui.painter_at(rect);
         painter.arrow(a, b - a, egui::Stroke::new(2.5_f32, color));
         painter.circle_filled(b, 6.0, color);
@@ -546,8 +584,18 @@ fn gesture_wheel(app: &mut App, ctx: &egui::Context, resp: &egui::Response, pain
     for (k, (_, name)) in wheel.iter().enumerate() {
         let a = std::f32::consts::FRAC_PI_2 - k as f32 * std::f32::consts::FRAC_PI_2;
         let at = start + egui::vec2(a.cos(), -a.sin()) * 60.0;
-        let color = if chosen == Some(k) { crate::ui::theme::ACCENT } else { text };
-        painter.text(at, egui::Align2::CENTER_CENTER, tr(name), egui::FontId::proportional(14.0), color);
+        let color = if chosen == Some(k) {
+            crate::ui::theme::ACCENT
+        } else {
+            text
+        };
+        painter.text(
+            at,
+            egui::Align2::CENTER_CENTER,
+            tr(name),
+            egui::FontId::proportional(14.0),
+            color,
+        );
     }
     if resp.drag_stopped() || !ctx.input(|i| i.pointer.secondary_down()) {
         app.view.gesture = None;
@@ -577,7 +625,6 @@ fn shortcut_bar(app: &mut App, ctx: &egui::Context) {
         app.view.shortcut_bar = None;
     }
 }
-
 
 /// Sketches above the rollback bar that no feature has used yet (shown in the model).
 fn loose_sketches(app: &App) -> Vec<(FeatureId, &threebcad_sketch::Sketch, threebcad_kernel::Plane)> {
@@ -782,7 +829,12 @@ mod tests {
 
     #[test]
     fn points_are_found_inside_a_quad() {
-        let q = [egui::pos2(0.0, 0.0), egui::pos2(10.0, 0.0), egui::pos2(10.0, 10.0), egui::pos2(0.0, 10.0)];
+        let q = [
+            egui::pos2(0.0, 0.0),
+            egui::pos2(10.0, 0.0),
+            egui::pos2(10.0, 10.0),
+            egui::pos2(0.0, 10.0),
+        ];
         assert!(in_polygon(egui::pos2(5.0, 5.0), &q));
         assert!(!in_polygon(egui::pos2(15.0, 5.0), &q));
     }

@@ -1,8 +1,8 @@
 //! The open assembly: its scene, picking faces for mates, dragging components with the mouse,
 //! interference results and the assembly exports.
 
+use crate::i18n::{tr, trf};
 use std::collections::{HashMap, HashSet};
-use crate::i18n::tr;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -312,7 +312,7 @@ impl App {
             let Some(id) = s.component_of(r) else { return false };
             let Some(c) = s.doc.component(id) else { return false };
             if c.fixed {
-                self.status = format!("{} is fixed: float it to move it", c.name);
+                self.status = trf("{} is fixed: float it to move it", &[&c.name]);
                 return false;
             }
             if s.explode != 0.0 {
@@ -459,7 +459,7 @@ impl App {
         let Some(s) = self.asm.as_ref() else { return };
         let Some(path) = rfd::FileDialog::new()
             .add_filter("CSV", &["csv"])
-            .set_file_name(format!("{} BOM.csv", s.doc.name))
+            .set_file_name(trf("{} BOM.csv", &[&s.doc.name]))
             .save_file()
         else {
             return;
@@ -467,7 +467,7 @@ impl App {
         let csv = assembly::bom_csv(&s.doc.bom(s.bom_indented));
         self.status = match std::fs::write(&path, csv) {
             Ok(()) => format!("Exported {}", path.display()),
-            Err(e) => format!("Export failed: {e}"),
+            Err(e) => trf("Export failed: {}", &[&e]),
         };
     }
 
@@ -496,7 +496,7 @@ impl App {
                 self.files.settings_changed = true;
                 format!("Inserted {name}")
             }
-            Err(e) => format!("Could not insert: {e:#}"),
+            Err(e) => trf("Could not insert: {}", &[&format!("{:#}", e)]),
         };
         self.sync_assembly();
         self.zoom_to_fit();

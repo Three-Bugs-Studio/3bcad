@@ -78,8 +78,14 @@ pub fn panel() -> Color32 {
 /// The ribbon's command area and other raised boxes.
 pub fn raised() -> (Color32, Stroke) {
     match look() {
-        Look::Light => (Color32::from_rgb(250, 250, 250), Stroke::new(1.0_f32, Color32::from_rgb(210, 210, 210))),
-        Look::Dark => (Color32::from_rgb(48, 51, 56), Stroke::new(1.0_f32, Color32::from_rgb(70, 74, 80))),
+        Look::Light => (
+            Color32::from_rgb(250, 250, 250),
+            Stroke::new(1.0_f32, Color32::from_rgb(210, 210, 210)),
+        ),
+        Look::Dark => (
+            Color32::from_rgb(48, 51, 56),
+            Stroke::new(1.0_f32, Color32::from_rgb(70, 74, 80)),
+        ),
         Look::HighContrast => (Color32::BLACK, Stroke::new(1.5_f32, Color32::WHITE)),
     }
 }
@@ -210,7 +216,11 @@ fn high_contrast() -> egui::Visuals {
 /// Sets egui's looks for `theme`. Call when the setting changes, and `track` every frame.
 pub fn apply(ctx: &egui::Context, theme: Theme) {
     ctx.set_visuals_of(egui::Theme::Light, light());
-    let dark_slot = if theme == Theme::HighContrast { high_contrast() } else { dark() };
+    let dark_slot = if theme == Theme::HighContrast {
+        high_contrast()
+    } else {
+        dark()
+    };
     ctx.set_visuals_of(egui::Theme::Dark, dark_slot);
     ctx.set_theme(match theme {
         Theme::System => egui::ThemePreference::System,

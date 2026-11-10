@@ -1,7 +1,7 @@
 //! Properties panel: parameters of the selected feature, or the active sketch tool and selection.
 
+use crate::i18n::{tr, trf};
 use eframe::egui::{self, Color32, RichText};
-use crate::i18n::tr;
 use threebcad_core::holes;
 use threebcad_core::*;
 use threebcad_sketch::tools::Item;
@@ -42,7 +42,9 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                         start = ui.button(tr("✏ Sketch on it")).clicked();
                     }
                     None if picked.is_empty() => {
-                        ui.weak(tr("Nothing selected. Click a face, edge or plane, or a feature in the tree to edit it."));
+                        ui.weak(tr(
+                            "Nothing selected. Click a face, edge or plane, or a feature in the tree to edit it.",
+                        ));
                     }
                     None => {
                         for d in &picked {
@@ -180,7 +182,10 @@ impl Ed {
 pub(crate) fn describe_plane(h: &History, p: &PlaneRef) -> String {
     match p {
         PlaneRef::Std(s) => s.name().into(),
-        PlaneRef::Face(f) => format!("a face of {}", h.get(f.tag.feature).map_or("?", |x| x.name.as_str())),
+        PlaneRef::Face(f) => trf(
+            "a face of {}",
+            &[&h.get(f.tag.feature).map_or("?", |x| x.name.as_str())],
+        ),
         PlaneRef::Feature(id) => h.get(*id).map_or("?".into(), |f| f.name.clone()),
     }
 }
@@ -188,11 +193,14 @@ pub(crate) fn describe_plane(h: &History, p: &PlaneRef) -> String {
 fn describe_axis(h: &History, a: &AxisRef) -> String {
     match a {
         AxisRef::Std(i) => ["X axis", "Y axis", "Z axis"][(*i as usize).min(2)].into(),
-        AxisRef::Edge(e) => format!(
+        AxisRef::Edge(e) => trf(
             "an edge of {}",
-            h.get(e.faces[0].feature).map_or("?", |x| x.name.as_str())
+            &[&h.get(e.faces[0].feature).map_or("?", |x| x.name.as_str())],
         ),
-        AxisRef::Face(f) => format!("a face of {}", h.get(f.tag.feature).map_or("?", |x| x.name.as_str())),
+        AxisRef::Face(f) => trf(
+            "a face of {}",
+            &[&h.get(f.tag.feature).map_or("?", |x| x.name.as_str())],
+        ),
         AxisRef::Feature(id) => h.get(*id).map_or("?".into(), |f| f.name.clone()),
     }
 }
@@ -257,7 +265,9 @@ fn end_editor(ed: &mut Ed, ui: &mut egui::Ui, salt: &str, end: &mut End, p: &Pic
             });
         }
         End::UpToVertex(_) | End::UpToSurface(_) => {
-            ui.weak(tr("Select another vertex/face and pick the condition again to change it."));
+            ui.weak(tr(
+                "Select another vertex/face and pick the condition again to change it.",
+            ));
         }
         _ => {}
     }
@@ -342,7 +352,7 @@ fn feature_panel(app: &mut App, ctx: &egui::Context) {
                     FeatureKind::Sketch { sketch, on, .. } => {
                         if let Some((s, dof)) = status {
                             ui.label(match s {
-                                Status::UnderDefined => format!("Under defined ({dof} DOF)"),
+                                Status::UnderDefined => trf("Under defined ({} DOF)", &[&dof]),
                                 Status::FullyDefined => "Fully defined".to_string(),
                                 Status::OverDefined => "Over defined".to_string(),
                             });
@@ -456,7 +466,7 @@ fn feature_panel(app: &mut App, ctx: &egui::Context) {
                         ui.label(from(&r.sketch));
                         let axis_name = match &r.axis {
                             None => "first centerline of the sketch".to_string(),
-                            Some(RevolveAxis::SketchLine(e)) => format!("sketch line {}", e.0 + 1),
+                            Some(RevolveAxis::SketchLine(e)) => trf("sketch line {}", &[&(e.0 + 1)]),
                             Some(RevolveAxis::Axis(a)) => describe_axis(h, a),
                         };
                         ui.horizontal_wrapped(|ui| {
@@ -579,7 +589,9 @@ fn feature_panel(app: &mut App, ctx: &egui::Context) {
                         if let Some(t) = &thread {
                             ui.label(format!("Thread: {} (cosmetic)", t.designation));
                         }
-                        ui.weak(tr("Holes go at the sketch's points; edit the sketch to move or add them."));
+                        ui.weak(tr(
+                            "Holes go at the sketch's points; edit the sketch to move or add them.",
+                        ));
                     }
                     FeatureKind::LinearPattern(lp) => {
                         seeds_editor(&mut ed, ui, h, id, &mut lp.seeds);
@@ -824,7 +836,7 @@ pub(crate) fn seeds_editor(ed: &mut Ed, ui: &mut egui::Ui, h: &History, me: Feat
     }
 }
 fn sketch_panel(s: &mut SketchSession, ui: &mut egui::Ui) {
-    ui.heading(format!("Sketch on {}", s.plane_name));
+    ui.heading(trf("Sketch on {}", &[&s.plane_name]));
     let (text, color) = s.status_text();
     ui.colored_label(color, RichText::new(text).strong());
     ui.separator();
@@ -846,7 +858,9 @@ fn sketch_panel(s: &mut SketchSession, ui: &mut egui::Ui) {
         }
         if let Some(fixes) = s.diagnosis.clone() {
             if fixes.is_empty() {
-                ui.label(tr("No single relation fixes it; delete relations until the sketch turns black or blue."));
+                ui.label(tr(
+                    "No single relation fixes it; delete relations until the sketch turns black or blue.",
+                ));
             } else {
                 ui.label(tr("Deleting any one of these fixes it:"));
                 for i in fixes {
@@ -958,7 +972,11 @@ fn tool_options(s: &mut SketchSession, ui: &mut egui::Ui) {
                 ui.add(egui::DragValue::new(&mut o.polygon_sides).range(3..=40));
             });
             ui.radio_value(&mut o.inscribed, true, tr("Inscribed circle (click a vertex)"));
-            ui.radio_value(&mut o.inscribed, false, tr("Circumscribed circle (click an edge midpoint)"));
+            ui.radio_value(
+                &mut o.inscribed,
+                false,
+                tr("Circumscribed circle (click an edge midpoint)"),
+            );
         }
         Tool::Fillet => {
             ui.horizontal(|ui| {

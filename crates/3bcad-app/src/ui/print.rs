@@ -1,8 +1,8 @@
 //! The 3D Print tab: export with a mesh quality, Send to Slicer, the printer and how the part sits
 //! on its bed, and the printability checks.
 
+use crate::i18n::{tr, trf};
 use eframe::egui::{self, Color32, RichText};
-use crate::i18n::tr;
 use threebcad_core::DEFAULT_PRINT_DOWN;
 use threebcad_io::printer::{self, PRINTERS};
 use threebcad_io::Slicer;
@@ -193,7 +193,7 @@ fn bed(app: &mut App, ui: &mut egui::Ui) {
             for (i, axis) in ["X", "Y", "Z"].iter().enumerate() {
                 if ui
                     .add(length(&mut s.bed[i]).speed(1.0).range(10.0..=2000.0))
-                    .on_hover_text(format!("Build volume {axis}"))
+                    .on_hover_text(trf("Build volume {}", &[&axis]))
                     .changed()
                 {
                     s.printer = "Custom".into();
@@ -219,7 +219,7 @@ fn bed(app: &mut App, ui: &mut egui::Ui) {
                 .iter()
                 .zip(over)
                 .filter(|(_, o)| *o > 0.0)
-                .map(|(a, o)| format!("{} too long in {a}", u.length(o)))
+                .map(|(a, o)| trf("{} too long in {}", &[&u.length(o), &a]))
                 .collect();
             ui.colored_label(crate::ui::theme::ERROR, format!("⚠ {}", axes.join(", ")));
         }
@@ -227,7 +227,9 @@ fn bed(app: &mut App, ui: &mut egui::Ui) {
     app.files.settings_changed |= changed;
     ui.vertical(|ui| {
         if icons::small(ui, "lay_flat", "Lay Flat", true, false)
-            .on_hover_text(tr("Put the selected flat face on the bed, or point a selected edge or axis up"))
+            .on_hover_text(tr(
+                "Put the selected flat face on the bed, or point a selected edge or axis up",
+            ))
             .clicked()
         {
             lay_flat(app);
@@ -309,7 +311,9 @@ fn checks(app: &mut App, ui: &mut egui::Ui) {
             ui.label(tr("Overhang"));
             changed |= ui
                 .add(number(&mut s.overhang_deg).speed(0.5).range(1.0..=89.0).suffix("°"))
-                .on_hover_text(tr("The steepest overhang, from vertical, the printer manages without support"))
+                .on_hover_text(tr(
+                    "The steepest overhang, from vertical, the printer manages without support",
+                ))
                 .changed();
         });
         ui.horizontal(|ui| {
@@ -328,11 +332,11 @@ fn checks(app: &mut App, ui: &mut egui::Ui) {
     let r = app.print;
     ui.vertical(|ui| {
         if app.show_overhangs {
-            ui.label(RichText::new(format!("■ needs support: {}", units().area(r.overhang))).color(color(OVERHANG)));
+            ui.label(RichText::new(trf("■ needs support: {}", &[&units().area(r.overhang)])).color(color(OVERHANG)));
         }
         if app.show_thin {
             ui.label(
-                RichText::new(format!("■ thinner than the nozzle: {}", units().area(r.too_thin)))
+                RichText::new(trf("■ thinner than the nozzle: {}", &[&units().area(r.too_thin)]))
                     .color(color(TOO_THIN)),
             );
             ui.label(RichText::new(format!("■ thin: {}", units().area(r.thin))).color(color(THIN)));
@@ -343,7 +347,7 @@ fn checks(app: &mut App, ui: &mut egui::Ui) {
 /// Lets the user point at the slicer's program; when `retry`, sends the part once it is found.
 fn locate(app: &mut App, retry: bool) {
     let slicer = app.files.settings.slicer;
-    let mut dialog = rfd::FileDialog::new().set_title(format!("Where is {}?", slicer.name()));
+    let mut dialog = rfd::FileDialog::new().set_title(trf("Where is {}?", &[&slicer.name()]));
     if cfg!(windows) {
         dialog = dialog.add_filter("Program", &["exe"]);
     }
@@ -361,10 +365,10 @@ pub fn slicer_prompt(app: &mut App, ctx: &egui::Context) {
     let mut answer = None;
     egui::Modal::new(egui::Id::new("slicer_missing")).show(ctx, |ui| {
         ui.set_width(380.0);
-        ui.heading(format!("{} was not found", slicer.name()));
-        ui.label(format!(
+        ui.heading(trf("{} was not found", &[&slicer.name()]));
+        ui.label(trf(
             "3BCAD looked in its usual install folder and on the PATH. Point to the {} program to use it from now on.",
-            slicer.name()
+            &[&slicer.name()],
         ));
         ui.add_space(8.0);
         ui.horizontal(|ui| {

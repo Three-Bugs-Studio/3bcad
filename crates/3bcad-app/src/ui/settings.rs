@@ -58,7 +58,10 @@ fn pressed(ctx: &egui::Context) -> Option<Option<KeyboardShortcut>> {
     ctx.input(|i| {
         i.events.iter().find_map(|e| match e {
             egui::Event::Key {
-                key, pressed: true, modifiers, ..
+                key,
+                pressed: true,
+                modifiers,
+                ..
             } => {
                 if *key == egui::Key::Escape {
                     return Some(None);
@@ -92,7 +95,10 @@ pub fn window(app: &mut App, ctx: &egui::Context) {
                 None => {}
                 Some(key) => match commands::conflict(&app.files.settings.keys, cmd, key) {
                     Some(other) => {
-                        w.message = Some(trf("{} is already the shortcut for {}", &[&commands::text(&key), &tr(other.name())]));
+                        w.message = Some(trf(
+                            "{} is already the shortcut for {}",
+                            &[&commands::text(&key), &tr(other.name())],
+                        ));
                     }
                     None => {
                         let keys = &mut app.files.settings.keys;
@@ -125,7 +131,7 @@ pub fn window(app: &mut App, ctx: &egui::Context) {
                         }
                     }
                 });
-                ui.separator();
+                ui.add_space(12.0);
                 ui.vertical(|ui| {
                     ui.set_min_width(380.0);
                     let s = &mut app.files.settings;
@@ -288,37 +294,40 @@ pub fn window(app: &mut App, ctx: &egui::Context) {
 fn shortcuts(ui: &mut egui::Ui, w: &mut SettingsWindow, s: &mut crate::files::Settings, changed: &mut bool) {
     ui.weak(tr("Click a shortcut, then press the keys for it (Esc cancels)."));
     egui::ScrollArea::vertical().max_height(360.0).show(ui, |ui| {
-        egui::Grid::new("shortcuts").num_columns(3).striped(true).show(ui, |ui| {
-            for c in Command::ALL {
-                ui.label(tr(c.name()));
-                let text = if w.capture == Some(c) {
-                    tr("Press the keys…").to_string()
-                } else {
-                    commands::key_of(&s.keys, c).map_or_else(|| tr("none").to_string(), |k| commands::text(&k))
-                };
-                if ui.button(RichText::new(text).monospace()).clicked() {
-                    w.capture = Some(c);
-                    w.message = None;
-                }
-                ui.horizontal(|ui| {
-                    if ui.small_button(tr("Clear")).clicked() {
-                        s.keys.insert(c, None);
-                        *changed = true;
+        egui::Grid::new("shortcuts")
+            .num_columns(3)
+            .striped(true)
+            .show(ui, |ui| {
+                for c in Command::ALL {
+                    ui.label(tr(c.name()));
+                    let text = if w.capture == Some(c) {
+                        tr("Press the keys…").to_string()
+                    } else {
+                        commands::key_of(&s.keys, c).map_or_else(|| tr("none").to_string(), |k| commands::text(&k))
+                    };
+                    if ui.button(RichText::new(text).monospace()).clicked() {
+                        w.capture = Some(c);
+                        w.message = None;
                     }
-                    if s.keys.contains_key(&c) && ui.small_button(tr("Default")).clicked() {
-                        // The default may have been given to another command meanwhile.
-                        match c.default_key().and_then(|k| commands::conflict(&s.keys, c, k)) {
-                            Some(other) => w.message = Some(trf("{} has that shortcut now", &[&tr(other.name())])),
-                            None => {
-                                s.keys.remove(&c);
-                                *changed = true;
+                    ui.horizontal(|ui| {
+                        if ui.small_button(tr("Clear")).clicked() {
+                            s.keys.insert(c, None);
+                            *changed = true;
+                        }
+                        if s.keys.contains_key(&c) && ui.small_button(tr("Default")).clicked() {
+                            // The default may have been given to another command meanwhile.
+                            match c.default_key().and_then(|k| commands::conflict(&s.keys, c, k)) {
+                                Some(other) => w.message = Some(trf("{} has that shortcut now", &[&tr(other.name())])),
+                                None => {
+                                    s.keys.remove(&c);
+                                    *changed = true;
+                                }
                             }
                         }
-                    }
-                });
-                ui.end_row();
-            }
-        });
+                    });
+                    ui.end_row();
+                }
+            });
     });
     if ui.button(tr("Reset all shortcuts")).clicked() {
         s.keys.clear();

@@ -46,6 +46,50 @@ impl Language {
 
 static CURRENT: AtomicU8 = AtomicU8::new(0);
 
+/// A system font with Vietnamese letters (egui's own font has none of ạ, ế, ộ…): Segoe UI on
+/// Windows, Arial on macOS, DejaVu / Noto / Liberation Sans on Linux.
+fn system_font() -> Option<Vec<u8>> {
+    let windows = std::env::var_os("WINDIR").map_or_else(|| "C:\\Windows".into(), std::path::PathBuf::from);
+    let candidates = [
+        windows.join("Fonts").join("segoeui.ttf"),
+        windows.join("Fonts").join("arial.ttf"),
+        "/System/Library/Fonts/Supplemental/Arial.ttf".into(),
+        "/Library/Fonts/Arial Unicode.ttf".into(),
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf".into(),
+        "/usr/share/fonts/TTF/DejaVuSans.ttf".into(),
+        "/usr/share/fonts/dejavu-sans-fonts/DejaVuSans.ttf".into(),
+        "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf".into(),
+        "/usr/share/fonts/noto/NotoSans-Regular.ttf".into(),
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf".into(),
+    ];
+    candidates
+        .iter()
+        .find_map(|p: &std::path::PathBuf| std::fs::read(p).ok())
+}
+
+/// Adds the system font: first in line for Vietnamese, else behind egui's font for the letters it
+/// lacks (a part may be named in Vietnamese whatever the interface's language).
+pub fn install_fonts(ctx: &eframe::egui::Context, lang: Language) {
+    use eframe::egui::{FontData, FontDefinitions, FontFamily};
+    let mut fonts = FontDefinitions::default();
+    let Some(bytes) = system_font() else {
+        log::warn!("no system font with Vietnamese letters was found");
+        return ctx.set_fonts(fonts);
+    };
+    fonts
+        .font_data
+        .insert("system".into(), std::sync::Arc::new(FontData::from_owned(bytes)));
+    for family in [FontFamily::Proportional, FontFamily::Monospace] {
+        let list = fonts.families.entry(family.clone()).or_default();
+        if lang == Language::Vietnamese && family == FontFamily::Proportional {
+            list.insert(0, "system".into());
+        } else {
+            list.push("system".into());
+        }
+    }
+    ctx.set_fonts(fonts);
+}
+
 pub fn set(lang: Language) {
     CURRENT.store(lang as u8, Ordering::Relaxed);
 }
@@ -86,10 +130,7 @@ fn parse(text: &'static str) -> HashMap<&'static str, &'static str> {
 
 /// `text` in the chosen language.
 pub fn tr(text: &str) -> &str {
-    current()
-        .table()
-        .and_then(|t| t.get(text).copied())
-        .unwrap_or(text)
+    current().table().and_then(|t| t.get(text).copied()).unwrap_or(text)
 }
 
 /// `tr` for text with values: `{}` in the English template and its translation take `args` in
@@ -131,5 +172,12 @@ mod tests {
         set(Language::English);
         assert_eq!(trf("Opened {}", &[&"part.step"]), "Opened part.step");
         assert_eq!(Language::from_id("vi"), Some(Language::Vietnamese));
+    }
+
+    /// Windows and macOS always have the font; Linux depends on the distribution.
+    #[cfg(any(windows, target_os = "macos"))]
+    #[test]
+    fn a_system_font_with_vietnamese_letters_is_found() {
+        assert!(system_font().is_some_and(|b| b.len() > 10_000));
     }
 }

@@ -1,7 +1,7 @@
 //! The desktop file workflow: New / Open / Save, recent files, the unsaved-changes prompt,
 //! autosave with crash recovery, and importing other formats.
 
-use crate::i18n::tr;
+use crate::i18n::{tr, trf};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
@@ -140,7 +140,12 @@ impl Settings {
                 }
                 "perspective" => s.perspective = v.trim() != "false",
                 "view_cube" => s.view_cube = v.trim() != "false",
-                "units" => s.units = UnitSystem::ALL.into_iter().find(|u| u.short() == v.trim()).unwrap_or(s.units),
+                "units" => {
+                    s.units = UnitSystem::ALL
+                        .into_iter()
+                        .find(|u| u.short() == v.trim())
+                        .unwrap_or(s.units)
+                }
                 "lod" => s.lod = v.trim() != "false",
                 "show_fps" => s.show_fps = v.trim() == "true",
                 "mouse_gestures" => s.mouse_gestures = v.trim() == "true",
@@ -300,7 +305,10 @@ fn import_into(
         "step" | "stp" => {
             let import = threebcad_io::read_step(&std::fs::read(path)?)?;
             if !import.skipped.is_empty() {
-                msg = format!("Imported {file}; {} shells could not be read", import.skipped.len());
+                msg = trf(
+                    "Imported {}; {} shells could not be read",
+                    &[&file, &import.skipped.len()],
+                );
                 log::warn!("{file}: skipped {:?}", import.skipped);
             }
             doc.edit(|h| {
@@ -556,7 +564,10 @@ impl App {
         if let Some(path) = dropped.first() {
             self.request(Pending::Open(path.clone()));
             if dropped.len() > 1 {
-                self.status = format!("Opened the first of {} files; drop one file at a time", dropped.len());
+                self.status = trf(
+                    "Opened the first of {} files; drop one file at a time",
+                    &[&dropped.len()],
+                );
             }
         }
     }
@@ -595,7 +606,7 @@ impl App {
                 _ => self.doc.write_to(&path),
             });
         if let Err(e) = written {
-            self.status = format!("Autosave failed: {e:#}");
+            self.status = trf("Autosave failed: {}", &[&format!("{:#}", e)]);
         }
     }
 
@@ -643,14 +654,14 @@ impl App {
                     doc.name = stem(&path);
                     self.status = match doc.part_error() {
                         None => format!("Opened {}", path.display()),
-                        Some(why) => format!("Opened {}; its part could not be read: {why}", path.display()),
+                        Some(why) => trf("Opened {}; its part could not be read: {}", &[&path.display(), &why]),
                     };
                     self.files.settings.add_recent(&path);
                     self.files.settings.save();
                     self.set_drawing(doc, Some(path));
                 }
                 Err(e) => {
-                    self.status = format!("Could not open {}: {e:#}", path.display());
+                    self.status = trf("Could not open {}: {}", &[&path.display(), &format!("{:#}", e)]);
                     self.files.settings.recent.retain(|p| p != &path || p.exists());
                 }
             },
@@ -665,14 +676,14 @@ impl App {
                         .count();
                     self.status = match missing {
                         0 => format!("Opened {}", path.display()),
-                        n => format!("Opened {}; {n} components could not be read", path.display()),
+                        n => trf("Opened {}; {} components could not be read", &[&path.display(), &n]),
                     };
                     self.files.settings.add_recent(&path);
                     self.files.settings.save();
                     self.set_assembly(doc, Some(path));
                 }
                 Err(e) => {
-                    self.status = format!("Could not open {}: {e:#}", path.display());
+                    self.status = trf("Could not open {}: {}", &[&path.display(), &format!("{:#}", e)]);
                     self.files.settings.recent.retain(|p| p != &path || p.exists());
                 }
             },
@@ -688,7 +699,7 @@ impl App {
                         self.status = msg.replacen("Imported", "Opened", 1);
                     }
                     Err(e) => {
-                        self.status = format!("Could not open {}: {e:#}", path.display());
+                        self.status = trf("Could not open {}: {}", &[&path.display(), &format!("{:#}", e)]);
                         self.files.settings.recent.retain(|p| p != &path || p.exists());
                     }
                 }
@@ -702,7 +713,7 @@ impl App {
                     self.set_doc(doc, Some(path));
                 }
                 Err(e) => {
-                    self.status = format!("Could not open {}: {e:#}", path.display());
+                    self.status = trf("Could not open {}: {}", &[&path.display(), &format!("{:#}", e)]);
                     self.files.settings.recent.retain(|p| p != &path || p.exists());
                 }
             },
@@ -834,7 +845,7 @@ impl App {
                 true
             }
             Err(e) => {
-                self.status = format!("Save failed: {e:#}");
+                self.status = trf("Save failed: {}", &[&format!("{:#}", e)]);
                 false
             }
         }
@@ -846,7 +857,7 @@ impl App {
         egui::Modal::new(egui::Id::new("unsaved")).show(ctx, |ui| {
             ui.set_width(340.0);
             ui.heading(tr("Save changes?"));
-            ui.label(format!("{} has changes that are not saved.", self.doc_name()));
+            ui.label(trf("{} has changes that are not saved.", &[&self.doc_name()]));
             ui.add_space(8.0);
             ui.horizontal(|ui| {
                 if ui.button(tr("Save")).clicked() {
@@ -879,20 +890,23 @@ impl App {
             .and_then(|m| m.modified())
             .ok()
             .and_then(|t| t.elapsed().ok())
-            .map_or(String::new(), |d| format!(" {} min ago", d.as_secs() / 60));
+            .map_or(String::new(), |d| trf(" {} min ago", &[&(d.as_secs() / 60)]));
         let mut answer = None;
         egui::Modal::new(egui::Id::new("recover")).show(ctx, |ui| {
             ui.set_width(380.0);
             ui.heading(tr("Recover your work?"));
-            ui.label(format!(
-                "3BCAD did not close normally last time. A copy of the {} was autosaved{when}.",
-                if is_assembly(&path) {
-                    "assembly"
-                } else if is_drawing(&path) {
-                    "drawing"
-                } else {
-                    "part"
-                }
+            ui.label(trf(
+                "3BCAD did not close normally last time. A copy of the {} was autosaved{}.",
+                &[
+                    &if is_assembly(&path) {
+                        "assembly"
+                    } else if is_drawing(&path) {
+                        "drawing"
+                    } else {
+                        "part"
+                    },
+                    &when,
+                ],
             ));
             ui.add_space(8.0);
             ui.horizontal(|ui| {
@@ -926,7 +940,7 @@ impl App {
             };
             self.status = match recovered {
                 Ok(()) => "Recovered the autosaved file: save it to keep it".into(),
-                Err(e) => format!("Could not recover: {e:#}"),
+                Err(e) => trf("Could not recover: {}", &[&format!("{:#}", e)]),
             };
         }
         let _ = std::fs::remove_file(path);
@@ -944,7 +958,7 @@ impl App {
         };
         self.status = match self.import(&path) {
             Ok(msg) => msg,
-            Err(e) => format!("Import failed: {e:#}"),
+            Err(e) => trf("Import failed: {}", &[&format!("{:#}", e)]),
         };
     }
 
@@ -986,7 +1000,7 @@ impl App {
         };
         self.status = match threebcad_io::write_dxf(&path, &sketch) {
             Ok(()) => format!("Exported {}", path.display()),
-            Err(e) => format!("Export failed: {e}"),
+            Err(e) => trf("Export failed: {}", &[&e]),
         };
     }
 }
@@ -999,7 +1013,10 @@ pub fn menu(app: &mut App, ui: &mut egui::Ui) {
     let keys = app.files.settings.keys.clone();
     let key = |c: Command| crate::commands::key_of(&keys, c).map_or_else(String::new, |k| crate::commands::text(&k));
     ui.menu_button(tr("File"), |ui| {
-        if ui.add(egui::Button::new(tr("New Part")).shortcut_text(key(Command::New))).clicked() {
+        if ui
+            .add(egui::Button::new(tr("New Part")).shortcut_text(key(Command::New)))
+            .clicked()
+        {
             ui.close_menu();
             app.request(Pending::New);
         }
@@ -1013,7 +1030,9 @@ pub fn menu(app: &mut App, ui: &mut egui::Ui) {
         }
         if ui
             .button(tr("New Drawing"))
-            .on_hover_text(tr("Engineering drawing of a part: views, sections, dimensions, PDF / DXF"))
+            .on_hover_text(tr(
+                "Engineering drawing of a part: views, sections, dimensions, PDF / DXF",
+            ))
             .clicked()
         {
             ui.close_menu();
@@ -1038,7 +1057,10 @@ pub fn menu(app: &mut App, ui: &mut egui::Ui) {
                 }
             }
         });
-        if ui.add(egui::Button::new(tr("Save")).shortcut_text(key(Command::Save))).clicked() {
+        if ui
+            .add(egui::Button::new(tr("Save")).shortcut_text(key(Command::Save)))
+            .clicked()
+        {
             ui.close_menu();
             app.save();
         }
@@ -1051,7 +1073,9 @@ pub fn menu(app: &mut App, ui: &mut egui::Ui) {
         }
         if ui
             .button(tr("Properties…"))
-            .on_hover_text(tr("Part number, description and other properties, for the bill of materials"))
+            .on_hover_text(tr(
+                "Part number, description and other properties, for the bill of materials",
+            ))
             .clicked()
         {
             ui.close_menu();
@@ -1086,7 +1110,9 @@ pub fn menu(app: &mut App, ui: &mut egui::Ui) {
         ui.separator();
         if ui
             .add(egui::Button::new(tr("Settings…")).shortcut_text(key(Command::Settings)))
-            .on_hover_text(tr("Theme, language, interface size, shortcuts, mouse, autosave, updates"))
+            .on_hover_text(tr(
+                "Theme, language, interface size, shortcuts, mouse, autosave, updates",
+            ))
             .clicked()
         {
             ui.close_menu();
@@ -1115,7 +1141,7 @@ pub fn properties_window(app: &mut App, ctx: &egui::Context) {
     };
     let mut open = true;
     let mut apply = false;
-    egui::Window::new(format!("Properties of {}", app.doc_name()))
+    egui::Window::new(trf("Properties of {}", &[&app.doc_name()]))
         .open(&mut open)
         .default_width(460.0)
         .show(ctx, |ui| {
@@ -1210,7 +1236,8 @@ mod tests {
         s.mouse_gestures = true;
         use crate::commands::Command;
         s.keys.insert(Command::ZoomToFit, None);
-        s.keys.insert(Command::SectionView, crate::commands::parse("Ctrl+Shift+X"));
+        s.keys
+            .insert(Command::SectionView, crate::commands::parse("Ctrl+Shift+X"));
         assert_eq!(Settings::parse(&s.to_text()), s);
         let junk = Settings::parse(
             "junk\nautosave_minutes=x\nbed=1,2\nnozzle=-1\nchord=NaN\nslicer=Cura\ntheme=pink\nui_scale=0\nkey.save=Hyper+S\nkey.nothing=F",
