@@ -8,6 +8,14 @@
   <a href="#license"><img src="https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue" alt="License: MIT OR Apache-2.0"></a>
 </p>
 
+<p align="center">
+  <b>Download:</b>
+  <a href="https://github.com/Three-Bugs-Studio/3bcad/releases/latest/download/3BCAD-windows-x64.msi">Windows</a> ·
+  <a href="https://github.com/Three-Bugs-Studio/3bcad/releases/latest/download/3BCAD-macos-universal.dmg">macOS</a> ·
+  <a href="https://github.com/Three-Bugs-Studio/3bcad/releases/latest/download/3BCAD-linux-x86_64.AppImage">Linux</a> ·
+  <a href="#download">other builds</a>
+</p>
+
 # 3BCAD
 
 **Open-source parametric 3D CAD, written in Rust, for makers, mechanical engineers and the 3D-printing
@@ -25,9 +33,11 @@ Everything is written in memory-safe Rust: the B-Rep geometry kernel ([`truck`](
 the 2D constraint solver, the feature history, the GPU viewport and the file formats. There is no C++
 toolchain to install, and one `cargo run` builds the whole application on Windows, macOS and Linux.
 
-> **Status: early preview (v0.x).** You can sketch, model, save and reopen parametric parts, put them
-> together in assemblies, make engineering drawings of them, import STEP, meshes and DXF, check and orient
-> them for printing, and export STL / 3MF / STEP / DXF / PDF / SVG. Expect breaking changes before 1.0.
+> **Status: 1.0, ready for everyday use.** You can sketch, model, save and reopen parametric parts, put them
+> together in assemblies, make engineering drawings of them, open STEP, STL, 3MF, OBJ and DXF files from other
+> apps, check and orient parts for printing, and export STL / 3MF / STEP / DXF / PDF / SVG. It comes with
+> installers for Windows, macOS and Linux, updates itself, and speaks English and Vietnamese. Files saved by
+> earlier versions still open. Next up is in the [roadmap](ROADMAP.md).
 
 ## Contents
 
@@ -199,13 +209,15 @@ toolchain to install, and one `cargo run` builds the whole application on Window
 
 ## Download
 
-Get the desktop app from the [Releases page](https://github.com/Three-Bugs-Studio/3bcad/releases/latest):
+Click the link for your computer; it always downloads the newest version:
 
 | Platform | Installer | Or the portable build |
 | --- | --- | --- |
-| Windows 10/11 (x64) | `3BCAD-<version>-windows-x64.msi`: installs for you (no admin rights), adds a Start menu entry, opens `.3bcad` files and appears under "Open with" for STEP, STL, 3MF, OBJ and DXF | `…-windows-x64.zip`: unzip, run `3bcad.exe` |
-| macOS 11+ (Apple Silicon and Intel) | `3BCAD-<version>-macos-universal.dmg`: drag `3BCAD.app` onto Applications | `…-macos-universal.zip` |
-| Linux (x64) | `3BCAD-<version>-linux-x86_64.AppImage`: `chmod +x` it and run it | `…-linux-x64.tar.gz`: extract, run `./3bcad` |
+| Windows 10/11 (x64) | [**3BCAD-windows-x64.msi**](https://github.com/Three-Bugs-Studio/3bcad/releases/latest/download/3BCAD-windows-x64.msi): installs for you (no admin rights), adds a Start menu entry, opens `.3bcad` files and appears under "Open with" for STEP, STL, 3MF, OBJ and DXF | [.zip](https://github.com/Three-Bugs-Studio/3bcad/releases/latest/download/3BCAD-windows-x64.zip): unzip, run `3bcad.exe` |
+| macOS 11+ (Apple Silicon and Intel) | [**3BCAD-macos-universal.dmg**](https://github.com/Three-Bugs-Studio/3bcad/releases/latest/download/3BCAD-macos-universal.dmg): drag `3BCAD.app` onto Applications | [.zip](https://github.com/Three-Bugs-Studio/3bcad/releases/latest/download/3BCAD-macos-universal.zip) |
+| Linux (x64) | [**3BCAD-linux-x86_64.AppImage**](https://github.com/Three-Bugs-Studio/3bcad/releases/latest/download/3BCAD-linux-x86_64.AppImage): `chmod +x` it and run it | [.tar.gz](https://github.com/Three-Bugs-Studio/3bcad/releases/latest/download/3BCAD-linux-x64.tar.gz): extract, run `./3bcad` |
+
+Release notes, checksums and older versions are on the [Releases page](https://github.com/Three-Bugs-Studio/3bcad/releases).
 
 Until the project has signing certificates, Windows SmartScreen ("More info → Run anyway") and macOS Gatekeeper
 (right-click `3BCAD.app` → **Open**) warn on first launch; [RELEASING.md](RELEASING.md#code-signing) describes the

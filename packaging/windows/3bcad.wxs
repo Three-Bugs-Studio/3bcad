@@ -1,6 +1,6 @@
 <!--
   The Windows installer, built with WiX 5 from the repository root by the Package workflow:
-    wix build packaging/windows/3bcad.wxs -arch x64 -d Version=0.9.0 -o 3BCAD-0.9.0-windows-x64.msi
+    wix build packaging/windows/3bcad.wxs -arch x64 -d Version=0.9.0 -o 3BCAD-windows-x64.msi
   Per-user, into %LOCALAPPDATA%\Programs\3BCAD: no admin rights needed, and the in-app updater
   (crates/3bcad-app/src/update.rs) can replace 3bcad.exe there.
 -->
