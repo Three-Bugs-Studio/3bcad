@@ -316,7 +316,7 @@ mod tests {
     }
 
     fn binary_stl(m: &PrintMesh) -> Vec<u8> {
-        let path = std::env::temp_dir().join(format!("3bcad-mesh-{}.stl", std::process::id()));
+        let path = std::env::temp_dir().join(format!("3bcad-mesh-{:?}.stl", std::thread::current().id()));
         crate::write_stl(&path, &[("cube", m)]).unwrap();
         let mut b = std::fs::read(&path).unwrap();
         std::fs::remove_file(path).ok();
@@ -325,7 +325,7 @@ mod tests {
     }
 
     fn sample_3mf(m: &PrintMesh) -> Vec<u8> {
-        let path = std::env::temp_dir().join(format!("3bcad-mesh-{}.3mf", std::process::id()));
+        let path = std::env::temp_dir().join(format!("3bcad-mesh-{:?}.3mf", std::thread::current().id()));
         crate::write_3mf(&path, &[("cube", m)], &crate::threemf::Info::default()).unwrap();
         let b = std::fs::read(&path).unwrap();
         std::fs::remove_file(path).ok();
