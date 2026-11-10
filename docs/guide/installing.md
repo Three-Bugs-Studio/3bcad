@@ -1,15 +1,17 @@
 # Installing 3BCAD
 
-Download 3BCAD from the
-[latest release](https://github.com/Three-Bugs-Studio/3bcad/releases/latest) on GitHub. Each release
-has a plain archive for every system and, from version 1.0, an installer as well. Pick one file for your
-computer:
+Click the link for your computer. It always downloads the newest version. If you are not sure,
+take the installer.
 
-| System | Installer | Archive |
+| System | Installer | Or the portable archive |
 | --- | --- | --- |
-| Windows 10 or 11, x64 | `3BCAD-<version>-windows-x64.msi` | `3BCAD-<version>-windows-x64.zip` |
-| macOS 11 or later, Apple silicon or Intel | `3BCAD-<version>-macos-universal.dmg` | `3BCAD-<version>-macos-universal.zip` |
-| Linux, x64 | `3BCAD-<version>-linux-x86_64.AppImage` | `3BCAD-<version>-linux-x64.tar.gz` |
+| Windows 10 or 11, x64 | [3BCAD-windows-x64.msi](https://github.com/Three-Bugs-Studio/3bcad/releases/latest/download/3BCAD-windows-x64.msi) | [3BCAD-windows-x64.zip](https://github.com/Three-Bugs-Studio/3bcad/releases/latest/download/3BCAD-windows-x64.zip) |
+| macOS 11 or later, Apple silicon or Intel | [3BCAD-macos-universal.dmg](https://github.com/Three-Bugs-Studio/3bcad/releases/latest/download/3BCAD-macos-universal.dmg) | [3BCAD-macos-universal.zip](https://github.com/Three-Bugs-Studio/3bcad/releases/latest/download/3BCAD-macos-universal.zip) |
+| Linux, x64 | [3BCAD-linux-x86_64.AppImage](https://github.com/Three-Bugs-Studio/3bcad/releases/latest/download/3BCAD-linux-x86_64.AppImage) | [3BCAD-linux-x64.tar.gz](https://github.com/Three-Bugs-Studio/3bcad/releases/latest/download/3BCAD-linux-x64.tar.gz) |
+
+Every release, with its notes, is on the
+[Releases page](https://github.com/Three-Bugs-Studio/3bcad/releases). Releases before 1.0 have the version
+in their file names and no installers.
 
 You need a graphics card with Vulkan, DirectX 12 or Metal. To check a download, compare its SHA-256 with
 the matching line of the release's `SHA256SUMS.txt`, using `sha256sum` (Linux), `shasum -a 256` (macOS)
@@ -33,7 +35,7 @@ use **File > Open…**.
 
 ## Linux
 
-- **AppImage**: make it executable (`chmod +x 3BCAD-<version>-linux-x86_64.AppImage`) and run it. It needs
+- **AppImage**: make it executable (`chmod +x 3BCAD-linux-x86_64.AppImage`) and run it. It needs
   no FUSE library. To get a menu entry and file associations, integrate it with a tool such as
   AppImageLauncher or Gear Lever.
 - **Archive (`.tar.gz`)**: extract it and run `./3bcad`.
