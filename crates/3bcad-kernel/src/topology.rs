@@ -57,6 +57,8 @@ pub struct Topology {
     pub vertices: Vec<P3>,
     /// Faces touching each vertex.
     pub vertex_faces: Vec<Vec<usize>>,
+    /// The tessellation tolerance of the face triangles: how far they may sit off the surface.
+    pub tol: f64,
 }
 
 fn v3(p: Point3) -> P3 {
@@ -282,7 +284,10 @@ fn cylinder_of(face: &Face, tf: &TopoFace, hints: &Hints) -> Option<(P3, P3, f64
 /// Faces, edges and vertices of a solid; `tol` is the tessellation tolerance for the faces.
 pub fn analyze(solid: &Solid, tol: f64) -> Topology {
     let meshed = solid.robust_triangulation(tol);
-    let mut out = Topology::default();
+    let mut out = Topology {
+        tol,
+        ..Topology::default()
+    };
     let faces: Vec<Face> = solid.face_iter().cloned().collect();
     let mut hints: Vec<Hints> = Vec::new();
     for mface in meshed.face_iter() {
