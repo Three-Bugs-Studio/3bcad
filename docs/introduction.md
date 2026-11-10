@@ -6,6 +6,9 @@ and every value stays editable: change a dimension and the part rebuilds. Parts 
 assemblies and onto engineering drawings, and the 3D Print tab gets them ready for your printer and
 slicer.
 
+3BCAD is made by Three Bugs Studio. See the studio's other open-source products at
+[3bstudio.me](https://3bstudio.me/#open-source).
+
 This guide shows you how to:
 
 - [install 3BCAD](guide/installing.md) and [model your first part](guide/getting-started.md);
