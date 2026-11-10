@@ -33,9 +33,11 @@ Everything is written in memory-safe Rust: the B-Rep geometry kernel ([`truck`](
 the 2D constraint solver, the feature history, the GPU viewport and the file formats. There is no C++
 toolchain to install, and one `cargo run` builds the whole application on Windows, macOS and Linux.
 
-> **Status: early preview (v0.x).** You can sketch, model, save and reopen parametric parts, put them
-> together in assemblies, make engineering drawings of them, import STEP, meshes and DXF, check and orient
-> them for printing, and export STL / 3MF / STEP / DXF / PDF / SVG. Expect breaking changes before 1.0.
+> **Status: 1.0, ready for everyday use.** You can sketch, model, save and reopen parametric parts, put them
+> together in assemblies, make engineering drawings of them, open STEP, STL, 3MF, OBJ and DXF files from other
+> apps, check and orient parts for printing, and export STL / 3MF / STEP / DXF / PDF / SVG. It comes with
+> installers for Windows, macOS and Linux, updates itself, and speaks English and Vietnamese. Files saved by
+> earlier versions still open. Next up is in the [roadmap](ROADMAP.md).
 
 ## Contents
 
