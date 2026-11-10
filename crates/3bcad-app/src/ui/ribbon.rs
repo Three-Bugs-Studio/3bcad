@@ -839,6 +839,6 @@ fn evaluate(app: &mut App, ui: &mut egui::Ui) {
         "Rebuild every feature from scratch (Ctrl+Q)",
     ) {
         app.doc.force_rebuild();
-        app.status = format!("Rebuilt {} features", app.doc.built().evaluated);
+        app.status = crate::i18n::trf("Rebuilt {} features", &[&app.doc.built().evaluated]);
     }
 }

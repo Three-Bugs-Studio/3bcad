@@ -696,7 +696,15 @@ impl App {
                         self.files.settings.save();
                         self.set_doc(doc, None);
                         self.selected = Some(id);
-                        self.status = msg.replacen("Imported", "Opened", 1);
+                        let file = path
+                            .file_name()
+                            .map_or_else(String::new, |n| n.to_string_lossy().into_owned());
+                        let skipped = msg.contains(';');
+                        self.status = if skipped {
+                            trf("Opened {}; some shells could not be read (see the log)", &[&file])
+                        } else {
+                            trf("Opened {}", &[&file])
+                        };
                     }
                     Err(e) => {
                         self.status = trf("Could not open {}: {}", &[&path.display(), &format!("{:#}", e)]);

@@ -143,14 +143,14 @@ impl Ed {
 
     pub fn length(&mut self, ui: &mut egui::Ui, label: &str, v: &mut f64, min: f64) {
         ui.horizontal(|ui| {
-            ui.label(label);
+            ui.label(tr(label));
             self.track(ui.add(length(v).speed(0.1).range(min..=10_000.0)));
         });
     }
 
     pub fn angle(&mut self, ui: &mut egui::Ui, label: &str, rad: &mut f64, range: std::ops::RangeInclusive<f64>) {
         ui.horizontal(|ui| {
-            ui.label(label);
+            ui.label(tr(label));
             let mut deg = rad.to_degrees();
             if self
                 .track(ui.add(number(&mut deg).speed(0.5).range(range).suffix("°")))
@@ -162,18 +162,18 @@ impl Ed {
     }
 
     pub fn check(&mut self, ui: &mut egui::Ui, v: &mut bool, label: &str) {
-        self.track(ui.checkbox(v, label));
+        self.track(ui.checkbox(v, tr(label)));
     }
 
     pub fn count(&mut self, ui: &mut egui::Ui, label: &str, v: &mut usize) {
         ui.horizontal(|ui| {
-            ui.label(label);
+            ui.label(tr(label));
             self.track(ui.add(number(v).range(1..=500)));
         });
     }
 
     pub fn button(&mut self, ui: &mut egui::Ui, label: &str, enabled: bool) -> bool {
-        let clicked = ui.add_enabled(enabled, egui::Button::new(label)).clicked();
+        let clicked = ui.add_enabled(enabled, egui::Button::new(tr(label))).clicked();
         self.changed |= clicked;
         clicked
     }
@@ -181,7 +181,7 @@ impl Ed {
 
 pub(crate) fn describe_plane(h: &History, p: &PlaneRef) -> String {
     match p {
-        PlaneRef::Std(s) => s.name().into(),
+        PlaneRef::Std(s) => tr(s.name()).into(),
         PlaneRef::Face(f) => trf(
             "a face of {}",
             &[&h.get(f.tag.feature).map_or("?", |x| x.name.as_str())],
@@ -192,7 +192,7 @@ pub(crate) fn describe_plane(h: &History, p: &PlaneRef) -> String {
 
 fn describe_axis(h: &History, a: &AxisRef) -> String {
     match a {
-        AxisRef::Std(i) => ["X axis", "Y axis", "Z axis"][(*i as usize).min(2)].into(),
+        AxisRef::Std(i) => tr(["X axis", "Y axis", "Z axis"][(*i as usize).min(2)]).into(),
         AxisRef::Edge(e) => trf(
             "an edge of {}",
             &[&h.get(e.faces[0].feature).map_or("?", |x| x.name.as_str())],
@@ -207,7 +207,7 @@ fn describe_axis(h: &History, a: &AxisRef) -> String {
 
 pub(crate) fn axis_editor(ed: &mut Ed, ui: &mut egui::Ui, h: &History, axis: &mut AxisRef, p: &Picks, label: &str) {
     ui.horizontal_wrapped(|ui| {
-        ui.label(format!("{label}: {}", describe_axis(h, axis)));
+        ui.label(format!("{}: {}", tr(label), describe_axis(h, axis)));
         for (i, n) in ["X", "Y", "Z"].iter().enumerate() {
             if ed.button(ui, n, true) {
                 *axis = AxisRef::Std(i as u8);
@@ -221,7 +221,7 @@ pub(crate) fn axis_editor(ed: &mut Ed, ui: &mut egui::Ui, h: &History, axis: &mu
 
 pub(crate) fn plane_editor(ed: &mut Ed, ui: &mut egui::Ui, h: &History, plane: &mut PlaneRef, p: &Picks, label: &str) {
     ui.horizontal_wrapped(|ui| {
-        ui.label(format!("{label}: {}", describe_plane(h, plane)));
+        ui.label(format!("{}: {}", tr(label), describe_plane(h, plane)));
         if ed.button(ui, "Use selection", p.plane.is_some()) {
             *plane = p.plane.clone().unwrap().0;
         }

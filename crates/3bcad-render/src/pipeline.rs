@@ -3,7 +3,8 @@ use egui_wgpu::wgpu;
 use crate::scene::{LineVertex, MeshVertex};
 
 const SHADER: &str = r#"
-// style.x: 0 shaded, 1 flat white (hidden lines removed / visible). clip: plane normal and offset,
+// style.x: 0 shaded, 1 flat white (hidden lines removed / visible); style.yzw: the colour model edges
+// take instead of their own (a wireframe on a dark background), unless y < 0. clip: plane normal and offset,
 // the side where dot(n, p) > w is cut away; a zero normal means no section.
 struct Globals {
     view_proj: mat4x4<f32>,
@@ -109,7 +110,9 @@ fn fs_line(frag: LineOut) -> @location(0) vec4<f32> {
 @fragment
 fn fs_edge(frag: LineOut) -> @location(0) vec4<f32> {
     if (clipped(frag.world)) { discard; }
-    return vec4<f32>(tint(frag.color, state_of(frag.id), 1.0), 1.0);
+    var c = frag.color;
+    if (globals.style.y >= 0.0) { c = globals.style.yzw; }
+    return vec4<f32>(tint(c, state_of(frag.id), 1.0), 1.0);
 }
 
 // Edges behind faces (Hidden Lines Visible), light grey.

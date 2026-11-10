@@ -218,6 +218,8 @@ impl App {
             fit_when_meshed: false,
             egui_ctx: cc.egui_ctx.clone(),
         };
+        // Status lines made while starting (opening a file) are in the user's language.
+        crate::i18n::set(app.files.settings.language);
         app.camera.ortho = !app.files.settings.perspective;
         app.view.style = app.files.settings.display_style;
         app.sync_geometry();
@@ -1231,7 +1233,7 @@ impl eframe::App for App {
                     })
                     .response
                     .on_hover_text(tr("Unit system"));
-                    ui.label(format!("{} bodies", self.doc.bodies().len()));
+                    ui.label(crate::i18n::trf("{} bodies", &[&self.doc.bodies().len()]));
                     let (errs, warns) = (self.doc.errors().len(), self.doc.warnings().len());
                     if errs + warns > 0 {
                         ui.separator();

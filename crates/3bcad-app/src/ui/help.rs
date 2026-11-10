@@ -124,7 +124,7 @@ const SHORTCUTS: &[(&str, &[(&str, &str)])] = &[
             ("Double-click a sketch", "Edit it"),
             ("Hold Ctrl while drawing", "Turn off snapping and automatic relations"),
             ("Esc, double-click or right-click", "End a line chain / cancel the tool"),
-            ("Delete", "Delete the selected sketch geometry"),
+            ("Del", "Delete the selected sketch geometry"),
             ("Double-click a dimension", "Change its value"),
         ],
     ),
@@ -147,7 +147,7 @@ const SHORTCUTS: &[(&str, &[(&str, &str)])] = &[
             ("Drag a component", "Move it as far as its mates let it"),
             ("Shift+drag a component", "Turn it"),
             ("Double-click a component in the tree", "Edit its part"),
-            ("Delete", "Delete the selected component, mate or explode step"),
+            ("Del", "Delete the selected component, mate or explode step"),
         ],
     ),
     (
@@ -160,7 +160,7 @@ const SHORTCUTS: &[(&str, &[(&str, &str)])] = &[
                 "Move it (projected views stay lined up)",
             ),
             ("Esc", "Stop the tool, then clear the selection"),
-            ("Delete", "Delete the selected view, dimension or note"),
+            ("Del", "Delete the selected view, dimension or note"),
         ],
     ),
 ];

@@ -367,6 +367,8 @@ pub struct ViewportCallback {
     pub silhouettes_version: u64,
     /// Draw the coarse copy (the view is moving).
     pub lod: bool,
+    /// The colour model edges take instead of their own (a wireframe on a dark background).
+    pub edge_color: Option<[f32; 3]>,
 }
 
 fn upload<T: Pod>(device: &wgpu::Device, data: &[T]) -> Buffer {
@@ -400,7 +402,10 @@ impl egui_wgpu::CallbackTrait for ViewportCallback {
             view_proj: self.view_proj.to_cols_array_2d(),
             eye: self.eye.extend(1.0).to_array(),
             body: [self.body_color[0], self.body_color[1], self.body_color[2], 1.0],
-            style: [if flat { 1.0 } else { 0.0 }, 0.0, 0.0, 0.0],
+            style: match self.edge_color {
+                Some([r, g, b]) => [if flat { 1.0 } else { 0.0 }, r, g, b],
+                None => [if flat { 1.0 } else { 0.0 }, -1.0, 0.0, 0.0],
+            },
             clip: self.clip.unwrap_or([0.0; 4]),
         };
         queue.write_buffer(&res.globals, 0, bytemuck::bytes_of(&globals));

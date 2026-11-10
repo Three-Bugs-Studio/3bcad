@@ -176,6 +176,10 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
             silhouettes: app.view.silhouettes.clone(),
             silhouettes_version: app.view.silhouettes_version,
             lod: app.view.moving,
+            // Without faces behind them, dark edges vanish into a dark background.
+            edge_color: (app.view.style == DisplayStyle::Wireframe
+                && crate::ui::theme::look() != crate::ui::theme::Look::Light)
+                .then_some([0.86, 0.88, 0.92]),
         },
     ));
     let painter = ui.painter_at(rect);
@@ -367,7 +371,7 @@ fn view_toolbar(app: &mut App, ctx: &egui::Context, rect: egui::Rect) {
                         .response
                         .on_hover_text(tr("Standard views (Ctrl+1 … Ctrl+8)"));
                         if ui
-                            .button(tr("Fit"))
+                            .button(tr("Zoom Fit"))
                             .on_hover_text(format!("{} ({})", tr("Zoom to fit"), key(app, Command::ZoomToFit)))
                             .clicked()
                         {
@@ -568,7 +572,7 @@ fn gesture_wheel(app: &mut App, ctx: &egui::Context, resp: &egui::Response, pain
     // Up, right, down, left.
     let wheel = [
         (Command::Top, "Top"),
-        (Command::ZoomToFit, "Fit"),
+        (Command::ZoomToFit, "Zoom Fit"),
         (Command::Front, "Front"),
         (Command::Isometric, "Isometric"),
     ];

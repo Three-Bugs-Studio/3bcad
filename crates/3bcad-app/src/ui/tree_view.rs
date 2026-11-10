@@ -51,7 +51,7 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
                     let resp = ui
                         .horizontal(|ui| {
                             icons::inline(ui, "plane", true);
-                            ui.selectable_label(selected, rp.name())
+                            ui.selectable_label(selected, tr(rp.name()))
                         })
                         .inner
                         .on_hover_text(tr("Double-click to sketch on it"));

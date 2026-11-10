@@ -1,0 +1,2039 @@
+# Vietnamese translation of the 3BCAD interface: an "en:" line (the English text, as the
+# program has it) followed by its "vi:" line. See docs/guide/translating.md.
+
+en: Face {} of body {}
+vi: Mặt {} của khối {}
+en: Edge {} of body {}
+vi: Cạnh {} của khối {}
+en: Vertex {} of body {}
+vi: Đỉnh {} của khối {}
+en: The part could not be meshed for display
+vi: Không chia lưới được chi tiết để hiển thị
+en: Meshing {} / {} bodies…
+vi: Đang chia lưới {} / {} khối…
+en: Select a plane or a planar face to sketch on
+vi: Chọn một mặt phẳng hoặc mặt phẳng trên chi tiết để phác thảo
+en: Select a plane, a planar face or a sketch
+vi: Chọn một mặt phẳng, mặt phẳng trên chi tiết hoặc một phác thảo
+en: Editing sketch on {}
+vi: Đang sửa phác thảo trên {}
+en: Sketch closed
+vi: Đã đóng phác thảo
+en: Sketch saved, but not linked to its face: {}
+vi: Đã lưu phác thảo, nhưng chưa liên kết với mặt của nó: {}
+en: Sketch saved
+vi: Đã lưu phác thảo
+en: Convert Entities: sketch on a model face first
+vi: Chuyển đổi đối tượng: hãy phác thảo trên một mặt của mô hình trước
+en: Converted {} edges of the face
+vi: Đã chuyển {} cạnh của mặt
+en: Export failed: {}
+vi: Xuất thất bại: {}
+en: Could not write {}: {}
+vi: Không ghi được {}: {}
+en: Could not open {}: {}
+vi: Không mở được {}: {}
+en: Undone
+vi: Đã hoàn tác
+en: Redone
+vi: Đã làm lại
+en: Rebuilt {} features
+vi: Đã dựng lại {} đặc trưng
+en: Select a planar face or a plane first
+vi: Hãy chọn trước một mặt phẳng trên chi tiết hoặc một mặt phẳng
+en: Unit system
+vi: Hệ đơn vị
+en: What's Wrong
+vi: Vấn đề
+en: {} is fixed: float it to move it
+vi: {} đang cố định: thả nổi để dời nó
+en: Collapse the exploded view to move components
+vi: Thu hình tách rời lại để dời chi tiết
+en: Save the assembly first, so 3BCAD can bring you back to it
+vi: Hãy lưu lắp ráp trước, để 3BCAD có thể đưa bạn quay lại
+en: Could not insert: {}
+vi: Không chèn được: {}
+en: no assembly is open
+vi: chưa mở lắp ráp nào
+en: the assembly has no parts
+vi: lắp ráp chưa có chi tiết nào
+en: Exported {}
+vi: Đã xuất {}
+en: 3BCAD part or assembly
+vi: Chi tiết hoặc lắp ráp 3BCAD
+en: New part
+vi: Chi tiết mới
+en: Open
+vi: Mở
+en: Save
+vi: Lưu
+en: Save As
+vi: Lưu thành
+en: Undo
+vi: Hoàn tác
+en: Redo
+vi: Làm lại
+en: Rebuild
+vi: Dựng lại
+en: Rename the selected feature
+vi: Đổi tên đặc trưng đang chọn
+en: Zoom to fit
+vi: Thu phóng vừa màn hình
+en: Front view
+vi: Hình chiếu Trước
+en: Back view
+vi: Hình chiếu Sau
+en: Left view
+vi: Hình chiếu Trái
+en: Right view
+vi: Hình chiếu Phải
+en: Top view
+vi: Hình chiếu Trên
+en: Bottom view
+vi: Hình chiếu Dưới
+en: Isometric view
+vi: Hình chiếu Trục đo
+en: Normal to the selected face or plane
+vi: Nhìn vuông góc với mặt hoặc mặt phẳng đang chọn
+en: Next display style
+vi: Kiểu hiển thị kế tiếp
+en: Section view
+vi: Xem mặt cắt
+en: Shortcut bar at the mouse
+vi: Thanh lệnh nhanh tại con trỏ
+en: Settings
+vi: Cài đặt
+en: Keyboard shortcuts window
+vi: Cửa sổ phím tắt
+en: The views now show {}
+vi: Các hình chiếu giờ thể hiện {}
+en: Could not use the part: {}
+vi: Không dùng được chi tiết: {}
+en: Save the drawing first, so 3BCAD can bring you back to it
+vi: Hãy lưu bản vẽ trước, để 3BCAD có thể đưa bạn quay lại
+en: Exported {} {} files next to {}
+vi: Đã xuất {} tệp {} vào cùng thư mục với {}
+en: Click a view where the vertical section line goes
+vi: Nhấp vào hình chiếu tại chỗ đặt đường cắt dọc
+en: Click a view where the horizontal section line goes
+vi: Nhấp vào hình chiếu tại chỗ đặt đường cắt ngang
+en: Click the middle of the area of a view to show larger
+vi: Nhấp vào tâm vùng cần phóng to trên hình chiếu
+en: Click an edge, a circle or a first vertex
+vi: Nhấp một cạnh, một đường tròn hoặc đỉnh thứ nhất
+en: Click the second vertex
+vi: Nhấp đỉnh thứ hai
+en: Click what the note points at (or empty sheet for no leader)
+vi: Nhấp vào đối tượng mà ghi chú chỉ tới (hoặc vùng trống trên tờ nếu không cần đường dẫn)
+en: Placed the front view and two projected views: drag them, or add more from the Drawing tab
+vi: Đã đặt hình chiếu Trước và hai hình chiếu từ nó: kéo để sắp xếp, hoặc thêm hình từ thẻ Bản vẽ
+en: 3BCAD part
+vi: Chi tiết 3BCAD
+en: PDF (every sheet, true scale)
+vi: PDF (mọi tờ, đúng tỉ lệ)
+en: SVG (a file per sheet)
+vi: SVG (mỗi tờ một tệp)
+en: DXF (a file per sheet, layered)
+vi: DXF (mỗi tờ một tệp, có lớp)
+en: Imported {}; {} shells could not be read
+vi: Đã nhập {}; {} vỏ (shell) không đọc được
+en: Opened the first of {} files; drop one file at a time
+vi: Đã mở tệp đầu tiên trong {} tệp; hãy thả từng tệp một
+en: Autosave failed: {}
+vi: Tự động lưu thất bại: {}
+en: New assembly: insert a part to start
+vi: Lắp ráp mới: chèn một chi tiết để bắt đầu
+en: New drawing: choose the part it shows (Drawing tab > Model)
+vi: Bản vẽ mới: chọn chi tiết cần thể hiện (thẻ Bản vẽ > Mô hình)
+en: Opened {}; its part could not be read: {}
+vi: Đã mở {}; không đọc được chi tiết của nó: {}
+en: Opened {}; {} components could not be read
+vi: Đã mở {}; {} chi tiết không đọc được
+en: Save failed: {}
+vi: Lưu thất bại: {}
+en: Save changes?
+vi: Lưu thay đổi?
+en: {} has changes that are not saved.
+vi: {} có thay đổi chưa được lưu.
+en: Don't Save
+vi: Không lưu
+en: Cancel
+vi: Hủy
+en:  {} min ago
+vi:  {} phút trước
+en: Recover your work?
+vi: Khôi phục công việc?
+en: 3BCAD did not close normally last time. A copy of the {} was autosaved{}.
+vi: Lần trước 3BCAD không đóng bình thường. Một bản sao của {} đã được tự động lưu{}.
+en: Recover
+vi: Khôi phục
+en: Discard
+vi: Bỏ đi
+en: Could not recover: {}
+vi: Không khôi phục được: {}
+en: Import failed: {}
+vi: Nhập thất bại: {}
+en: Select a sketch or a planar face to export as DXF
+vi: Chọn một phác thảo hoặc mặt phẳng để xuất ra DXF
+en: File
+vi: Tệp
+en: New Part
+vi: Chi tiết mới
+en: New Assembly
+vi: Lắp ráp mới
+en: Put parts together with mates
+vi: Ghép các chi tiết bằng ràng buộc lắp
+en: New Drawing
+vi: Bản vẽ mới
+en: Engineering drawing of a part: views, sections, dimensions, PDF / DXF
+vi: Bản vẽ kỹ thuật của chi tiết: hình chiếu, mặt cắt, kích thước, PDF / DXF
+en: Open…
+vi: Mở…
+en: 3BCAD files, or STEP, STL, 3MF, OBJ and DXF as a new part
+vi: Tệp 3BCAD, hoặc STEP, STL, 3MF, OBJ và DXF thành chi tiết mới
+en: Open Recent
+vi: Mở gần đây
+en: No recent parts
+vi: Chưa có chi tiết gần đây
+en: Save As…
+vi: Lưu thành…
+en: Properties…
+vi: Thuộc tính…
+en: Part number, description and other properties, for the bill of materials
+vi: Mã chi tiết, mô tả và các thuộc tính khác, dùng cho bảng kê vật tư
+en: Import…
+vi: Nhập…
+en: STEP solids, STL / 3MF / OBJ meshes, DXF sketches
+vi: Khối đặc STEP, lưới STL / 3MF / OBJ, phác thảo DXF
+en: Export DXF…
+vi: Xuất DXF…
+en: The selected sketch or planar face
+vi: Phác thảo hoặc mặt phẳng đang chọn
+en: Units
+vi: Đơn vị
+en: Material
+vi: Vật liệu
+en: Settings…
+vi: Cài đặt…
+en: Theme, language, interface size, shortcuts, mouse, autosave, updates
+vi: Giao diện, ngôn ngữ, cỡ giao diện, phím tắt, chuột, tự động lưu, cập nhật
+en: Decimals
+vi: Chữ số thập phân
+en: Properties of {}
+vi: Thuộc tính của {}
+en: Name
+vi: Tên
+en: Value
+vi: Giá trị
+en: Remove
+vi: Gỡ bỏ
+en: + Other
+vi: + Khác
+en: Apply
+vi: Áp dụng
+en: Properties saved with the file
+vi: Thuộc tính được lưu cùng tệp
+en: Drop to open (3BCAD, STEP, STL, 3MF, OBJ, DXF)
+vi: Thả vào để mở (3BCAD, STEP, STL, 3MF, OBJ, DXF)
+en: Opened {}
+vi: Đã mở {}
+en: All supported
+vi: Mọi định dạng hỗ trợ
+en: 3BCAD part, assembly or drawing
+vi: Chi tiết, lắp ráp hoặc bản vẽ 3BCAD
+en: Mesh (STL, 3MF, OBJ)
+vi: Lưới (STL, 3MF, OBJ)
+en: DXF drawing
+vi: Bản vẽ DXF
+en: 3BCAD assembly
+vi: Lắp ráp 3BCAD
+en: 3BCAD drawing
+vi: Bản vẽ 3BCAD
+en: Saved {}
+vi: Đã lưu {}
+en: Recovered the autosaved file: save it to keep it
+vi: Đã khôi phục tệp tự động lưu: hãy lưu lại để giữ nó
+en: Move up
+vi: Lên trên
+en: Move down
+vi: Xuống dưới
+en: Add…
+vi: Thêm…
+en: All bodies
+vi: Mọi khối
+en: {} bodies (picked by a face)
+vi: {} khối (chọn qua một mặt)
+en: ISO metric
+vi: ISO hệ mét
+en: ANSI Inch
+vi: ANSI hệ inch
+en: Profile
+vi: Biên dạng
+en: Sketch profile
+vi: Biên dạng phác thảo
+en: Circular profile
+vi: Biên dạng tròn
+en: Path
+vi: Đường dẫn
+en: The profile is carried along the path, square to it. A circular profile needs no sketch.
+vi: Biên dạng được quét dọc đường dẫn, luôn vuông góc với nó. Biên dạng tròn không cần phác thảo.
+en: Profiles, in order
+vi: Các biên dạng, theo thứ tự
+en: Guide curves
+vi: Đường dẫn hướng
+en: Start tangency
+vi: Tiếp tuyến đầu
+en: End tangency
+vi: Tiếp tuyến cuối
+en: Tangency 0 leaves the end free; larger values pull the surface square out of the profile.
+vi: Tiếp tuyến 0 để đầu mút tự do; giá trị lớn hơn kéo bề mặt ra vuông góc với biên dạng.
+en: Circle from: {}
+vi: Đường tròn từ: {}
+en: Revolutions
+vi: Số vòng
+en: Clockwise
+vi: Cùng chiều kim đồng hồ
+en: Counterclockwise
+vi: Ngược chiều kim đồng hồ
+en: Use the helix as the path of a sweep (a spring) or of a curve pattern.
+vi: Dùng đường xoắn ốc làm đường dẫn cho Quét (lò xo) hoặc cho Mảng theo đường cong.
+en: Major Ø{} mm, pitch {} mm, tap drill Ø{} mm
+vi: Đường kính ngoài Ø{} mm, bước ren {} mm, mũi khoan taro Ø{} mm
+en: A modelled ISO 68 thread: printable, and watertight. Rods are threaded outside, holes inside.
+vi: Ren ISO 68 được dựng thật: in được và lưới kín. Trục có ren ngoài, lỗ có ren trong.
+en: Edge
+vi: Cạnh
+en: Radius at points along the edge (0 = start, 1 = end)
+vi: Bán kính tại các điểm dọc cạnh (0 = đầu, 1 = cuối)
+en: Rounds every edge where a face of set 1 meets a face of set 2.
+vi: Bo tròn mọi cạnh nơi mặt của nhóm 1 gặp mặt của nhóm 2.
+en: By a plane
+vi: Bằng mặt phẳng
+en: By a sketch
+vi: Bằng phác thảo
+en: A sketch splits off what lies inside its outlines, straight through the part.
+vi: Phác thảo tách phần nằm trong đường bao của nó, xuyên thẳng qua chi tiết.
+en: Delete these
+vi: Xóa các khối này
+en: Keep only these
+vi: Chỉ giữ các khối này
+en: Translate
+vi: Tịnh tiến
+en: Select the flat face to mate first.
+vi: Hãy chọn trước mặt phẳng cần áp.
+en: Points from
+vi: Điểm lấy từ
+en: A copy goes at every sketch point, placed as the seed sits relative to its center.
+vi: Mỗi điểm phác thảo nhận một bản sao, đặt giống vị trí của bản gốc so với tâm của nó.
+en: Along
+vi: Theo
+en: A round face gets a spherical cap; other faces a smooth elliptical one.
+vi: Mặt tròn nhận vòm cầu; các mặt khác nhận vòm elip trơn.
+en: Sketch
+vi: Phác thảo
+en: Sketch on a plane parallel to the cylinder's axis; the sketch rolls onto the surface without stretching.
+vi: Phác thảo trên mặt phẳng song song với trục hình trụ; phác thảo được cuộn lên bề mặt mà không bị kéo giãn.
+en: Presets (per side)
+vi: Mức có sẵn (mỗi phía)
+en: Holes grow and pins, tabs and slots' walls move in by the clearance. Fit one part of each pair.
+vi: Lỗ nở rộng, còn thành của chốt, tai và rãnh lùi vào theo khe hở. Chỉ chỉnh một chi tiết trong mỗi cặp.
+en: {} has no properties to edit.
+vi: {} không có thuộc tính để sửa.
+en: Sweep: select the profile sketch, then Ctrl+click the path (a sketch or a helix)
+vi: Quét: chọn phác thảo biên dạng, rồi Ctrl+nhấp đường dẫn (phác thảo hoặc xoắn ốc)
+en: Loft: select two or more closed profile sketches (Ctrl+click), in order
+vi: Nối biên dạng: chọn từ hai phác thảo biên dạng kín trở lên (Ctrl+nhấp), theo thứ tự
+en: Helix: select a sketch with a circle first
+vi: Xoắn ốc: hãy chọn trước một phác thảo có đường tròn
+en: Variable Fillet: select a straight edge first
+vi: Bo tròn biến đổi: hãy chọn trước một cạnh thẳng
+en: Face Fillet: select two faces or more (Ctrl+click)
+vi: Bo tròn mặt: chọn từ hai mặt trở lên (Ctrl+nhấp)
+en: Thread: select a cylindrical face (a rod or a hole) first
+vi: Ren: hãy chọn trước một mặt trụ (trục hoặc lỗ)
+en: Dome: select a flat face first
+vi: Vòm: hãy chọn trước một mặt phẳng
+en: Wrap: select a sketch, then Ctrl+click the cylindrical face to wrap onto
+vi: Quấn: chọn một phác thảo, rồi Ctrl+nhấp mặt trụ cần quấn lên
+en: Fit: select the faces of a hole, pin, tab or slot (Ctrl+click for more)
+vi: Lắp ghép: chọn các mặt của lỗ, chốt, tai hoặc rãnh (Ctrl+nhấp để chọn thêm)
+en: Sketch Pattern: select the feature, then Ctrl+click a sketch of points
+vi: Mảng theo phác thảo: chọn đặc trưng, rồi Ctrl+nhấp một phác thảo điểm
+en: Curve Pattern: select the feature, then Ctrl+click a curve (sketch or helix)
+vi: Mảng theo đường cong: chọn đặc trưng, rồi Ctrl+nhấp một đường cong (phác thảo hoặc xoắn ốc)
+en: Combine: select a face on each body (Ctrl+click), the main body first
+vi: Kết hợp: chọn một mặt trên mỗi khối (Ctrl+nhấp), khối chính trước
+en: Delete/Keep Body: select a face on each body first
+vi: Xóa/Giữ khối: hãy chọn trước một mặt trên mỗi khối
+en: Swept Cut
+vi: Quét cắt
+en: Like Swept Boss, removing material
+vi: Như Quét khối, nhưng bóc vật liệu
+en: Lofted Cut
+vi: Nối biên dạng cắt
+en: Like Lofted Boss, removing material
+vi: Như Nối biên dạng khối, nhưng bóc vật liệu
+en: Variable Fillet
+vi: Bo tròn biến đổi
+en: Thread
+vi: Ren
+en: Dome
+vi: Vòm
+en: Select a flat face to raise into a smooth cap
+vi: Chọn một mặt phẳng để nâng thành vòm trơn
+en: Swept Boss/Base
+vi: Quét khối
+en: Lofted Boss/Base
+vi: Nối biên dạng khối
+en: Helix/Spiral
+vi: Xoắn ốc
+en: Face Fillet
+vi: Bo tròn mặt
+en: Wrap
+vi: Quấn
+en: Fit
+vi: Lắp ghép
+en: Sketch Pattern
+vi: Mảng theo phác thảo
+en: Curve Pattern
+vi: Mảng theo đường cong
+en: Combine
+vi: Kết hợp
+en: Split
+vi: Tách
+en: Delete/Keep Body
+vi: Xóa/Giữ khối
+en: Move/Copy Body
+vi: Dời/Chép khối
+en: Scale
+vi: Tỉ lệ
+en: Add
+vi: Cộng
+en: Use selection
+vi: Dùng lựa chọn
+en: All
+vi: Tất cả
+en: Diameter
+vi: Đường kính
+en: Twist
+vi: Xoắn
+en: Cut (remove material)
+vi: Cắt (bóc vật liệu)
+en: Merge result
+vi: Hợp nhất kết quả
+en: Pitch
+vi: Bước
+en: Height
+vi: Chiều cao
+en: Pitch (radial)
+vi: Bước (hướng kính)
+en: Taper angle
+vi: Góc côn
+en: Start angle
+vi: Góc bắt đầu
+en: Reverse direction
+vi: Đảo hướng
+en: Cylindrical face (a rod or a hole)
+vi: Mặt trụ (trục hoặc lỗ)
+en: Full length of the face
+vi: Hết chiều dài mặt
+en: Length
+vi: Chiều dài
+en: Offset from the start
+vi: Cách điểm đầu
+en: Start from the other end
+vi: Bắt đầu từ đầu kia
+en: Right-handed
+vi: Ren phải
+en: Add a point
+vi: Thêm một điểm
+en: faces in set 1
+vi: mặt thuộc nhóm 1
+en: faces in set 2
+vi: mặt thuộc nhóm 2
+en: Radius
+vi: Bán kính
+en: Main body (pick one of its faces)
+vi: Khối chính (chọn một mặt của nó)
+en: bodies to combine (one face each)
+vi: khối cần kết hợp (mỗi khối một mặt)
+en: Plane
+vi: Mặt phẳng
+en: bodies (one face each)
+vi: khối (mỗi khối một mặt)
+en: Rotate
+vi: Xoay
+en: About
+vi: Quanh
+en: Angle
+vi: Góc
+en: Mate a face against a plane
+vi: Áp một mặt vào mặt phẳng
+en: Face
+vi: Mặt
+en: Against
+vi: Áp vào
+en: Copy (keep the original)
+vi: Sao chép (giữ bản gốc)
+en: About: part origin
+vi: Tâm: gốc tọa độ chi tiết
+en: About: a vertex
+vi: Tâm: một đỉnh
+en: About: {}
+vi: Tâm: {}
+en: Origin
+vi: Gốc tọa độ
+en: Uniform
+vi: Đều
+en: Factor
+vi: Hệ số
+en: Instances
+vi: Số bản sao
+en: Equal spacing over the whole curve
+vi: Cách đều trên toàn đường cong
+en: Spacing
+vi: Khoảng cách
+en: Turn with the curve
+vi: Xoay theo đường cong
+en: Flat face
+vi: Mặt phẳng
+en: Reverse (sink into the part)
+vi: Đảo chiều (lõm vào chi tiết)
+en: Cylindrical face
+vi: Mặt trụ
+en: Depth
+vi: Chiều sâu
+en: faces to move
+vi: mặt cần dời
+en: Clearance
+vi: Khe hở
+en: Press
+vi: Lắp ép
+en: Slip
+vi: Lắp trượt
+en: Loose
+vi: Lắp lỏng
+en: Resin (SLA, DLP)
+vi: Nhựa lỏng (SLA, DLP)
+en: Powder (SLS, MJF)
+vi: Bột (SLS, MJF)
+en: Ready
+vi: Sẵn sàng
+en: Select a closed profile sketch, then Ctrl+click a path sketch or helix (a path alone sweeps a circle)
+vi: Chọn một phác thảo biên dạng kín, rồi Ctrl+nhấp phác thảo đường dẫn hoặc xoắn ốc (chỉ chọn đường dẫn thì quét đường tròn)
+en: Select two or more profile sketches in order (Ctrl+click), then any guide curves
+vi: Chọn từ hai phác thảo biên dạng trở lên theo thứ tự (Ctrl+nhấp), rồi các đường dẫn hướng nếu có
+en: Select a sketch with a circle: the helix starts on it
+vi: Chọn một phác thảo có đường tròn: xoắn ốc bắt đầu từ đó
+en: Select one straight edge: its radius runs from 1 to 3 mm
+vi: Chọn một cạnh thẳng: bán kính chạy từ 1 đến 3 mm
+en: Select faces: the first is set 1, the rest set 2; rounds where the sets meet
+vi: Chọn các mặt: mặt đầu là nhóm 1, còn lại là nhóm 2; bo tròn nơi hai nhóm gặp nhau
+en: Select a cylindrical face: a rod gets an outside thread, a hole an inside one
+vi: Chọn một mặt trụ: trục được ren ngoài, lỗ được ren trong
+en: Select a sketch (on a plane parallel to the axis), then Ctrl+click a cylindrical face
+vi: Chọn một phác thảo (trên mặt phẳng song song với trục), rồi Ctrl+nhấp một mặt trụ
+en: Select the faces of a hole, pin, tab or slot: they move in by a press, slip or loose clearance
+vi: Chọn các mặt của lỗ, chốt, tai hoặc rãnh: chúng lùi vào theo khe hở lắp ép, trượt hoặc lỏng
+en: Select the feature to repeat, then Ctrl+click a sketch of points
+vi: Chọn đặc trưng cần lặp, rồi Ctrl+nhấp một phác thảo điểm
+en: Select the feature to repeat, then Ctrl+click a sketch curve or helix
+vi: Chọn đặc trưng cần lặp, rồi Ctrl+nhấp một đường phác thảo hoặc xoắn ốc
+en: Select a face of the main body, then Ctrl+click a face of each other body
+vi: Chọn một mặt của khối chính, rồi Ctrl+nhấp một mặt của từng khối còn lại
+en: Split the bodies by a selected plane or sketch (default Right Plane)
+vi: Tách các khối bằng mặt phẳng hoặc phác thảo đang chọn (mặc định Mặt phẳng Phải)
+en: Select a face of each body to delete
+vi: Chọn một mặt của mỗi khối cần xóa
+en: Move the selected bodies (or all) by values, a rotation or a mate
+vi: Dời các khối đang chọn (hoặc tất cả) theo giá trị, phép xoay hoặc áp mặt
+en: Scale the selected bodies (or all) about the origin
+vi: Thay đổi tỉ lệ các khối đang chọn (hoặc tất cả) quanh gốc tọa độ
+en: Parts changed on disk: the assembly shows them as they are now
+vi: Các chi tiết đã thay đổi trên đĩa: lắp ráp hiển thị chúng theo bản mới nhất
+en: Mate deleted
+vi: Đã xóa ràng buộc lắp
+en: Explode step deleted
+vi: Đã xóa bước tách rời
+en: Component deleted, with its mates
+vi: Đã xóa chi tiết, cùng các ràng buộc lắp của nó
+en: {} mate between the two picked faces
+vi: Ràng buộc lắp {} giữa hai mặt đã chọn
+en: Pick two faces on two different components (Ctrl+click the second)
+vi: Chọn hai mặt trên hai chi tiết khác nhau (Ctrl+nhấp mặt thứ hai)
+en: {} added, but {}
+vi: Đã thêm {}, nhưng {}
+en: Cannot mate: {}
+vi: Không tạo được ràng buộc lắp: {}
+en: Insert a part or an assembly from a file
+vi: Chèn chi tiết hoặc lắp ráp từ tệp
+en: Recent
+vi: Gần đây
+en: Insert a part opened recently
+vi: Chèn chi tiết mở gần đây
+en: A fixed component stays put; mates move the others to it
+vi: Chi tiết cố định đứng yên; ràng buộc lắp dời các chi tiết khác đến nó
+en: Open the component's part to change it
+vi: Mở chi tiết gốc của nó để sửa
+en: Remove the component and its mates (Delete)
+vi: Gỡ chi tiết và các ràng buộc lắp của nó (Delete)
+en: Find parts that overlap (parts that only touch are fine)
+vi: Tìm các chi tiết chồng lấn nhau (chỉ chạm nhau thì không sao)
+en: {} pairs of parts interfere
+vi: {} cặp chi tiết giao thoa
+en: Bill of materials
+vi: Bảng kê vật tư
+en: Export the assembly as STEP: each part once, every component placed and named
+vi: Xuất lắp ráp ra STEP: mỗi chi tiết lưu một lần, mọi chi tiết lắp đều đúng vị trí và có tên
+en: Export one object per part, laid out on the bed for the slicer
+vi: Xuất mỗi chi tiết thành một đối tượng, xếp sẵn trên bàn in cho phần mềm cắt lớp
+en: Open the parts in {}, laid out on the bed
+vi: Mở các chi tiết trong {}, xếp sẵn trên bàn in
+en: Explode step added
+vi: Đã thêm bước tách rời
+en: Play the exploded view, or put the parts back
+vi: Chạy hình tách rời, hoặc đưa các chi tiết về chỗ cũ
+en: ⚠ {} mates do not hold
+vi: ⚠ {} ràng buộc lắp không thỏa mãn
+en: Assembly Tree
+vi: Cây lắp ráp
+en: Insert a part to start: the first one is fixed at the origin.
+vi: Chèn một chi tiết để bắt đầu: chi tiết đầu tiên được cố định tại gốc tọa độ.
+en: Could not read {}: {}
+vi: Không đọc được {}: {}
+en: Edit Part
+vi: Sửa chi tiết
+en: Delete
+vi: Xóa
+en: Flip
+vi: Lật
+en: Exploded View ({} steps)
+vi: Hình tách rời ({} bước)
+en: Select a component and click Explode Step.
+vi: Chọn một chi tiết và nhấp Bước tách rời.
+en: steps
+vi: bước
+en: Mate
+vi: Ràng buộc lắp
+en: Assembly
+vi: Lắp ráp
+en: Face of {}
+vi: Mặt của {}
+en: Distance
+vi: Khoảng cách
+en: Flip alignment
+vi: Đảo chiều
+en: Faces facing the same way instead of each other, or the other side
+vi: Hai mặt quay cùng hướng thay vì đối mặt nhau, hoặc lật sang phía kia
+en: Does not hold: {}
+vi: Không thỏa mãn: {}
+en: Delete Mate
+vi: Xóa ràng buộc lắp
+en: Explode Step {}
+vi: Bước tách rời {}
+en: Direction
+vi: Hướng
+en: Delete Step
+vi: Xóa bước
+en: Could not read it: {}
+vi: Không đọc được: {}
+en: Fixed
+vi: Cố định
+en: Position
+vi: Vị trí
+en: Turn 90°
+vi: Xoay 90°
+en: Open the part to change it
+vi: Mở chi tiết để sửa
+en: Delete Component
+vi: Xóa chi tiết
+en: Interference
+vi: Giao thoa
+en: The assembly changed since it was checked.
+vi: Lắp ráp đã thay đổi kể từ lần kiểm tra trước.
+en: Parts
+vi: Chi tiết
+en: Shared volume
+vi: Thể tích chung
+en: They are shown in red.
+vi: Chúng được tô màu đỏ.
+en: Check Again
+vi: Kiểm tra lại
+en: Bill of Materials
+vi: Bảng kê vật tư
+en: Indented
+vi: Phân cấp
+en: List the parts of each sub-assembly under it
+vi: Liệt kê chi tiết của mỗi cụm lắp con ngay dưới nó
+en: Export CSV…
+vi: Xuất CSV…
+en: Part number and description come from each part's File > Properties.
+vi: Mã chi tiết và mô tả lấy từ Tệp > Thuộc tính của từng chi tiết.
+en: Insert
+vi: Chèn
+en: Send to Slicer
+vi: Gửi sang phần mềm cắt lớp
+en: Explode Step
+vi: Bước tách rời
+en: {} added
+vi: Đã thêm {}
+en: Float
+vi: Thả nổi
+en: Fix
+vi: Cố định
+en: No interference
+vi: Không có giao thoa
+en: 1 pair of parts interferes
+vi: 1 cặp chi tiết giao thoa
+en: Move the picked components out, along a picked flat face or else up; set the direction and              distance in Properties
+vi: Dời các chi tiết đã chọn ra xa, theo một mặt phẳng đã chọn hoặc lên trên; đặt hướng và khoảng cách trong Thuộc tính
+en: Collapse
+vi: Thu lại
+en: Explode
+vi: Tách rời
+en: {} components
+vi: {} chi tiết
+en: ⚠ 1 mate does not hold
+vi: ⚠ 1 ràng buộc lắp không thỏa mãn
+en: Mates ({})
+vi: Ràng buộc lắp ({})
+en: Step {}: {} parts, {}
+vi: Bước {}: {} chi tiết, {}
+en: Equations
+vi: Phương trình
+en: Configuration
+vi: Cấu hình
+en: Rename this configuration
+vi: Đổi tên cấu hình này
+en: + New
+vi: + Mới
+en: A new configuration like this one
+vi: Cấu hình mới giống cấu hình này
+en: Expression
+vi: Biểu thức
+en: This configuration only
+vi: Chỉ cấu hình này
+en: (Apply)
+vi: (Áp dụng)
+en: + Variable
+vi: + Biến
+en: + Dimension
+vi: + Kích thước
+en: The part has no dimensions yet
+vi: Chi tiết chưa có kích thước nào
+en: {} equations have errors
+vi: {} phương trình bị lỗi
+en: New / Edit Configurations…
+vi: Tạo / Sửa cấu hình…
+en: Variants of the part with their own dimensions and suppressed features
+vi: Các biến thể của chi tiết với kích thước và đặc trưng tạm ẩn riêng
+en: Appearance
+vi: Màu sắc bề mặt
+en: Body
+vi: Khối
+en: Colour
+vi: Màu
+en: Remove colour
+vi: Bỏ màu
+en: Colour removed
+vi: Đã bỏ màu
+en: Default
+vi: Mặc định
+en: The part changed on disk: the views show it as it is now
+vi: Chi tiết đã thay đổi trên đĩa: các hình chiếu thể hiện theo bản mới nhất
+en: Projected View ({})
+vi: Hình chiếu ({})
+en: Choose the part this drawing shows
+vi: Chọn chi tiết mà bản vẽ thể hiện
+en: Show a part opened recently
+vi: Thể hiện một chi tiết mở gần đây
+en: Open the part to change it; the drawing shows the change when you come back
+vi: Mở chi tiết để sửa; bản vẽ sẽ cập nhật khi bạn quay lại
+en: The front view with the top and side views projected from it
+vi: Hình chiếu Trước kèm hình chiếu Trên và hình chiếu cạnh chiếu từ nó
+en: Model View
+vi: Hình chiếu mô hình
+en: A view of the part from one side, or isometric
+vi: Hình chiếu chi tiết từ một phía, hoặc trục đo
+en: Projected
+vi: Hình chiếu
+en: Project the selected view and place it {}
+vi: Chiếu từ hình đang chọn và đặt về phía {}
+en: Show a circle of a view larger: click its middle
+vi: Phóng to một vùng tròn của hình chiếu: nhấp vào tâm của nó
+en: Click an edge, a circle, or two vertices of a view
+vi: Nhấp một cạnh, một đường tròn hoặc hai đỉnh của hình chiếu
+en: Bring in the dimensions of the part's sketches and extrusions
+vi: Đưa vào kích thước từ phác thảo và các lệnh đùn của chi tiết
+en: Added {} model dimensions
+vi: Đã thêm {} kích thước mô hình
+en: Add a note: click what it points at, or empty sheet
+vi: Thêm ghi chú: nhấp vào đối tượng nó chỉ tới, hoặc vùng trống trên tờ
+en: A new sheet with the same size, scale and title block
+vi: Tờ mới có cùng khổ giấy, tỉ lệ và khung tên
+en: Delete the selected view, dimension or note (Delete)
+vi: Xóa hình chiếu, kích thước hoặc ghi chú đang chọn (Delete)
+en: Unit system for dimensions
+vi: Hệ đơn vị cho kích thước
+en: ⚠ The part could not be read
+vi: ⚠ Không đọc được chi tiết
+en: Drawing Tree
+vi: Cây bản vẽ
+en: No part yet: Drawing tab > Model
+vi: Chưa có chi tiết: thẻ Bản vẽ > Mô hình
+en: Size
+vi: Khổ giấy
+en: Projection
+vi: Phép chiếu
+en: First angle (ISO)
+vi: Góc chiếu thứ nhất (ISO)
+en: The view seen from the left goes on the right, the top view below
+vi: Hình nhìn từ trái đặt bên phải, hình chiếu Trên đặt bên dưới
+en: Third angle (ANSI)
+vi: Góc chiếu thứ ba (ANSI)
+en: The view seen from the right goes on the right, the top view above
+vi: Hình nhìn từ phải đặt bên phải, hình chiếu Trên đặt bên trên
+en: Title block
+vi: Khung tên
+en: {Name} fills in from File > Properties of the drawing or the part, or {Sheet}, {Scale}, {Projection}, {Model}, {Material}.
+vi: {Name} lấy từ Tệp > Thuộc tính của bản vẽ hoặc chi tiết; ngoài ra có {Sheet}, {Scale}, {Projection}, {Model}, {Material}.
+en: + Cell
+vi: + Ô
+en: Delete Sheet
+vi: Xóa tờ
+en: Looks at
+vi: Hướng nhìn
+en: Own scale
+vi: Tỉ lệ riêng
+en: Else the sheet's scale
+vi: Nếu không, theo tỉ lệ của tờ
+en: Projected from its parent and lined up with it, at the parent's scale.
+vi: Chiếu từ hình gốc và gióng thẳng hàng với nó, theo tỉ lệ của hình gốc.
+en: Label
+vi: Nhãn
+en: Vertical line
+vi: Đường dọc
+en: Horizontal line
+vi: Đường ngang
+en: Line at
+vi: Vị trí đường
+en: Look the other way
+vi: Nhìn theo hướng ngược lại
+en: Hatch: {}, from the part's material
+vi: Kiểu gạch: {}, theo vật liệu của chi tiết
+en: Centre
+vi: Tâm
+en: Hidden lines (dashed)
+vi: Nét khuất (nét đứt)
+en: Centre marks and centrelines
+vi: Dấu tâm và đường tâm
+en: Delete View
+vi: Xóa hình chiếu
+en: Dimension
+vi: Kích thước
+en: What it measures is gone from the part
+vi: Đối tượng được đo không còn trên chi tiết
+en: Delete Dimension
+vi: Xóa kích thước
+en: Note
+vi: Ghi chú
+en: Remove Leader
+vi: Bỏ đường dẫn
+en: No leader: add the note with the Note tool on a view to point at it.
+vi: Không có đường dẫn: dùng công cụ Ghi chú nhấp lên hình chiếu để chỉ vào đối tượng.
+en: Delete Note
+vi: Xóa ghi chú
+en: Model
+vi: Mô hình
+en: Standard Views
+vi: Hình chiếu chuẩn
+en: Detail
+vi: Hình trích
+en: Smart Dimension
+vi: Kích thước thông minh
+en: Model Items
+vi: Kích thước mô hình
+en: Add Sheet
+vi: Thêm tờ
+en: View deleted, with the views and dimensions made from it
+vi: Đã xóa hình chiếu, cùng các hình chiếu và kích thước tạo từ nó
+en: Dimension deleted
+vi: Đã xóa kích thước
+en: Note deleted
+vi: Đã xóa ghi chú
+en: {} View
+vi: Hình chiếu {}
+en: Section
+vi: Mặt cắt
+en: Cut a view along a vertical line: click where it goes
+vi: Cắt hình chiếu theo đường dọc: nhấp vào chỗ đặt đường cắt
+en: Section —
+vi: Mặt cắt —
+en: Cut a view along a horizontal line: click where it goes
+vi: Cắt hình chiếu theo đường ngang: nhấp vào chỗ đặt đường cắt
+en: No more model dimensions fit the views on this sheet
+vi: Không còn kích thước mô hình nào phù hợp với các hình chiếu trên tờ này
+en: Added 1 model dimension
+vi: Đã thêm 1 kích thước mô hình
+en: Every sheet as one PDF, printed at true scale
+vi: Mọi tờ trong một tệp PDF, in đúng tỉ lệ
+en: An SVG file per sheet
+vi: Mỗi tờ một tệp SVG
+en: A DXF file per sheet, a layer per kind of line
+vi: Mỗi tờ một tệp DXF, mỗi loại nét một lớp
+en: , model
+vi: , mô hình
+en: From the part's sketch or feature: change it in the part.
+vi: Lấy từ phác thảo hoặc đặc trưng của chi tiết: hãy sửa trong chi tiết.
+en: Measured off the view: it follows the part's changes.
+vi: Đo trên hình chiếu: tự cập nhật theo thay đổi của chi tiết.
+en: Section view added: drag it along its line, or set the line in Properties
+vi: Đã thêm mặt cắt: kéo nó dọc theo đường cắt, hoặc đặt đường cắt trong Thuộc tính
+en: Sections are cut from model, projected or section views
+vi: Mặt cắt được cắt từ hình chiếu mô hình, hình chiếu hoặc mặt cắt khác
+en: Detail view added: set its size and scale in Properties
+vi: Đã thêm hình trích: đặt kích cỡ và tỉ lệ trong Thuộc tính
+en: Details are taken from model, projected or section views
+vi: Hình trích được lấy từ hình chiếu mô hình, hình chiếu hoặc mặt cắt
+en: Nothing to dimension there: click an edge, a circle or a vertex
+vi: Không có gì để ghi kích thước ở đó: nhấp một cạnh, đường tròn hoặc đỉnh
+en: Click a vertex for the second point
+vi: Nhấp một đỉnh làm điểm thứ hai
+en: Dimension added: drag its text to place it
+vi: Đã thêm kích thước: kéo chữ số để đặt vị trí
+en: Those cannot be dimensioned together
+vi: Không thể ghi kích thước giữa các đối tượng đó
+en: NOTE
+vi: GHI CHÚ
+en: Note added: type its text in Properties
+vi: Đã thêm ghi chú: nhập nội dung trong Thuộc tính
+en: No rebuild errors or warnings.
+vi: Không có lỗi hay cảnh báo khi dựng lại.
+en: Select the feature
+vi: Chọn đặc trưng
+en: Arc length {}
+vi: Độ dài cung {}
+en: Cylinder radius {}, diameter {}, axis {}
+vi: Trụ: bán kính {}, đường kính {}, trục {}
+en: Center distance {}
+vi: Khoảng cách tâm {}
+en: Normal distance {}
+vi: Khoảng cách pháp tuyến {}
+en: Minimum distance ≈ {}
+vi: Khoảng cách nhỏ nhất ≈ {}
+en: Measure
+vi: Đo
+en: Ctrl+click to measure between two items.
+vi: Ctrl+nhấp để đo giữa hai đối tượng.
+en: Copy
+vi: Sao chép
+en: Density
+vi: Khối lượng riêng
+en: Mass Properties
+vi: Đặc tính khối lượng
+en: The part has no bodies.
+vi: Chi tiết chưa có khối nào.
+en: Surface area {}
+vi: Diện tích bề mặt {}
+en: Center of mass {}
+vi: Trọng tâm {}
+en: Principal moments ({}·{}²) {}, {}, {}
+vi: Mômen quán tính chính ({}·{}²) {}, {}, {}
+en: Units: {}. From a {} mm tessellation.
+vi: Đơn vị: {}. Tính trên lưới tam giác {} mm.
+en: The center of mass is marked in the graphics area.
+vi: Trọng tâm được đánh dấu trong vùng đồ họa.
+en: Edit the feature and pick the face or edge again; the one it used is gone.
+vi: Sửa đặc trưng và chọn lại mặt hoặc cạnh; đối tượng cũ không còn nữa.
+en: Change a dimension slightly or turn off Merge result; truck could not intersect these faces.
+vi: Đổi nhẹ một kích thước hoặc tắt Hợp nhất kết quả; truck không giao được các mặt này.
+en: Use a smaller value.
+vi: Dùng giá trị nhỏ hơn.
+en: Edit the sketch and close the profile (or use a thin feature).
+vi: Sửa phác thảo cho biên dạng kín lại (hoặc dùng thành mỏng).
+en: Edit the sketch and run Diagnose to find the conflicting relations.
+vi: Sửa phác thảo và chạy Chẩn đoán để tìm ràng buộc xung đột.
+en: Fix the parent feature first.
+vi: Sửa đặc trưng cha trước.
+en: Reverse the direction or pick another end condition.
+vi: Đảo hướng hoặc chọn điều kiện kết thúc khác.
+en: Check the skipped instances: they may fall outside the part.
+vi: Kiểm tra các bản sao bị bỏ qua: chúng có thể nằm ngoài chi tiết.
+en: Draw a centerline in the sketch, or pick an axis in the Properties panel.
+vi: Vẽ một đường tâm trong phác thảo, hoặc chọn trục trong bảng Thuộc tính.
+en: Double-click the feature to edit it and check its inputs.
+vi: Nhấp đúp đặc trưng để sửa và kiểm tra dữ liệu đầu vào.
+en: Errors
+vi: Lỗi
+en: Warnings
+vi: Cảnh báo
+en: Select one or two vertices, edges or faces.
+vi: Chọn một hoặc hai đỉnh, cạnh hoặc mặt.
+en: Point {}
+vi: Điểm {}
+en: Length {}
+vi: Độ dài {}
+en: Radius {}, diameter {}
+vi: Bán kính {}, đường kính {}
+en: Center {}
+vi: Tâm {}
+en: Area {}
+vi: Diện tích {}
+en: Normal {}
+vi: Pháp tuyến {}
+en: {} to {}
+vi: Từ {} đến {}
+en: Material {}
+vi: Vật liệu {}
+en: Mass {}
+vi: Khối lượng {}
+en: Volume {}
+vi: Thể tích {}
+en: Help
+vi: Trợ giúp
+en: Keyboard Shortcuts
+vi: Phím tắt
+en: User Guide and Tutorials
+vi: Hướng dẫn sử dụng và bài học
+en: Report a Bug
+vi: Báo lỗi
+en: Open Log Folder
+vi: Mở thư mục nhật ký
+en: 3bcad.log and crash reports, to attach to a bug report
+vi: 3bcad.log và báo cáo sự cố, để đính kèm khi báo lỗi
+en: Could not open the log folder: {}
+vi: Không mở được thư mục nhật ký: {}
+en: Check for Updates…
+vi: Kiểm tra cập nhật…
+en: Checking for updates…
+vi: Đang kiểm tra cập nhật…
+en: About 3BCAD…
+vi: Giới thiệu 3BCAD…
+en: 3BCAD closed unexpectedly
+vi: 3BCAD đã đóng bất thường
+en: Sorry, the last time it ran, 3BCAD stopped without closing. Your work may be in the autosave it offers.
+vi: Rất tiếc, lần chạy trước 3BCAD đã dừng mà không đóng đúng cách. Công việc của bạn có thể nằm trong bản tự động lưu mà nó đề xuất.
+en: A crash report was saved: {}
+vi: Đã lưu báo cáo sự cố: {}
+en: Attaching it to a bug report helps fix the cause.
+vi: Đính kèm nó khi báo lỗi sẽ giúp tìm và sửa nguyên nhân.
+en: About 3BCAD
+vi: Giới thiệu 3BCAD
+en: Open-source parametric CAD for parts, assemblies, drawings and 3D printing.
+vi: Phần mềm CAD tham số mã nguồn mở cho chi tiết, lắp ráp, bản vẽ và in 3D.
+en: Made by Three Bugs Studio
+vi: Phát triển bởi Three Bugs Studio
+en: Created by Duong Phu Dong, with the 3BCAD contributors.
+vi: Tạo bởi Duong Phu Dong, cùng những người đóng góp cho 3BCAD.
+en: Copyright © 2026 Three Bugs Studio and the 3BCAD contributors.
+vi: Bản quyền © 2026 Three Bugs Studio và những người đóng góp cho 3BCAD.
+en: Licensed under the MIT license or the Apache License 2.0, at your option.
+vi: Cấp phép theo giấy phép MIT hoặc Apache License 2.0, tùy bạn chọn.
+en: Built with truck (B-Rep kernel), egui and wgpu.
+vi: Xây dựng với truck (nhân B-Rep), egui và wgpu.
+en: View
+vi: Khung nhìn
+en: Left drag (or middle drag)
+vi: Kéo chuột trái (hoặc chuột giữa)
+en: Orbit
+vi: Xoay khung nhìn
+en: Right drag (or Ctrl + middle drag)
+vi: Kéo chuột phải (hoặc Ctrl + kéo chuột giữa)
+en: Pan
+vi: Dời khung nhìn
+en: Mouse wheel
+vi: Con lăn chuột
+en: Zoom
+vi: Thu phóng
+en: F, or double-click empty space
+vi: F, hoặc nhấp đúp vào vùng trống
+en: Selecting
+vi: Chọn
+en: Click
+vi: Nhấp
+en: Select a face, edge, vertex or plane
+vi: Chọn mặt, cạnh, đỉnh hoặc mặt phẳng
+en: Ctrl + click
+vi: Ctrl + nhấp
+en: Clear the selection
+vi: Bỏ chọn
+en: Sketching
+vi: Phác thảo
+en: Start a sketch on that plane
+vi: Bắt đầu phác thảo trên mặt phẳng đó
+en: Double-click a plane in the feature tree
+vi: Nhấp đúp một mặt phẳng trong cây đặc trưng
+en: Start a sketch on it
+vi: Bắt đầu phác thảo trên nó
+en: Double-click a sketch
+vi: Nhấp đúp một phác thảo
+en: Edit it
+vi: Sửa nó
+en: Hold Ctrl while drawing
+vi: Giữ Ctrl khi vẽ
+en: Turn off snapping and automatic relations
+vi: Tắt bắt điểm và ràng buộc tự động
+en: Esc, double-click or right-click
+vi: Esc, nhấp đúp hoặc nhấp phải
+en: Delete the selected sketch geometry
+vi: Xóa hình phác thảo đang chọn
+en: Double-click a dimension
+vi: Nhấp đúp một kích thước
+en: Change its value
+vi: Đổi giá trị của nó
+en: Features and tree
+vi: Đặc trưng và cây
+en: Right-click a feature
+vi: Nhấp phải một đặc trưng
+en: Edit, suppress, move, roll back or delete
+vi: Sửa, tạm ẩn, di chuyển, quay lui hoặc xóa
+en: Drag a feature in the tree
+vi: Kéo một đặc trưng trong cây
+en: Reorder it
+vi: Đổi thứ tự của nó
+en: Drag the blue bar
+vi: Kéo thanh màu xanh
+en: Roll back the part
+vi: Quay lui chi tiết
+en: Ctrl+Q (or Ctrl+B)
+vi: Ctrl+Q (hoặc Ctrl+B)
+en: Rebuild every feature
+vi: Dựng lại mọi đặc trưng
+en: Show or hide this window
+vi: Hiện hoặc ẩn cửa sổ này
+en: Assemblies
+vi: Lắp ráp
+en: Click a face, Ctrl+click another part's face
+vi: Nhấp một mặt, Ctrl+nhấp mặt của chi tiết khác
+en: Pick them for a mate
+vi: Chọn chúng để tạo ràng buộc lắp
+en: Drag a component
+vi: Kéo một chi tiết
+en: Move it as far as its mates let it
+vi: Dời nó trong phạm vi ràng buộc lắp cho phép
+en: Shift+drag a component
+vi: Shift+kéo một chi tiết
+en: Turn it
+vi: Xoay nó
+en: Double-click a component in the tree
+vi: Nhấp đúp một chi tiết trong cây
+en: Edit its part
+vi: Sửa chi tiết gốc của nó
+en: Delete the selected component, mate or explode step
+vi: Xóa chi tiết, ràng buộc lắp hoặc bước tách rời đang chọn
+en: Drawings
+vi: Bản vẽ
+en: Mouse wheel, middle or right drag
+vi: Con lăn, kéo chuột giữa hoặc chuột phải
+en: Zoom, pan the sheet
+vi: Thu phóng, dời tờ
+en: F, or double-click empty sheet
+vi: F, hoặc nhấp đúp vùng trống trên tờ
+en: Fit the sheet
+vi: Thu phóng vừa tờ
+en: Drag a view, dimension or note
+vi: Kéo hình chiếu, kích thước hoặc ghi chú
+en: Move it (projected views stay lined up)
+vi: Dời nó (các hình chiếu vẫn gióng thẳng hàng)
+en: Stop the tool, then clear the selection
+vi: Dừng công cụ, rồi bỏ chọn
+en: Delete the selected view, dimension or note
+vi: Xóa hình chiếu, kích thước hoặc ghi chú đang chọn
+en: Export configuration
+vi: Cấu hình khi xuất
+en: Exports and Send to Slicer build the part in this configuration
+vi: Xuất tệp và Gửi sang phần mềm cắt lớp đều dựng chi tiết theo cấu hình này
+en: Chord
+vi: Sai lệch dây cung
+en: Furthest a triangle may lie from the true surface
+vi: Khoảng cách xa nhất cho phép giữa tam giác và bề mặt thật
+en: Most a curved surface may turn within one triangle
+vi: Góc cong lớn nhất cho phép của bề mặt trong một tam giác
+en: … triangles
+vi: … tam giác
+en: Triangles in an STL or 3MF export at this quality
+vi: Số tam giác khi xuất STL hoặc 3MF ở chất lượng này
+en: Locate…
+vi: Chọn vị trí…
+en: Forget the located program
+vi: Quên chương trình đã chỉ định
+en: Build volume {}
+vi: Vùng in {}
+en: {} too long in {}
+vi: Vượt {} theo {}
+en: Put the selected flat face on the bed, or point a selected edge or axis up
+vi: Đặt mặt phẳng đang chọn xuống bàn in, hoặc hướng cạnh hay trục đang chọn lên trên
+en: Print the part on its bottom again
+vi: In chi tiết lại trên mặt đáy
+en: The part rests on its bottom
+vi: Chi tiết nằm trên mặt đáy
+en: Lay Flat: select a flat face to put on the bed (or an edge or axis to point up)
+vi: Đặt phẳng: chọn một mặt phẳng để đặt xuống bàn in (hoặc một cạnh hay trục để hướng lên)
+en: The part is laid out on the bed
+vi: Chi tiết đã được đặt trên bàn in
+en: Overhang
+vi: Phần nhô
+en: The steepest overhang, from vertical, the printer manages without support
+vi: Góc nhô lớn nhất, tính từ phương thẳng đứng, mà máy in in được không cần giá đỡ
+en: Nozzle
+vi: Đầu phun
+en: Min wall
+vi: Thành tối thiểu
+en: Usually two or three nozzle widths
+vi: Thường bằng hai hoặc ba lần đường kính đầu phun
+en: ■ needs support: {}
+vi: ■ cần giá đỡ: {}
+en: ■ thinner than the nozzle: {}
+vi: ■ mỏng hơn đầu phun: {}
+en: Where is {}?
+vi: {} ở đâu?
+en: {} was not found
+vi: Không tìm thấy {}
+en: 3BCAD looked in its usual install folder and on the PATH. Point to the {} program to use it from now on.
+vi: 3BCAD đã tìm trong thư mục cài đặt thông thường và trên PATH. Hãy chỉ đến chương trình {} để dùng từ nay về sau.
+en: Lay Flat
+vi: Đặt phẳng
+en: Reset
+vi: Đặt lại
+en: Overhangs
+vi: Phần nhô
+en: Thin Walls
+vi: Thành mỏng
+en: Coarse
+vi: Thô
+en: Fine
+vi: Mịn
+en: Custom
+vi: Tùy chỉnh
+en: Export STL
+vi: Xuất STL
+en: Export 3MF
+vi: Xuất 3MF
+en: Export STEP
+vi: Xuất STEP
+en: Save the exact part (model position) for other CAD programs
+vi: Lưu chi tiết chính xác (vị trí mô hình) cho các phần mềm CAD khác
+en: Save the part as it sits on the printer's bed, meshed at the quality on the right
+vi: Lưu chi tiết theo tư thế trên bàn in, chia lưới ở chất lượng bên phải
+en: Using {}
+vi: Đang dùng {}
+en: Using the default install location
+vi: Đang dùng vị trí cài đặt mặc định
+en: Open the part in the chosen slicer, on its bed
+vi: Mở chi tiết trong phần mềm cắt lớp đã chọn, đặt trên bàn in
+en: ✔ Fits: {} × {} × {}
+vi: ✔ Vừa: {} × {} × {}
+en: Colour faces that need support when printed as laid out
+vi: Tô màu các mặt cần giá đỡ khi in theo tư thế hiện tại
+en: Colour walls too thin for the nozzle (red) or thinner than the thinnest wall (orange)
+vi: Tô màu thành mỏng hơn đầu phun (đỏ) hoặc mỏng hơn thành tối thiểu (cam)
+en: ■ thin: {}
+vi: ■ mỏng: {}
+en: Program
+vi: Chương trình
+en: Selection
+vi: Lựa chọn
+en: ✏ Sketch on it
+vi: ✏ Phác thảo trên nó
+en: Nothing selected. Click a face, edge or plane, or a feature in the tree to edit it.
+vi: Chưa chọn gì. Nhấp một mặt, cạnh hoặc mặt phẳng, hoặc một đặc trưng trong cây để sửa.
+en: a face of {}
+vi: một mặt của {}
+en: an edge of {}
+vi: một cạnh của {}
+en: Offset
+vi: Khoảng lệch
+en: Select another vertex/face and pick the condition again to change it.
+vi: Chọn đỉnh/mặt khác rồi chọn lại điều kiện để thay đổi.
+en: Close
+vi: Đóng
+en: Under defined ({} DOF)
+vi: Chưa xác định đủ ({} bậc tự do)
+en: ✏ Edit Sketch
+vi: ✏ Sửa phác thảo
+en: Dimensions
+vi: Kích thước
+en: Direction 1
+vi: Hướng 1
+en: sketch line {}
+vi: đường phác thảo {}
+en: Holes go at the sketch's points; edit the sketch to move or add them.
+vi: Lỗ đặt tại các điểm của phác thảo; sửa phác thảo để dời hoặc thêm lỗ.
+en: Instances to skip (row,column; …)
+vi: Bản sao bỏ qua (hàng,cột; …)
+en: Instances to skip (1 is the seed)
+vi: Bản sao bỏ qua (1 là bản gốc)
+en: Through three points
+vi: Qua ba điểm
+en: At a vertex
+vi: Tại một đỉnh
+en: At the center of a face
+vi: Tại tâm một mặt
+en: At the center of an arc
+vi: Tại tâm một cung
+en: Features to repeat:
+vi: Đặc trưng cần lặp:
+en: Sketch on {}
+vi: Phác thảo trên {}
+en: Diagnose
+vi: Chẩn đoán
+en: No single relation fixes it; delete relations until the sketch turns black or blue.
+vi: Không có ràng buộc riêng lẻ nào sửa được; hãy xóa bớt ràng buộc đến khi phác thảo chuyển sang màu đen hoặc xanh.
+en: Deleting any one of these fixes it:
+vi: Xóa bất kỳ một ràng buộc nào sau đây sẽ sửa được:
+en: Select sketch geometry to see and add relations.
+vi: Chọn hình phác thảo để xem và thêm ràng buộc.
+en: Selected
+vi: Đã chọn
+en: For construction
+vi: Làm đường dựng
+en: Edit value
+vi: Sửa giá trị
+en: Existing relations
+vi: Ràng buộc hiện có
+en: Delete relation
+vi: Xóa ràng buộc
+en: Add relations
+vi: Thêm ràng buộc
+en: Delete selected
+vi: Xóa mục đã chọn
+en: Sides
+vi: Số cạnh
+en: Inscribed circle (click a vertex)
+vi: Nội tiếp đường tròn (nhấp một đỉnh)
+en: Circumscribed circle (click an edge midpoint)
+vi: Ngoại tiếp đường tròn (nhấp trung điểm cạnh)
+en: Distance-distance
+vi: Khoảng cách - khoảng cách
+en: Angle-distance
+vi: Góc - khoảng cách
+en: Distance 2
+vi: Khoảng cách 2
+en: Reverse
+vi: Đảo chiều
+en: Total angle
+vi: Tổng góc
+en: X axis
+vi: Trục X
+en: Y axis
+vi: Trục Y
+en: Z axis
+vi: Trục Z
+en: From: {}
+vi: Từ: {}
+en: Fully defined
+vi: Xác định hoàn toàn
+en: Over defined
+vi: Xác định thừa
+en: Follows {}
+vi: Theo {}
+en: Pattern {} instances
+vi: Mảng {} bản sao
+en: Direction 2
+vi: Hướng 2
+en: Draft
+vi: Góc thoát khuôn
+en: Draft outward
+vi: Thoát khuôn ra ngoài
+en: Thin feature
+vi: Thành mỏng
+en: One
+vi: Một phía
+en: Mid
+vi: Giữa
+en: Two
+vi: Hai phía
+en: Thickness
+vi: Chiều dày
+en: Thickness 2
+vi: Chiều dày 2
+en: Other side
+vi: Phía kia
+en: Flip side to cut
+vi: Đảo phía cắt
+en: first centerline of the sketch
+vi: đường tâm đầu tiên của phác thảo
+en: Centerline
+vi: Đường tâm
+en: Direction 2 angle
+vi: Góc hướng 2
+en: Tangent propagation
+vi: Lan truyền tiếp tuyến
+en: Equal distance
+vi: Khoảng cách bằng nhau
+en: Flip direction
+vi: Đảo hướng
+en: Shell outward
+vi: Tạo vỏ ra ngoài
+en: faces removed
+vi: mặt được bỏ
+en: Through All
+vi: Xuyên suốt
+en: Thread: {} (cosmetic)
+vi: Ren: {} (tượng trưng)
+en: Axis
+vi: Trục
+en: Equal spacing
+vi: Cách đều
+en: Angle between
+vi: Góc giữa
+en: Merge solids
+vi: Hợp nhất khối
+en: Offset from
+vi: Cách
+en: Flip normal
+vi: Đảo pháp tuyến
+en: Base
+vi: Cơ sở
+en: Through
+vi: Qua
+en: First
+vi: Thứ nhất
+en: Second
+vi: Thứ hai
+en: Through two points
+vi: Qua hai điểm
+en: Along an edge
+vi: Theo một cạnh
+en: Axis of a cylindrical face
+vi: Trục của mặt trụ
+en: Where two planes meet
+vi: Giao tuyến hai mặt phẳng
+en: Origin: part origin
+vi: Gốc: gốc tọa độ chi tiết
+en: Origin: a vertex
+vi: Gốc: một đỉnh
+en: Origin: {}
+vi: Gốc: {}
+en: Draft angle
+vi: Góc thoát khuôn
+en: Neutral plane
+vi: Mặt phẳng trung hòa
+en: faces to draft
+vi: mặt cần tạo góc thoát khuôn
+en: Both sides of the sketch plane
+vi: Cả hai phía mặt phẳng phác thảo
+en: Flip material side
+vi: Đảo phía vật liệu
+en: The rib grows from the line to the nearest wall and stops at the part's bounding box.
+vi: Gân mọc từ đường phác thảo tới thành gần nhất và dừng ở hộp bao của chi tiết.
+en: Bodies (every body so far)
+vi: Khối (mọi khối đến bước này)
+en: Some relations conflict or repeat each other.
+vi: Một số ràng buộc xung đột hoặc trùng lặp nhau.
+en: What's new in this version
+vi: Có gì mới trong phiên bản này
+en: ⬆ Update to v{}
+vi: ⬆ Cập nhật lên v{}
+en: What's new in it, and install it
+vi: Xem có gì mới và cài đặt
+en: ◀ Back to {}
+vi: ◀ Quay lại {}
+en: Save the part and go back, to see the change there
+vi: Lưu chi tiết và quay lại để xem thay đổi ở đó
+en: Keyboard shortcuts (F1)
+vi: Phím tắt (F1)
+en: Select a sketch (in the feature tree or the graphics area) first
+vi: Hãy chọn trước một phác thảo (trong cây đặc trưng hoặc vùng đồ họa)
+en: Fillet: select edges or faces first (Ctrl+click for more)
+vi: Bo tròn: hãy chọn trước cạnh hoặc mặt (Ctrl+nhấp để chọn thêm)
+en: Chamfer: select edges or faces first (Ctrl+click for more)
+vi: Vát mép: hãy chọn trước cạnh hoặc mặt (Ctrl+nhấp để chọn thêm)
+en: Draft: select the side faces to draft
+vi: Góc thoát khuôn: chọn các mặt bên cần tạo góc
+en: Hole Wizard: select a flat face or a sketch of points
+vi: Trình tạo lỗ: chọn một mặt phẳng hoặc một phác thảo điểm
+en: Hole placed at the face center; edit its sketch to move or add holes
+vi: Đã đặt lỗ tại tâm mặt; sửa phác thảo của nó để dời hoặc thêm lỗ
+en: Axis: select an edge, a cylindrical face, two vertices or two planes
+vi: Trục: chọn một cạnh, một mặt trụ, hai đỉnh hoặc hai mặt phẳng
+en: Display relations
+vi: Hiển thị ràng buộc
+en: Pick a face, or select a feature in the tree, to colour it
+vi: Chọn một mặt, hoặc một đặc trưng trong cây, để tô màu
+en: Shortcuts
+vi: Phím tắt
+en: Extruded Boss/Base
+vi: Đùn khối
+en: Extrude the selected sketch
+vi: Đùn phác thảo đang chọn
+en: Revolved Boss/Base
+vi: Xoay khối
+en: Revolve the selected sketch about its centerline
+vi: Xoay phác thảo đang chọn quanh đường tâm của nó
+en: Extruded Cut
+vi: Đùn cắt
+en: Cut the selected sketch into the part
+vi: Cắt phác thảo đang chọn vào chi tiết
+en: Revolved Cut
+vi: Xoay cắt
+en: Cut by revolving the selected sketch about its centerline
+vi: Cắt bằng cách xoay phác thảo đang chọn quanh đường tâm
+en: Rib
+vi: Gân
+en: Grow a wall from an open sketch line
+vi: Tạo thành gân từ một đường phác thảo hở
+en: Box
+vi: Hộp
+en: Rectangle sketch + extrude on the Top Plane
+vi: Phác thảo hình chữ nhật + đùn trên Mặt phẳng Trên
+en: Rebuild errors and warnings
+vi: Lỗi và cảnh báo khi dựng lại
+en: Hole Wizard
+vi: Trình tạo lỗ
+en: Fillet
+vi: Bo tròn
+en: Chamfer
+vi: Vát mép
+en: Shell
+vi: Tạo vỏ
+en: Linear Pattern
+vi: Mảng thẳng
+en: Circular Pattern
+vi: Mảng tròn
+en: Mirror
+vi: Đối xứng
+en: Point
+vi: Điểm
+en: Coordinate System
+vi: Hệ tọa độ
+en: Cylinder
+vi: Hình trụ
+en: Edit Sketch
+vi: Sửa phác thảo
+en: Exit Sketch
+vi: Thoát phác thảo
+en: Convert Entities
+vi: Chuyển đổi đối tượng
+en: Drawing
+vi: Bản vẽ
+en: Features
+vi: Đặc trưng
+en: Evaluate
+vi: Đánh giá
+en: 3D Print
+vi: In 3D
+en: Select a sketch first
+vi: Hãy chọn trước một phác thảo
+en: Select a sketch of points, or a flat face (a hole goes at its center)
+vi: Chọn một phác thảo điểm, hoặc một mặt phẳng (lỗ đặt tại tâm của nó)
+en: Round the selected edges (or every edge of selected faces)
+vi: Bo tròn các cạnh đang chọn (hoặc mọi cạnh của mặt đang chọn)
+en: Bevel the selected edges (or every edge of selected faces)
+vi: Vát các cạnh đang chọn (hoặc mọi cạnh của mặt đang chọn)
+en: Hollow the body; the selected faces are removed
+vi: Làm rỗng khối; các mặt đang chọn được bỏ đi
+en: Tilt the selected side walls about the Top Plane (or a selected plane)
+vi: Nghiêng các thành bên đang chọn theo Mặt phẳng Trên (hoặc mặt phẳng đang chọn)
+en: Repeat the selected feature (or all bodies) around an axis (default Z)
+vi: Lặp đặc trưng đang chọn (hoặc mọi khối) quanh một trục (mặc định Z)
+en: Mirror the selected feature (or all bodies) about a selected plane (default Right)
+vi: Đối xứng đặc trưng đang chọn (hoặc mọi khối) qua mặt phẳng đang chọn (mặc định Phải)
+en: From an edge, a cylinder, two vertices or two planes
+vi: Từ một cạnh, một hình trụ, hai đỉnh hoặc hai mặt phẳng
+en: At a vertex, a face center or an arc center
+vi: Tại một đỉnh, tâm mặt hoặc tâm cung
+en: At a selected vertex (or the origin)
+vi: Tại đỉnh đang chọn (hoặc gốc tọa độ)
+en: Circle sketch + extrude on the Top Plane
+vi: Phác thảo đường tròn + đùn trên Mặt phẳng Trên
+en: Sketch on
+vi: Phác thảo trên
+en: Select a flat face or a plane first, or pick a plane on the right
+vi: Hãy chọn trước một mặt phẳng trên chi tiết hoặc một mặt phẳng, hoặc chọn mặt phẳng bên phải
+en: Sketch on the XZ plane, looking from the front
+vi: Phác thảo trên mặt phẳng XZ, nhìn từ phía trước
+en: Sketch on the XY plane, the build plate
+vi: Phác thảo trên mặt phẳng XY, tức bàn in
+en: Sketch on the YZ plane, looking from the right
+vi: Phác thảo trên mặt phẳng YZ, nhìn từ bên phải
+en: Sketch on this reference plane
+vi: Phác thảo trên mặt phẳng tham chiếu này
+en: Open the selected sketch
+vi: Mở phác thảo đang chọn
+en: Select a sketch in the feature tree first
+vi: Hãy chọn trước một phác thảo trong cây đặc trưng
+en: Save the sketch and leave sketch mode
+vi: Lưu phác thảo và thoát chế độ phác thảo
+en: Copy the edges of the face this sketch is on into the sketch
+vi: Chép các cạnh của mặt chứa phác thảo này vào phác thảo
+en: Distances, angles, radii and lengths of the selection
+vi: Khoảng cách, góc, bán kính và độ dài của đối tượng chọn
+en: Volume, mass, center of mass and moments
+vi: Thể tích, khối lượng, trọng tâm và mômen quán tính
+en: Global variables, equations that drive dimensions, and configurations
+vi: Biến toàn cục, phương trình điều khiển kích thước, và cấu hình
+en: Colour the picked face, its body or its feature, or the feature selected in the tree
+vi: Tô màu mặt đã chọn, khối hoặc đặc trưng chứa nó, hoặc đặc trưng chọn trong cây
+en: Rebuild every feature from scratch (Ctrl+Q)
+vi: Dựng lại mọi đặc trưng từ đầu (Ctrl+Q)
+en: {} is already the shortcut for {}
+vi: {} đã là phím tắt của {}
+en: Language
+vi: Ngôn ngữ
+en: Theme
+vi: Giao diện
+en: Interface size
+vi: Cỡ giao diện
+en: Ctrl + plus and Ctrl + minus change it too; Ctrl+0 resets it.
+vi: Ctrl + dấu cộng và Ctrl + dấu trừ cũng thay đổi được; Ctrl+0 để đặt lại.
+en: Units of new parts
+vi: Đơn vị cho chi tiết mới
+en: Autosave every
+vi: Tự động lưu mỗi
+en: 0 turns autosave off
+vi: 0 để tắt tự động lưu
+en: Check for updates at start
+vi: Kiểm tra cập nhật khi khởi động
+en: Display style
+vi: Kiểu hiển thị
+en: Perspective (off: orthographic)
+vi: Phối cảnh (tắt: chiếu vuông góc)
+en: Show the view cube
+vi: Hiện khối định hướng
+en: These are how 3BCAD starts; the View toolbar changes them for now.
+vi: 3BCAD khởi động với các thiết lập này; thanh công cụ Khung nhìn chỉ đổi chúng tạm thời.
+en: Right mouse drag
+vi: Kéo chuột phải
+en: Pans the view
+vi: Dời khung nhìn
+en: Shows the mouse gesture wheel
+vi: Hiện vòng cử chỉ chuột
+en: Left drag orbits, the wheel zooms, Ctrl + middle drag pans.
+vi: Kéo chuột trái để xoay, con lăn để thu phóng, Ctrl + kéo chuột giữa để dời khung nhìn.
+en: Send to Slicer opens
+vi: Gửi sang phần mềm cắt lớp sẽ mở
+en: Forget
+vi: Quên
+en: found where it usually installs
+vi: tìm ở nơi thường cài đặt
+en: The printer, nozzle and print checks are on the 3D Print tab.
+vi: Máy in, đầu phun và các kiểm tra bản in nằm ở thẻ In 3D.
+en: Draw large models simplified while the view moves
+vi: Vẽ giản lược mô hình lớn khi khung nhìn đang chuyển động
+en: Show the frame rate
+vi: Hiện tốc độ khung hình
+en: Click again to reset everything
+vi: Nhấp lần nữa để đặt lại mọi thứ
+en: Reset to defaults
+vi: Khôi phục mặc định
+en: Every setting back to how 3BCAD comes; recent files are kept
+vi: Đưa mọi cài đặt về mặc định ban đầu của 3BCAD; vẫn giữ danh sách tệp gần đây
+en: Saved in {}
+vi: Đã lưu tại {}
+en: Not saved: no user folder
+vi: Chưa lưu: không có thư mục người dùng
+en: Click a shortcut, then press the keys for it (Esc cancels).
+vi: Nhấp vào một phím tắt, rồi bấm tổ hợp phím mới (Esc để hủy).
+en: Press the keys…
+vi: Bấm tổ hợp phím…
+en: none
+vi: không có
+en: Clear
+vi: Xóa trống
+en: {} has that shortcut now
+vi: {} giờ dùng phím tắt đó
+en: Reset all shortcuts
+vi: Đặt lại mọi phím tắt
+en: General
+vi: Chung
+en: Mouse
+vi: Chuột
+en: 3D printing
+vi: In 3D
+en: Performance
+vi: Hiệu năng
+en:  min
+vi:  phút
+en: Asks GitHub for a newer release when 3BCAD starts; nothing else is sent
+vi: Hỏi GitHub có bản mới hơn khi 3BCAD khởi động; không gửi thông tin nào khác
+en: Gestures: drag up for the Top view, down for Front, left for Isometric, right to zoom to fit. Shift + right drag still pans.
+vi: Cử chỉ: kéo lên cho hình chiếu Trên, xuống cho Trước, sang trái cho Trục đo, sang phải để thu phóng vừa màn hình. Shift + kéo chuột phải vẫn dời khung nhìn.
+en: Under Defined ({} DOF)
+vi: Chưa xác định đủ ({} bậc tự do)
+en: In Equations: {}@ and the sketch's name
+vi: Trong Phương trình: {}@ và tên phác thảo
+en: "{}" is not a number or a length
+vi: "{}" không phải số hay độ dài
+en: Select
+vi: Chọn
+en: Line
+vi: Đường thẳng
+en: Corner Rectangle
+vi: Hình chữ nhật góc
+en: Center Rectangle
+vi: Hình chữ nhật tâm
+en: 3 Point Rectangle
+vi: Hình chữ nhật 3 điểm
+en: Circle
+vi: Đường tròn
+en: Perimeter Circle
+vi: Đường tròn 3 điểm
+en: Centerpoint Arc
+vi: Cung tâm
+en: Tangent Arc
+vi: Cung tiếp tuyến
+en: 3 Point Arc
+vi: Cung 3 điểm
+en: Spline
+vi: Đường spline
+en: Straight Slot
+vi: Rãnh thẳng
+en: Centerpoint Slot
+vi: Rãnh tâm
+en: Polygon
+vi: Đa giác
+en: Sketch Fillet
+vi: Bo tròn phác thảo
+en: Sketch Chamfer
+vi: Vát mép phác thảo
+en: Trim Entities
+vi: Cắt tỉa đối tượng
+en: Extend Entities
+vi: Kéo dài đối tượng
+en: Offset Entities
+vi: Offset đối tượng
+en: Mirror Entities
+vi: Đối xứng đối tượng
+en: Click to select, drag geometry to move it, double-click a dimension to edit it
+vi: Nhấp để chọn, kéo hình để dời, nhấp đúp kích thước để sửa
+en: Click points to chain lines; double-click, right-click or Esc ends the chain
+vi: Nhấp các điểm để vẽ chuỗi đường; nhấp đúp, nhấp phải hoặc Esc để kết thúc chuỗi
+en: Click two points
+vi: Nhấp hai điểm
+en: Click two opposite corners
+vi: Nhấp hai góc đối diện
+en: Click the center, then a corner
+vi: Nhấp tâm, rồi một góc
+en: Click two corners of one side, then the opposite side
+vi: Nhấp hai góc của một cạnh, rồi cạnh đối diện
+en: Click the center, then the radius (or type it in the Properties panel)
+vi: Nhấp tâm, rồi bán kính (hoặc nhập trong bảng Thuộc tính)
+en: Click three points on the circle
+vi: Nhấp ba điểm trên đường tròn
+en: Click the center, the start, then the end
+vi: Nhấp tâm, điểm đầu, rồi điểm cuối
+en: Click the end of a line or arc, then the arc end
+vi: Nhấp đầu mút một đường thẳng hoặc cung, rồi điểm cuối cung
+en: Click the start, the end, then a point on the arc
+vi: Nhấp điểm đầu, điểm cuối, rồi một điểm trên cung
+en: Click points; double-click or Enter finishes
+vi: Nhấp các điểm; nhấp đúp hoặc Enter để kết thúc
+en: Click both arc centers, then the width
+vi: Nhấp hai tâm cung, rồi bề rộng
+en: Click the slot center, an arc center, then the width
+vi: Nhấp tâm rãnh, một tâm cung, rồi bề rộng
+en: Click the center, then a vertex (or edge midpoint)
+vi: Nhấp tâm, rồi một đỉnh (hoặc trung điểm cạnh)
+en: Click to place a point
+vi: Nhấp để đặt điểm
+en: Click a corner where two lines meet
+vi: Nhấp vào góc nơi hai đường gặp nhau
+en: Click the piece of an entity to remove
+vi: Nhấp vào đoạn đối tượng cần bỏ
+en: Click near the end of a line to extend
+vi: Nhấp gần đầu mút đường cần kéo dài
+en: Select entities, set the options, then Apply
+vi: Chọn đối tượng, đặt tùy chọn, rồi Áp dụng
+en: Select entities and a centerline (picked last), then Apply
+vi: Chọn đối tượng và một đường tâm (chọn sau cùng), rồi Áp dụng
+en: Select entities and the center point (picked last), then Apply
+vi: Chọn đối tượng và điểm tâm (chọn sau cùng), rồi Áp dụng
+en: Click one or two items, then click where the dimension goes
+vi: Nhấp một hoặc hai đối tượng, rồi nhấp vào chỗ đặt kích thước
+en: The relations conflict: the sketch is over-defined
+vi: Các ràng buộc xung đột: phác thảo bị xác định thừa
+en: That value cannot be built; the dimension was not changed
+vi: Không dựng được với giá trị đó; kích thước không đổi
+en: Select the entities, then the line to mirror about
+vi: Chọn đối tượng, rồi đường làm trục đối xứng
+en: Select the entities, then the center point
+vi: Chọn đối tượng, rồi điểm tâm
+en: Fully Defined
+vi: Xác định hoàn toàn
+en: Over Defined
+vi: Xác định thừa
+en: This dimension over-defines the sketch; delete it or another relation
+vi: Kích thước này làm phác thảo bị xác định thừa; hãy xóa nó hoặc một ràng buộc khác
+en: Those items cannot be dimensioned together
+vi: Không thể ghi kích thước giữa các đối tượng đó
+en: Start a tangent arc on the end of a line or arc
+vi: Bắt đầu cung tiếp tuyến tại đầu mút một đường thẳng hoặc cung
+en: Lengths must be positive
+vi: Độ dài phải dương
+en: Too small: click further apart
+vi: Quá nhỏ: hãy nhấp cách xa hơn
+en: The three points are in a line
+vi: Ba điểm thẳng hàng
+en: Start on the end of a line or arc, and end off its tangent
+vi: Bắt đầu tại đầu mút đường thẳng hoặc cung, và kết thúc lệch khỏi tiếp tuyến của nó
+en: A spline needs two points
+vi: Đường spline cần hai điểm
+en: Same as the system
+vi: Theo hệ thống
+en: Light
+vi: Sáng
+en: Dark
+vi: Tối
+en: High contrast
+vi: Tương phản cao
+en: Feature Tree
+vi: Cây đặc trưng
+en: Show / hide
+vi: Hiện / ẩn
+en: Double-click to sketch on it
+vi: Nhấp đúp để phác thảo trên nó
+en: Edit Feature
+vi: Sửa đặc trưng
+en: Rename (F2)
+vi: Đổi tên (F2)
+en: Appearance…
+vi: Màu sắc bề mặt…
+en: Move Up
+vi: Lên trên
+en: Move Down
+vi: Xuống dưới
+en: Roll Back to Here
+vi: Quay lui đến đây
+en: Delete (with children)
+vi: Xóa (cả đặc trưng con)
+en: Solid Bodies ({})
+vi: Khối đặc ({})
+en: Click to select the body, Ctrl+click to add it
+vi: Nhấp để chọn khối, Ctrl+nhấp để thêm vào
+en: Rollback bar: drag to build the part only up to here
+vi: Thanh quay lui: kéo để chỉ dựng chi tiết đến đây
+en: Unsuppress
+vi: Bỏ tạm ẩn
+en: Suppress
+vi: Tạm ẩn
+en: Suppressed
+vi: Đã tạm ẩn
+en: Unsuppressed
+vi: Đã bỏ tạm ẩn
+en: Update
+vi: Cập nhật
+en: 3BCAD {} is available
+vi: Đã có 3BCAD {}
+en: You have {}.
+vi: Bạn đang dùng {}.
+en: The update did not install: {}
+vi: Không cài được bản cập nhật: {}
+en: Update now
+vi: Cập nhật ngay
+en: Download it, check it against the release's checksums and install it
+vi: Tải về, đối chiếu mã kiểm tra (checksum) của bản phát hành rồi cài đặt
+en: Download it from the release page (not possible from this build)
+vi: Tải về từ trang phát hành (bản dựng này không tự cập nhật được)
+en: Release page
+vi: Trang phát hành
+en: Skip this version
+vi: Bỏ qua phiên bản này
+en: Later
+vi: Để sau
+en: Downloading and checking 3BCAD {}…
+vi: Đang tải và kiểm tra 3BCAD {}…
+en: 3BCAD {} is installed
+vi: Đã cài 3BCAD {}
+en: It starts the next time 3BCAD opens.
+vi: Bản mới sẽ chạy từ lần mở 3BCAD tới.
+en: Restart now
+vi: Khởi động lại ngay
+en: Center of mass
+vi: Trọng tâm
+en: LMB select · drag a part to move it, Shift+drag to turn it · drag empty space to orbit · RMB pan · wheel zoom
+vi: Chuột trái: chọn · kéo chi tiết để dời, Shift+kéo để xoay · kéo vùng trống để xoay khung nhìn · chuột phải: dời khung nhìn · con lăn: thu phóng
+en: LMB orbit / select · RMB gestures, Shift+RMB pan · wheel zoom · F fit · S shortcut bar
+vi: Chuột trái: xoay khung nhìn / chọn · chuột phải: cử chỉ, Shift+chuột phải: dời khung nhìn · con lăn: thu phóng · F: vừa màn hình · S: thanh lệnh nhanh
+en: LMB orbit / select · RMB pan · wheel zoom · F fit · S shortcut bar
+vi: Chuột trái: xoay khung nhìn / chọn · chuột phải: dời khung nhìn · con lăn: thu phóng · F: vừa màn hình · S: thanh lệnh nhanh
+en: {} FPS · {} triangles
+vi: {} FPS · {} tam giác
+en: Views
+vi: Hình chiếu
+en: Normal To
+vi: Nhìn vuông góc
+en: Look straight at the selected planar face or plane
+vi: Nhìn thẳng vào mặt phẳng đang chọn
+en: Standard views (Ctrl+1 … Ctrl+8)
+vi: Hình chiếu chuẩn (Ctrl+1 … Ctrl+8)
+en: Cut the model open to look inside (the part does not change)
+vi: Cắt mở mô hình để nhìn bên trong (chi tiết không thay đổi)
+en: Perspective
+vi: Phối cảnh
+en: Off: orthographic, parallel lines stay parallel
+vi: Tắt: chiếu vuông góc, đường song song vẫn song song
+en: Section View
+vi: Xem mặt cắt
+en: position
+vi: vị trí
+en: Flip: keep the other side
+vi: Lật: giữ phía còn lại
+en: Drag the arrow in the view to move the plane. The part does not change.
+vi: Kéo mũi tên trong khung nhìn để dời mặt phẳng. Chi tiết không thay đổi.
+en: Drag to move the section plane
+vi: Kéo để dời mặt phẳng cắt
+en: ✔ Exit Sketch
+vi: ✔ Thoát phác thảo
+en: Discard changes
+vi: Bỏ thay đổi
+en: Front
+vi: Trước
+en: Back
+vi: Sau
+en: Right
+vi: Phải
+en: Left
+vi: Trái
+en: Top
+vi: Trên
+en: Bottom
+vi: Dưới
+en: Isometric
+vi: Trục đo
+en: Selected {}
+vi: Đã chọn {}
+en: cannot write to {}: update from the release page instead
+vi: không ghi được vào {}: hãy cập nhật từ trang phát hành
+en: cannot replace {}
+vi: không thay thế được {}
+en: 3BCAD {} is the latest version
+vi: 3BCAD {} là phiên bản mới nhất
+en: Could not check for updates: {}
+vi: Không kiểm tra được cập nhật: {}
+en: GitHub sent something that is not JSON
+vi: GitHub trả về dữ liệu không phải JSON
+en: the release has no version tag
+vi: bản phát hành không có thẻ phiên bản
+en: cannot run curl to reach GitHub
+vi: không chạy được curl để kết nối GitHub
+en: this release has no download for this computer
+vi: bản phát hành này không có tệp tải cho máy tính này
+en: this release has no SHA256SUMS.txt to check the download
+vi: bản phát hành này không có SHA256SUMS.txt để kiểm tra tệp tải
+en: 3BCAD's folder is unknown
+vi: không rõ thư mục của 3BCAD
+en: SHA256SUMS.txt does not list the download
+vi: SHA256SUMS.txt không liệt kê tệp tải này
+en: the download is damaged (its SHA-256 does not match)
+vi: tệp tải bị hỏng (SHA-256 không khớp)
+en: cannot run tar to unpack the update
+vi: không chạy được tar để giải nén bản cập nhật
+en: could not unpack the update: {}
+vi: không giải nén được bản cập nhật: {}
+en: no program name
+vi: không có tên chương trình
+en: the download does not hold 3BCAD
+vi: tệp tải không chứa 3BCAD
+en: Shaded With Edges
+vi: Tô bóng có cạnh
+en: Shaded
+vi: Tô bóng
+en: Hidden Lines Removed
+vi: Ẩn nét khuất
+en: Hidden Lines Visible
+vi: Hiện nét khuất
+en: Wireframe
+vi: Khung dây
+en: Above
+vi: Phía trên
+en: Below
+vi: Phía dưới
+en: Horizontal
+vi: Ngang
+en: Vertical
+vi: Dọc
+en: Aligned
+vi: Xiên
+en: ANSI31 (iron, general)
+vi: ANSI31 (gang, thông dụng)
+en: ANSI32 (steel)
+vi: ANSI32 (thép)
+en: ANSI33 (brass, bronze, copper)
+vi: ANSI33 (đồng thau, đồng thiếc, đồng)
+en: ANSI37 (plastic, rubber)
+vi: ANSI37 (nhựa, cao su)
+en: Front Plane
+vi: Mặt phẳng Trước
+en: Top Plane
+vi: Mặt phẳng Trên
+en: Right Plane
+vi: Mặt phẳng Phải
+en: Hole
+vi: Lỗ
+en: Counterbore
+vi: Lỗ bậc
+en: Countersink
+vi: Lỗ côn
+en: Tapped Hole
+vi: Lỗ ren
+en: Subtract
+vi: Trừ
+en: Common
+vi: Giao
+en: Emboss
+vi: Dập nổi
+en: Deboss
+vi: Dập chìm
+en: Scribe
+vi: Khắc vạch
+en: MMGS (millimetre, gram, second)
+vi: MMGS (milimét, gam, giây)
+en: CGS (centimetre, gram, second)
+vi: CGS (xentimét, gam, giây)
+en: IPS (inch, pound, second)
+vi: IPS (inch, pound, giây)
+en: Add to / remove from the selection (Fillet, Chamfer, Measure…)
+vi: Thêm vào / bỏ khỏi lựa chọn (Bo tròn, Vát mép, Đo…)
+en: Sketch tab > Front / Top / Right
+vi: Thẻ Phác thảo > Trước / Trên / Phải
+en: End a line chain / cancel the tool
+vi: Kết thúc chuỗi đường / hủy công cụ
+en: Undo / Redo (inside a sketch: sketch edits)
+vi: Hoàn tác / Làm lại (trong phác thảo: các thao tác phác thảo)
+en: Front, Back, Left, Right, Top, Bottom, Isometric view
+vi: Hình chiếu Trước, Sau, Trái, Phải, Trên, Dưới, Trục đo
+en: Click the view cube
+vi: Nhấp khối định hướng
+en: Look from that face, edge or corner
+vi: Nhìn từ mặt, cạnh hoặc góc đó
+en: Perspective / orthographic
+vi: Phối cảnh / chiếu vuông góc
+en: The tab's commands at the mouse
+vi: Lệnh của thẻ hiện tại con trỏ
+en: Arrow keys (Shift: 90°)
+vi: Phím mũi tên (Shift: 90°)
+en: Turn the view 15°
+vi: Xoay khung nhìn 15°
+en: Ctrl + arrow keys, Page Up / Down
+vi: Ctrl + phím mũi tên, Page Up / Down
+en: Pan, zoom
+vi: Dời khung nhìn, thu phóng
+en: Ctrl+, (File > Settings)
+vi: Ctrl+, (Tệp > Cài đặt)
+en: Settings, where every shortcut can be changed
+vi: Cài đặt, nơi đổi được mọi phím tắt
+en: Repeat the selected feature (or all bodies) along an edge/axis (default X)
+vi: Lặp đặc trưng đang chọn (hoặc mọi khối) theo một cạnh/trục (mặc định X)
+en: Offset from a plane/face, 3 vertices, two planes (mid) or plane + edge (angle)
+vi: Lệch từ mặt phẳng/mặt, qua 3 đỉnh, giữa hai mặt phẳng, hoặc mặt phẳng + cạnh (góc)
+en: Mirror face/plane
+vi: Mặt/mặt phẳng đối xứng
+en: No parts interfere. Parts that only touch are fine.
+vi: Không có chi tiết nào giao thoa. Chi tiết chỉ chạm nhau thì không sao.
+en: Equations applied
+vi: Đã áp dụng phương trình
+en: Suppress features in the tree to leave them out of this configuration; tick "This configuration only" for an equation that sets a dimension here alone.
+vi: Tạm ẩn đặc trưng trong cây để loại chúng khỏi cấu hình này; đánh dấu "Chỉ cấu hình này" cho phương trình chỉ đặt kích thước trong cấu hình này.
+
+en: Display
+vi: Hiển thị
+
+en: Opened {}; some shells could not be read (see the log)
+vi: Đã mở {}; một số vỏ không đọc được (xem nhật ký)
+
+en: Zoom Fit
+vi: Vừa màn hình
+
+en: {} bodies
+vi: {} khối
