@@ -216,11 +216,9 @@ pub fn about(app: &mut App, ctx: &egui::Context) {
             ui.hyperlink_to(REPOSITORY, REPOSITORY);
             ui.add_space(6.0);
             ui.label(tr("Copyright © 2026 Three Bugs Studio and the 3BCAD contributors."));
-            ui.label(tr(
-                "Licensed under the MIT license or the Apache License 2.0, at your option.",
-            ));
+            ui.label(tr("Licensed under the Apache License 2.0."));
             ui.weak(
-                "Building on 3BCAD? Keep the license files and NOTICE, give your version its own name, and \
+                "Building on 3BCAD? Keep the license file and NOTICE, give your version its own name, and \
                  say it is based on 3BCAD by Three Bugs Studio (see TRADEMARKS.md).",
             );
             ui.add_space(6.0);

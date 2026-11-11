@@ -21,7 +21,6 @@
             <File Id="Exe" Source="target/release/3bcad.exe">
               <Shortcut Name="3BCAD" Directory="ProgramMenuFolder" />
             </File>
-            <File Source="LICENSE-MIT" />
             <File Source="LICENSE-APACHE" />
             <File Source="NOTICE" />
             <!-- Left by an in-app update until 3BCAD next starts. -->

@@ -79,7 +79,7 @@ jobs:
         if: runner.os == 'Windows'
         run: |
           mkdir -p "dist/$PKG"
-          cp target/release/3bcad.exe README.md CHANGELOG.md LICENSE-MIT LICENSE-APACHE NOTICE "dist/$PKG/"
+          cp target/release/3bcad.exe README.md CHANGELOG.md LICENSE-APACHE NOTICE "dist/$PKG/"
           (cd dist && 7z a "$PKG.zip" "$PKG")
           # WiX 5: later versions come with the Open Source Maintenance Fee EULA.
           dotnet tool install wix --version 5.0.2 --tool-path "$RUNNER_TEMP/wix"
@@ -145,7 +145,7 @@ jobs:
       - name: Package (macOS)
         if: runner.os == 'macOS'
         run: |
-          cp README.md CHANGELOG.md LICENSE-MIT LICENSE-APACHE NOTICE "dist/$PKG/"
+          cp README.md CHANGELOG.md LICENSE-APACHE NOTICE "dist/$PKG/"
           (cd dist && ditto -c -k --keepParent "$PKG" "$PKG.zip")
           # The disk image shows the same folder plus a shortcut to drag 3BCAD.app onto.
           ln -s /Applications "dist/$PKG/Applications"
@@ -173,7 +173,7 @@ jobs:
         run: |
           cargo build --release --locked
           mkdir -p "dist/$PKG"
-          cp target/release/3bcad README.md CHANGELOG.md LICENSE-MIT LICENSE-APACHE NOTICE "dist/$PKG/"
+          cp target/release/3bcad README.md CHANGELOG.md LICENSE-APACHE NOTICE "dist/$PKG/"
           tar -C dist -czf "dist/$PKG.tar.gz" "$PKG"
           desktop-file-validate packaging/linux/3bcad.desktop
           d="$RUNNER_TEMP/AppDir"
@@ -183,7 +183,7 @@ jobs:
           for s in 16 32 48 64 128 256 512; do
             install -Dm644 "assets/icon-$s.png" "$d/usr/share/icons/hicolor/${s}x$s/apps/3bcad.png"
           done
-          install -Dm644 -t "$d/usr/share/doc/3bcad" LICENSE-MIT LICENSE-APACHE NOTICE
+          install -Dm644 -t "$d/usr/share/doc/3bcad" LICENSE-APACHE NOTICE
           ln -s usr/bin/3bcad "$d/AppRun"
           ln -s usr/share/applications/3bcad.desktop "$d/3bcad.desktop"
           ln -s usr/share/icons/hicolor/256x256/apps/3bcad.png "$d/3bcad.png"
