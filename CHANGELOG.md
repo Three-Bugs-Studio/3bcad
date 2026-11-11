@@ -7,6 +7,8 @@ saved files and workflows; patch versions (0.x.y) only fix bugs.
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-11-11
+
 ### Changed
 
 - 3BCAD is now licensed under the Apache License 2.0 only (it was MIT OR Apache-2.0). Releases up to v1.0.1 stay
@@ -402,7 +404,8 @@ First public preview of 3BCAD.
 - Send to Slicer for OrcaSlicer, Bambu Studio and PrusaSlicer.
 - App version shown in the title bar and ribbon, linking to these release notes.
 
-[Unreleased]: https://github.com/Three-Bugs-Studio/3bcad/compare/v1.0.1...HEAD
+[Unreleased]: https://github.com/Three-Bugs-Studio/3bcad/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/Three-Bugs-Studio/3bcad/releases/tag/v1.1.0
 [1.0.1]: https://github.com/Three-Bugs-Studio/3bcad/releases/tag/v1.0.1
 [1.0.0]: https://github.com/Three-Bugs-Studio/3bcad/releases/tag/v1.0.0
 [0.9.0]: https://github.com/Three-Bugs-Studio/3bcad/releases/tag/v0.9.0
