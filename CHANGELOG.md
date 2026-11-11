@@ -7,6 +7,16 @@ saved files and workflows; patch versions (0.x.y) only fix bugs.
 
 ## [Unreleased]
 
+### Changed
+
+- 3BCAD is now licensed under the Apache License 2.0 only (it was MIT OR Apache-2.0). Releases up to v1.0.1 stay
+  available under either license; the downloads and the installer now ship `LICENSE-APACHE` and `NOTICE` only.
+
+### Fixed
+
+- A chamfer or fillet on one arc of a circular rim no longer silently treats only that arc when the rim's arcs
+  were fitted a few µm apart (common after a boolean): the arcs are recognised as one circle again.
+
 ## [1.0.1] - 2026-11-10
 
 ### Fixed

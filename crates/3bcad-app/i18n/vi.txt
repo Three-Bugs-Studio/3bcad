@@ -1027,8 +1027,8 @@ en: Created by Duong Phu Dong, with the 3BCAD contributors.
 vi: Tạo bởi Duong Phu Dong, cùng những người đóng góp cho 3BCAD.
 en: Copyright © 2026 Three Bugs Studio and the 3BCAD contributors.
 vi: Bản quyền © 2026 Three Bugs Studio và những người đóng góp cho 3BCAD.
-en: Licensed under the MIT license or the Apache License 2.0, at your option.
-vi: Cấp phép theo giấy phép MIT hoặc Apache License 2.0, tùy bạn chọn.
+en: Licensed under the Apache License 2.0.
+vi: Cấp phép theo Apache License 2.0.
 en: Built with truck (B-Rep kernel), egui and wgpu.
 vi: Xây dựng với truck (nhân B-Rep), egui và wgpu.
 en: View

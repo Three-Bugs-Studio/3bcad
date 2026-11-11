@@ -1098,7 +1098,7 @@ impl Eval {
                 if edge_ops::full_circle(topo, e) {
                     let dup = rounds
                         .iter()
-                        .any(|r| r.0 == b && norm(sub(r.1, center)) < 1e-6 && (r.3 - radius).abs() < 1e-6);
+                        .any(|r| r.0 == b && edge_ops::same_circle(r.1, r.3, center, radius));
                     if !dup {
                         rounds.push((b, center, axis, radius, topo.clone(), e));
                     }
@@ -1111,7 +1111,7 @@ impl Eval {
                     && tools.iter().any(|(tb, _, _, te)| {
                         *tb == b
                             && matches!(self.s.bodies[b].topo.edges[*te].curve, EdgeCurve::Circle { center: c, radius: r, .. }
-                                if norm(sub(c, center)) < 1e-6 && (r - radius).abs() < 1e-6)
+                                if edge_ops::same_circle(c, r, center, radius))
                     });
                 if dup {
                     continue;
@@ -1154,7 +1154,7 @@ impl Eval {
             let on = |body: &Body| {
                 body.topo.edges.iter().any(|ed| {
                     matches!(ed.curve, EdgeCurve::Circle { center: c, radius: r, .. }
-                        if norm(sub(c, center)) < 1e-6 && (r - radius).abs() < 1e-6)
+                        if edge_ops::same_circle(c, r, center, radius))
                 })
             };
             let b = if self.s.bodies.get(b).is_some_and(on) {
