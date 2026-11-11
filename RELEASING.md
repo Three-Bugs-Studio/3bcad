@@ -60,10 +60,13 @@ Add user-facing changes to `## [Unreleased]` in `CHANGELOG.md` as part of each f
 ## Code signing
 
 Signing runs only when its secrets exist (Settings → Secrets and variables → Actions), and never for pull requests.
-Without them releases are built as before: Windows unsigned, macOS with an ad-hoc signature.
+Without them releases are built as before: Windows unsigned, macOS with an ad-hoc signature. Windows is set up to
+sign through the [SignPath Foundation](#setting-up-signpath-free-windows-signing-for-open-source) (free for open
+source); a certificate file still works as before when SignPath is not configured.
 
 | Secret | What it is |
 | --- | --- |
+| `SIGNPATH_API_TOKEN` | API token of a SignPath user with *Submitter* rights on the project (Windows signing through SignPath) |
 | `WINDOWS_CERTIFICATE` | Authenticode code-signing certificate with its private key, as a base64 `.pfx` (`base64 -w0 cert.pfx`) |
 | `WINDOWS_CERTIFICATE_PASSWORD` | the `.pfx` password |
 | `MACOS_CERTIFICATE` | "Developer ID Application" certificate with its private key, exported from Keychain Access as a `.p12`, base64 |
@@ -72,15 +75,47 @@ Without them releases are built as before: Windows unsigned, macOS with an ad-ho
 | `APPLE_TEAM_ID` | that account's 10-character team ID |
 | `APPLE_APP_PASSWORD` | an app-specific password for that Apple ID (account.apple.com → Sign-In and Security) |
 
-- **Windows**: [`packaging/windows/sign.ps1`](packaging/windows/sign.ps1) signs `3bcad.exe` (before it goes into the
-  `.zip` and the `.msi`) and then the `.msi` with signtool (SHA-256, RFC 3161 timestamp), and checks both with
+- **Windows, SignPath** (used when `SIGNPATH_API_TOKEN` exists; set up below): `package.yml` builds `3bcad.exe` and
+  the `.msi` around it, uploads both as the `signpath-unsigned-windows` artifact (kept 1 day, never published:
+  `release.yml` only downloads `3BCAD-*`) and submits one signing request. SignPath signs the program, the copy
+  inside the installer and the installer, as [`packaging/windows/signpath.xml`](packaging/windows/signpath.xml)
+  says; the job waits up to 2 hours for the request to be approved, checks both signatures, then packs the `.zip`.
+- **Windows, certificate file** (used when only `WINDOWS_CERTIFICATE` exists):
+  [`packaging/windows/sign.ps1`](packaging/windows/sign.ps1) signs `3bcad.exe` (before it goes into the `.zip` and
+  the `.msi`) and then the `.msi` with signtool (SHA-256, RFC 3161 timestamp), and checks both with
   `signtool verify /pa`. Since June 2023 new public code-signing certificates are issued only on hardware tokens or
-  cloud HSMs, so a `.pfx` file may not be available. Azure Trusted Signing, or the
-  [SignPath Foundation](https://signpath.org) (free for open source), can replace that one step.
+  cloud HSMs, so a `.pfx` file may not be available.
 - **macOS**: the certificate goes into a throwaway keychain. `3BCAD.app` is signed with the hardened runtime,
   notarized (`notarytool submit --wait`) and stapled, then the `.dmg` around it is signed, notarized and stapled.
   CI checks them with `codesign --verify --deep --strict`, `spctl -a -vv` and `xcrun stapler validate`. The `.zip`
   and the `.dmg` hold the same app.
+
+### Setting up SignPath (free Windows signing for open source)
+
+The certificate is issued to SignPath Foundation, which then shows as the publisher. Its conditions are on
+[signpath.org/terms](https://signpath.org/terms); the ones that shape our process:
+
+- an OSI-approved licence with no commercial dual licensing (3BCAD is Apache-2.0 only), a public repository, an
+  existing release, and a [code signing policy](README.md#code-signing-policy) on the home page;
+- multi-factor authentication for every team member on GitHub and SignPath;
+- every signing request is approved by hand, and builds run only on GitHub-hosted runners;
+- product name and version are enforced on each signed program (`signpath.xml` does this).
+
+Steps:
+
+1. Apply at [signpath.org/apply](https://signpath.org/apply) and wait for the free subscription to be approved.
+2. In SignPath: add the predefined trusted build system **GitHub.com** to the organization; create the project
+   (slug `3bcad`) linked to it and to this repository; add the artifact configuration with slug `windows` from
+   [`packaging/windows/signpath.xml`](packaging/windows/signpath.xml); create the signing policy (slug
+   `release-signing`) with the Foundation certificate and the approvers from the code signing policy.
+3. Create a SignPath user (or CI user) with *Submitter* rights on that policy and copy its API token.
+4. In GitHub (Settings → Secrets and variables → Actions): the secret `SIGNPATH_API_TOKEN`, and the variable
+   `SIGNPATH_ORGANIZATION_ID` (from SignPath). `SIGNPATH_PROJECT_SLUG` and `SIGNPATH_SIGNING_POLICY_SLUG` are only
+   needed if the slugs differ from `3bcad` and `release-signing`.
+5. Try it without releasing: Actions → **Package** → **Run workflow** on `main`, approve the request in SignPath,
+   and check that the job's "Use the signed files" step lists both files as signed.
+
+If `signpath.xml` changes, paste the new version into SignPath before the next release.
 
 ## When something goes wrong
 
@@ -106,7 +141,8 @@ replace `3bcad.exe` there.
 
 ## Known limitations
 
-- Until the [signing secrets](#code-signing) are set up, the builds are not code-signed. On first launch Windows
+- Until [SignPath](#setting-up-signpath-free-windows-signing-for-open-source) or the other signing secrets are set
+  up, the builds are not code-signed. On first launch Windows
   SmartScreen shows "Windows protected your PC" (click **More info → Run anyway**), and macOS needs a right-click on
   `3BCAD.app` → **Open**. Even when signed, SmartScreen can warn until a new certificate has built up reputation.
 - On macOS, double-clicking a 3BCAD file in Finder does not open it (Finder sends files as Apple Events, which

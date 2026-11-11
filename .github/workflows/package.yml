@@ -3,8 +3,10 @@ name: Package
 # Builds the release downloads. release.yml calls it to publish them; pull requests that change the
 # packaging run it too, so the installers are tested before release day (nothing is published).
 # Signing runs only when its secrets exist, and never for pull requests. See RELEASING.md.
+# Run it by hand (Actions → Package → Run workflow) to try the signing setup without releasing.
 on:
   workflow_call:
+  workflow_dispatch:
   pull_request:
     paths:
       - packaging/**
@@ -32,7 +34,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     env:
       # Flags only: the secrets themselves reach just the signing steps, not the build.
-      WINDOWS_SIGN: ${{ github.event_name != 'pull_request' && secrets.WINDOWS_CERTIFICATE != '' }}
+      # Windows signs through SignPath when its token exists, else with a .pfx certificate.
+      SIGNPATH_SIGN: ${{ github.event_name != 'pull_request' && secrets.SIGNPATH_API_TOKEN != '' }}
+      WINDOWS_SIGN: ${{ github.event_name != 'pull_request' && secrets.WINDOWS_CERTIFICATE != '' && secrets.SIGNPATH_API_TOKEN == '' }}
       MACOS_SIGN: ${{ github.event_name != 'pull_request' && secrets.MACOS_CERTIFICATE != '' }}
     defaults:
       run:
@@ -75,12 +79,10 @@ jobs:
           WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
         run: packaging/windows/sign.ps1 target/release/3bcad.exe
 
-      - name: Package (Windows)
+      - name: Installer (Windows)
         if: runner.os == 'Windows'
         run: |
-          mkdir -p "dist/$PKG"
-          cp target/release/3bcad.exe README.md CHANGELOG.md LICENSE-APACHE NOTICE "dist/$PKG/"
-          (cd dist && 7z a "$PKG.zip" "$PKG")
+          mkdir -p dist
           # WiX 5: later versions come with the Open Source Maintenance Fee EULA.
           dotnet tool install wix --version 5.0.2 --tool-path "$RUNNER_TEMP/wix"
           # MSI versions are plain dotted numbers, so drop any -beta.N suffix.
@@ -94,6 +96,62 @@ jobs:
           WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
           WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
         run: packaging/windows/sign.ps1 "dist/$env:PKG.msi"
+
+      # SignPath (free for open source, see RELEASING.md): one signing request per build, which a person
+      # approves in SignPath. It signs 3bcad.exe, the copy inside the .msi, and the .msi itself, as
+      # packaging/windows/signpath.xml says. The unsigned files go up as their own artifact, which
+      # release.yml does not publish.
+      - name: Collect the files to sign (Windows)
+        if: runner.os == 'Windows' && env.SIGNPATH_SIGN == 'true'
+        run: |
+          mkdir -p "$RUNNER_TEMP/unsigned"
+          cp target/release/3bcad.exe "dist/$PKG.msi" "$RUNNER_TEMP/unsigned/"
+
+      - id: unsigned
+        if: runner.os == 'Windows' && env.SIGNPATH_SIGN == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: signpath-unsigned-windows
+          path: ${{ runner.temp }}/unsigned/
+          retention-days: 1
+          if-no-files-found: error
+
+      - name: Sign with SignPath (Windows)
+        if: runner.os == 'Windows' && env.SIGNPATH_SIGN == 'true'
+        uses: signpath/github-action-submit-signing-request@v3
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG || '3bcad' }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG || 'release-signing' }}
+          artifact-configuration-slug: windows
+          github-artifact-id: ${{ steps.unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          # Time for an approver to approve the request in SignPath.
+          wait-for-completion-timeout-in-seconds: 7200
+          output-artifact-directory: ${{ runner.temp }}/signed
+          parameters: |
+            version: "${{ env.VERSION }}"
+
+      - name: Use the signed files (Windows)
+        if: runner.os == 'Windows' && env.SIGNPATH_SIGN == 'true'
+        shell: pwsh
+        run: |
+          Copy-Item "$env:RUNNER_TEMP/signed/3bcad.exe" target/release/3bcad.exe -Force
+          Copy-Item "$env:RUNNER_TEMP/signed/$env:PKG.msi" "dist/$env:PKG.msi" -Force
+          foreach ($f in 'target/release/3bcad.exe', "dist/$env:PKG.msi") {
+            $s = Get-AuthenticodeSignature $f
+            if ($s.Status -ne 'Valid') { throw "$f is not validly signed: $($s.StatusMessage)" }
+            "$f signed by $($s.SignerCertificate.Subject)"
+          }
+
+      # Packed last, so it holds the signed program.
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          mkdir -p "dist/$PKG"
+          cp target/release/3bcad.exe README.md CHANGELOG.md LICENSE-APACHE NOTICE "dist/$PKG/"
+          (cd dist && 7z a "$PKG.zip" "$PKG")
 
       # macOS: one 3BCAD.app, in a .zip and in a .dmg.
       - name: Build (macOS)
