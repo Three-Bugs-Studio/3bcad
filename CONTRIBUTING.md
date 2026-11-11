@@ -46,7 +46,7 @@ cargo test --workspace
 - Add a test for new logic (solver constraints, kernel operations, file formats). Geometry tests
   should check something physical: volume, watertightness, solved coordinates.
 - Follow the existing crate boundaries: `core` must not depend on `render` or `app`; `kernel` must not depend on `sketch`.
-- New dependencies need a reason in the PR description. Prefer pure-Rust crates with MIT/Apache-2.0 compatible licenses.
+- New dependencies need a reason in the PR description. Prefer pure-Rust crates with Apache-2.0 compatible licenses (MIT, BSD, Apache-2.0, ...).
 - Update `README.md` if you change user-facing behaviour.
 
 ## Fuzzing
@@ -82,9 +82,9 @@ Also add user-facing changes to `## [Unreleased]` in `CHANGELOG.md`; those notes
 
 ## Licensing of contributions
 
-3BCAD is dual licensed under MIT or Apache-2.0. Unless you explicitly state otherwise, any contribution
-intentionally submitted for inclusion in the work by you, as defined in the Apache-2.0 license, shall be
-dual licensed as above, without any additional terms or conditions.
+3BCAD is licensed under the Apache License, Version 2.0. Unless you explicitly state otherwise, any
+contribution intentionally submitted for inclusion in the work by you, as defined in the Apache-2.0 license,
+shall be licensed as above, without any additional terms or conditions.
 
 Do not submit code copied from proprietary CAD software, or from projects under licenses incompatible with
-MIT/Apache-2.0 (for example GPL or LGPL code).
+Apache-2.0 (for example GPL or LGPL code).

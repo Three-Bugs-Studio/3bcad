@@ -5,7 +5,7 @@
 <p align="center">
   <a href="https://github.com/Three-Bugs-Studio/3bcad/actions/workflows/ci.yml"><img src="https://github.com/Three-Bugs-Studio/3bcad/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://github.com/Three-Bugs-Studio/3bcad/releases/latest"><img src="https://img.shields.io/github/v/release/Three-Bugs-Studio/3bcad" alt="Latest release"></a>
-  <a href="#license"><img src="https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue" alt="License: MIT OR Apache-2.0"></a>
+  <a href="#license"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="License: Apache-2.0"></a>
 </p>
 
 <p align="center">
@@ -344,17 +344,13 @@ Contributions are welcome! Read [CONTRIBUTING.md](CONTRIBUTING.md), the
 
 ## License
 
-Licensed under either of
-
-- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE))
-- MIT license ([LICENSE-MIT](LICENSE-MIT))
-
-at your option.
+Licensed under the Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE)). Releases up to v1.0.1 were
+also offered under the MIT license and stay available under it.
 
 Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in the work by you,
-as defined in the Apache-2.0 license, shall be dual licensed as above, without any additional terms or conditions.
+as defined in the Apache-2.0 license, shall be licensed as above, without any additional terms or conditions.
 
-3BCAD was created by Duong Phu Dong at Three Bugs Studio. If you share or build on it, keep the license files and
+3BCAD was created by Duong Phu Dong at Three Bugs Studio. If you share or build on it, keep the license file and
 [NOTICE](NOTICE), and say your version is based on 3BCAD by Three Bugs Studio. The names and logos are covered by
 the [trademark policy](TRADEMARKS.md): a modified version needs its own name. To cite 3BCAD, use **Cite this
 repository** on GitHub ([CITATION.cff](CITATION.cff)).

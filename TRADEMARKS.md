@@ -1,6 +1,6 @@
 # Trademark policy
 
-The 3BCAD code is open source under the MIT or Apache-2.0 license. The names **3BCAD** and
+The 3BCAD code is open source under the Apache-2.0 license. The names **3BCAD** and
 **Three Bugs Studio**, and their logos (`assets/`), are not: they say where a program comes from, and
 the code licenses do not cover them (Apache-2.0, section 6).
 

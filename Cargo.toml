@@ -13,7 +13,7 @@ exclude = ["fuzz"]
 [workspace.package]
 version = "1.0.1"
 edition = "2021"
-license = "MIT OR Apache-2.0"
+license = "Apache-2.0"
 repository = "https://github.com/Three-Bugs-Studio/3bcad"
 rust-version = "1.87"
 

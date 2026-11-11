@@ -25,4 +25,4 @@ Decisions the maintainer (@DongDuong2001) needs to make. Answer inline or in PR
 ## Resolved
 
 - Repository visibility: public (2026-10-26), to allow the "Protect main" ruleset.
-- Licence: MIT OR Apache-2.0.
+- Licence: Apache-2.0 only from 2026-11-11 (releases up to v1.0.1 were MIT OR Apache-2.0).
