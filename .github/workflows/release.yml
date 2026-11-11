@@ -60,6 +60,8 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           path: dist
+          # Only the downloads (3BCAD-<platform>), never the unsigned files sent for signing.
+          pattern: 3BCAD-*
           merge-multiple: true
       - name: Publish GitHub Release
         env:

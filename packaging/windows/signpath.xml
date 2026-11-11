@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  SignPath artifact configuration for the Windows release: paste it into the SignPath project
+  (Artifact configurations, slug "windows") whenever this file changes. See RELEASING.md, Code signing.
+
+  package.yml uploads one ZIP holding the unsigned 3bcad.exe and the .msi built around it. SignPath signs
+  the program, signs the copy inside the installer, then signs the installer; the portable .zip is
+  packed afterwards from the signed program.
+
+  SignPath Foundation requires the product name and version to be enforced on every signed program:
+  build.rs sets ProductName "3BCAD", and ProductVersion is the Cargo version, passed as "version".
+-->
+<artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
+  <parameters>
+    <parameter name="version" required="true" />
+  </parameters>
+  <zip-file>
+    <pe-file path="3bcad.exe" product-name="3BCAD" product-version="${version}">
+      <authenticode-sign />
+    </pe-file>
+    <msi-file path="3BCAD-windows-x64.msi" author="Three Bugs Studio">
+      <pe-file-set product-name="3BCAD" product-version="${version}">
+        <include path="3bcad.exe" />
+        <for-each>
+          <authenticode-sign />
+        </for-each>
+      </pe-file-set>
+      <authenticode-sign />
+    </msi-file>
+  </zip-file>
+</artifact-configuration>

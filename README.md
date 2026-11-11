@@ -47,7 +47,7 @@ toolchain to install, and one `cargo run` builds the whole application on Window
 - [Your first assembly](#your-first-assembly)
 - [Your first drawing](#your-first-drawing)
 - [User guide and tutorials](https://three-bugs-studio.github.io/3bcad/) (also in [`docs/`](docs/SUMMARY.md))
-- [Download](#download) and [build from source](#build-from-source)
+- [Download](#download) ([code signing policy](#code-signing-policy)) and [build from source](#build-from-source)
 - [Controls](#controls)
 - [Files](#files)
 - [How it is built](#how-it-is-built)
@@ -219,9 +219,10 @@ Click the link for your computer; it always downloads the newest version:
 
 Release notes, checksums and older versions are on the [Releases page](https://github.com/Three-Bugs-Studio/3bcad/releases).
 
-Until the project has signing certificates, Windows SmartScreen ("More info → Run anyway") and macOS Gatekeeper
-(right-click `3BCAD.app` → **Open**) warn on first launch; [RELEASING.md](RELEASING.md#code-signing) describes the
-signing the release workflow does once they exist.
+Windows releases are being set up for code signing through the SignPath Foundation (see the
+[code signing policy](#code-signing-policy)). Until a release is signed, Windows SmartScreen ("More info → Run
+anyway") and macOS Gatekeeper (right-click `3BCAD.app` → **Open**) warn on first launch, and even signed downloads
+can show a SmartScreen warning for a while until they have built up reputation.
 The version you are running is shown in the title bar; see [CHANGELOG.md](CHANGELOG.md) for what changed in
 each release.
 
@@ -229,6 +230,24 @@ From 0.8.0 on, 3BCAD checks for a newer release when it starts and offers **Upda
 release for your computer, checks it against the release's `SHA256SUMS.txt`, installs it in place and restarts.
 Turn the check off with **File → Check for updates at start**, or check at any time with **File → Check for
 Updates…**. It needs `curl` and `tar`, which Windows 10 and later, macOS and Linux include.
+
+### Code signing policy
+
+Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by
+[SignPath Foundation](https://signpath.org).
+
+- Committers and reviewers: [members of Three Bugs Studio](https://github.com/orgs/Three-Bugs-Studio/people)
+- Approvers: owners of the [Three Bugs Studio organization](https://github.com/Three-Bugs-Studio)
+
+Only programs built from this repository by its GitHub Actions release workflow are signed, and every signing
+request is approved by hand. Changes from people outside the team are reviewed by a team member before they are
+merged. See [RELEASING.md](RELEASING.md#code-signing) for how it works.
+
+**Privacy:** 3BCAD sends nothing about you, your files or your use of it. The only network request it makes on its
+own is the update check at start, which asks GitHub for the newest release (GitHub's
+[privacy statement](https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement) applies);
+turn it off with **File → Check for updates at start**. Updates are downloaded only when you choose **Update now**,
+and links in the app (such as the **Help** menu) open in your browser only when you click them.
 
 ## Build from source
 
