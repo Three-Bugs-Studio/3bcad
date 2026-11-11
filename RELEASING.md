@@ -95,9 +95,8 @@ source); a certificate file still works as before when SignPath is not configure
 The certificate is issued to SignPath Foundation, which then shows as the publisher. Its conditions are on
 [signpath.org/terms](https://signpath.org/terms); the ones that shape our process:
 
-- an OSI-approved licence with no *commercial* dual licensing (ask SignPath to confirm "MIT OR Apache-2.0" when
-  applying), a public repository, an existing release, and a [code signing policy](README.md#code-signing-policy) on
-  the home page;
+- an OSI-approved licence with no commercial dual licensing (3BCAD is Apache-2.0 only), a public repository, an
+  existing release, and a [code signing policy](README.md#code-signing-policy) on the home page;
 - multi-factor authentication for every team member on GitHub and SignPath;
 - every signing request is approved by hand, and builds run only on GitHub-hosted runners;
 - product name and version are enforced on each signed program (`signpath.xml` does this).
