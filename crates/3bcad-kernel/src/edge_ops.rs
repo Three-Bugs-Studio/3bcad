@@ -185,6 +185,13 @@ fn arc_ends(topo: &Topology, e: &TopoEdge, center: P3, axis: P3) -> (f64, f64) {
     (a.min(b), a.max(b))
 }
 
+/// Whether two arcs lie on the same circle. Each arc's circle is fitted on its own, and on a rim
+/// the kernel approximates (after a boolean) the fits differ by a few µm.
+pub fn same_circle(c1: P3, r1: f64, c2: P3, r2: f64) -> bool {
+    let tol = 1e-5 * (1.0 + r1.max(r2));
+    norm(sub(c1, c2)) < tol && (r1 - r2).abs() < tol
+}
+
 /// Whether the arcs on `edge`'s circle close the whole circle (a cylinder's rim is several arcs).
 pub fn full_circle(topo: &Topology, edge: usize) -> bool {
     let EdgeCurve::Circle { center, axis, radius } = topo.edges[edge].curve else {
@@ -193,10 +200,9 @@ pub fn full_circle(topo: &Topology, edge: usize) -> bool {
     let swept: f64 = topo
         .edges
         .iter()
-        .filter(|e| {
-            matches!(e.curve, EdgeCurve::Circle { center: c, radius: r, .. }
-                if norm(sub(c, center)) < 1e-6 && (r - radius).abs() < 1e-6)
-        })
+        .filter(
+            |e| matches!(e.curve, EdgeCurve::Circle { center: c, radius: r, .. } if same_circle(c, r, center, radius)),
+        )
         .map(|e| {
             if e.vertices[0] == e.vertices[1] {
                 return TAU;
@@ -584,6 +590,42 @@ mod tests {
         // Without the mesh allowance the bore rim is refused: the bug this guards.
         topo.tol = 0.0;
         assert!(chamfer(&topo, 1.0).is_err());
+    }
+
+    #[test]
+    fn a_rim_of_separately_fitted_arcs_is_a_full_circle() {
+        // Exercise 173: three 120° arcs of an R17.001 rim whose fitted centres and radii differ by
+        // ~1.5 µm; only one third got chamfered.
+        let r = 17.001;
+        let at = |deg: f64| {
+            let a = deg.to_radians();
+            [r * a.cos(), r * a.sin(), 76.0]
+        };
+        let arc = |v: [usize; 2], mid: f64, center: P3, radius: f64| TopoEdge {
+            curve: EdgeCurve::Circle {
+                center,
+                axis: [0.0, 0.0, 1.0],
+                radius,
+            },
+            points: Vec::new(),
+            length: 0.0,
+            mid: at(mid),
+            tangent: [0.0; 3],
+            sides: Vec::new(),
+            vertices: v,
+        };
+        let topo = Topology {
+            vertices: vec![at(0.0), at(120.0), at(240.0)],
+            edges: vec![
+                arc([0, 1], 60.0, [-4.8e-7, 3.0e-7, 76.0], 17.0010005),
+                arc([1, 2], 180.0, [1.08e-6, 0.0, 76.0], 17.0010011),
+                arc([2, 0], 300.0, [0.0, -1.2e-6, 76.0], 17.0009995),
+            ],
+            ..Topology::default()
+        };
+        assert!((0..3).all(|e| full_circle(&topo, e)));
+        // A concentric circle 0.1 mm larger is a different circle.
+        assert!(!same_circle([0.0; 3], 17.0, [0.0; 3], 17.1));
     }
 
     #[test]
