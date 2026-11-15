@@ -954,9 +954,10 @@ fn sketch_panel(s: &mut SketchSession, ui: &mut egui::Ui) {
 }
 
 /// A font picked from the installed ones; `None` while unchanged.
-fn font_combo(ui: &mut egui::Ui, salt: &str, current: &str) -> Option<String> {
+fn font_combo(ui: &mut egui::Ui, current: &str) -> Option<String> {
     let mut picked = None;
-    egui::ComboBox::from_id_salt(salt)
+    // An id from the combo's place in the panel: CodeQL takes a literal id "salt" for cryptography.
+    egui::ComboBox::from_id_salt(ui.next_auto_id())
         .selected_text(current)
         .height(360.0)
         .show_ui(ui, |ui| {
@@ -984,7 +985,7 @@ fn text_editor(s: &mut SketchSession, ui: &mut egui::Ui, i: usize) {
     }
     ui.horizontal(|ui| {
         ui.label(tr("Font"));
-        if let Some(f) = font_combo(ui, "text_font", &t.font) {
+        if let Some(f) = font_combo(ui, &t.font) {
             s.checkpoint();
             s.set_text(i, &words, &f);
         }
@@ -1068,7 +1069,7 @@ fn tool_options(s: &mut SketchSession, ui: &mut egui::Ui) {
                 } else {
                     o.font.as_str()
                 };
-                if let Some(f) = font_combo(ui, "text_tool_font", current) {
+                if let Some(f) = font_combo(ui, current) {
                     o.font = f;
                 }
             });
