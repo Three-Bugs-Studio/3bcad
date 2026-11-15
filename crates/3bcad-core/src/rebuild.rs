@@ -1075,11 +1075,12 @@ impl Eval {
                 })
             });
         // Lettering's many short walls need more than a micron, or the export meshes do not join.
+        // A boss kept as a new body would keep the lap as material of its own.
         let lap = |into: P3| {
-            if sketch.texts().is_empty() {
+            if sketch.texts().is_empty() || (op == OpKind::Add && !e.merge) {
                 GROW
             } else {
-                self.face_lap(&plane, &regions, into)
+                self.face_lap(&plane, &regions, into, op == OpKind::Add)
             }
         };
         let (z0, z1) = match (on_face, sign > 0.0) {
@@ -1106,29 +1107,44 @@ impl Eval {
     /// How far a tool sketched on a face may run past it along `into`: 0.1 mm, or half the
     /// material behind the face (a boss) or the gap in front of it (a cut) where that is less. A
     /// micron keeps truck off coplanar faces too, but with lettering it leaves slivers whose
-    /// meshes do not join, so the export is not watertight.
+    /// meshes do not join, so the export is not watertight. Where the outline leaves the face (a
+    /// boss over its edge, a cut running under a higher part) the lap would add material in the
+    /// air or take it from inside, so it stays a micron.
     // shortcut: only text gets this. Round profiles do not need it (the export mends their seams),
     // and a wider lap makes truck fail booleans the micron gets through (one of the reference
-    // flange's patterned holes); check the parts corpus before using it for more.
-    fn face_lap(&self, plane: &Plane, regions: &[ProfileRegion], into: P3) -> f64 {
+    // flange's patterned holes); check the parts corpus before using it for more. Only the
+    // outline is sampled, not the inside of a stroke (a hole in the face under a wide letter).
+    fn face_lap(&self, plane: &Plane, regions: &[ProfileRegion], into: P3, boss: bool) -> f64 {
+        let pts: Vec<[f64; 2]> = regions
+            .iter()
+            .flat_map(|r| std::iter::once(&r.outer).chain(&r.holes))
+            .flat_map(|lp| offset::sample_loop(lp, 32))
+            .collect();
+        let (lo, hi) = pts
+            .iter()
+            .fold(([f64::INFINITY; 2], [f64::NEG_INFINITY; 2]), |(lo, hi), p| {
+                ([lo[0].min(p[0]), lo[1].min(p[1])], [hi[0].max(p[0]), hi[1].max(p[1])])
+            });
+        // Rays along the normal only meet triangles over the outline's box.
+        let over = |t: &[P3; 3]| {
+            let q = t.map(|p| plane.to_local(p));
+            (0..2).all(|i| q.iter().any(|p| p[i] <= hi[i] + 1e-3) && q.iter().any(|p| p[i] >= lo[i] - 1e-3))
+        };
         let tris: Vec<[P3; 3]> = self
             .s
             .bodies
             .iter()
             .flat_map(|b| b.topo.faces.iter().flat_map(|f| f.tris.iter().copied()))
+            .filter(over)
             .collect();
-        let corners = regions
-            .iter()
-            .flat_map(|r| std::iter::once(&r.outer).chain(&r.holes))
-            .flat_map(|lp| lp.iter().map(offset::seg_start))
-            .step_by(7)
-            .take(64);
         let mut lap: f64 = 0.1;
-        for c in corners {
-            let o = sub(plane.to_world(c), scale3(into, 1e-4));
-            if let [a, b, ..] = ray_hits(o, into, &tris)[..] {
-                lap = lap.min((b - a) / 2.0);
+        for c in pts {
+            // Just past the face, where the lap would go: material for a boss, air for a cut.
+            let hits = ray_hits(add3(plane.to_world(c), scale3(into, 1e-4)), into, &tris);
+            if (hits.len() % 2 == 1) != boss {
+                return GROW;
             }
+            lap = lap.min(hits.first().map_or(f64::INFINITY, |t| t / 2.0));
         }
         lap.max(GROW)
     }
