@@ -5,7 +5,7 @@ use std::collections::HashSet;
 
 use serde::{Deserialize, Serialize};
 use truck_meshalgo::prelude::*;
-use truck_modeling::Solid;
+use truck_modeling::{Face, Shell, Solid};
 
 use crate::solid::Plane;
 
@@ -113,38 +113,92 @@ pub fn print_mesh(solid: &Solid, tol: f64) -> PrintMesh {
 /// `print_mesh` within a chord tolerance (mm) and an angle tolerance (radians): curved faces are
 /// meshed finer until no triangle spans more than `angle` of the surface's turn.
 pub fn print_mesh_within(solid: &Solid, chord: f64, angle: f64) -> PrintMesh {
+    let faces: Vec<_> = solid.face_iter().collect();
     let mut tol = chord;
     let mut meshed = solid.robust_triangulation(tol);
+    let mut turns = face_turns(&meshed);
+    // Per face, the turn and tolerance it last got straighter at; `None` once a mesh 4× finer left
+    // it as bent (a cone's apex, a face truck's mesher lays off its surface): refining it would only
+    // add triangles, without end.
+    let mut shrank: Vec<_> = turns.iter().map(|&t| Some((t, tol))).collect();
     for _ in 0..6 {
-        let turn = max_turn(&meshed);
-        if turn <= angle || tol <= MIN_TOL {
+        if tol <= MIN_TOL {
             break;
         }
-        // A facet's turn grows with the square root of its chord deviation.
-        tol = (tol * (angle / turn).powi(2) * 0.8).max(MIN_TOL);
+        // The face that turns most steers, once it shows that meshed alone 4× finer it straightens.
+        let quarter = (tol / 4.0).max(MIN_TOL);
+        let steer = loop {
+            let Some((f, &t)) = turns
+                .iter()
+                .enumerate()
+                .filter(|&(f, _)| shrank[f].is_some())
+                .max_by(|a, b| a.1.total_cmp(b.1))
+            else {
+                break None;
+            };
+            if t <= angle {
+                break None;
+            }
+            let alone = turn_alone(faces[f], quarter);
+            if alone < 0.9 * t {
+                break Some((t, alone));
+            }
+            shrank[f] = None;
+        };
+        let Some((worst, alone)) = steer else { break };
+        // A facet's turn grows with the square root of its chord deviation, so the face meshed 4×
+        // finer turns about half as much. A coarse mesh can turn far more (a whole fillet in one
+        // triangle): when the face straightened more than twice that, step from the finer mesh.
+        tol = if alone < worst / 4.0 {
+            (quarter * (angle / alone).powi(2) * 0.8).min(quarter)
+        } else {
+            tol * (angle / worst).powi(2) * 0.8
+        }
+        .max(MIN_TOL);
         meshed = solid.robust_triangulation(tol);
+        turns = face_turns(&meshed);
+        for (s, &t) in shrank.iter_mut().zip(&turns) {
+            *s = match *s {
+                Some((was, _)) if t < was => Some((t, tol)),
+                // A slightly finer tolerance often leaves a face's mesh as it was.
+                Some((_, at)) if tol * 4.0 > at => *s,
+                _ => None,
+            };
+        }
     }
     welded(&meshed)
 }
 
-/// The widest angle (radians) between the surface normals at the corners of one triangle.
-fn max_turn(meshed: &Meshed) -> f64 {
+/// Each face's `turn` (0 for a face truck could not mesh).
+fn face_turns(meshed: &Meshed) -> Vec<f64> {
+    meshed
+        .face_iter()
+        .map(|f| f.surface().map_or(0.0, |p| turn(&p)))
+        .collect()
+}
+
+/// `turn` of `face` meshed on its own at `tol`.
+fn turn_alone(face: &Face, tol: f64) -> f64 {
+    let meshed = Shell::from(vec![face.clone()]).robust_triangulation(tol);
     meshed
         .face_iter()
         .filter_map(|f| f.surface())
-        .flat_map(|poly| {
-            let nor = poly.normals().to_vec();
-            poly.faces()
-                .triangle_iter()
-                .filter_map(|t| {
-                    let n = [t[0].nor?, t[1].nor?, t[2].nor?].map(|i| nor[i].normalize());
-                    Some(
-                        (0..3)
-                            .map(|k| n[k].dot(n[(k + 1) % 3]).clamp(-1.0, 1.0).acos())
-                            .fold(0.0, f64::max),
-                    )
-                })
-                .collect::<Vec<_>>()
+        .map(|p| turn(&p))
+        .fold(0.0, f64::max)
+}
+
+/// The widest angle (radians) between the surface normals at the corners of one triangle.
+fn turn(poly: &PolygonMesh) -> f64 {
+    let nor = poly.normals();
+    poly.faces()
+        .triangle_iter()
+        .filter_map(|t| {
+            let n = [t[0].nor?, t[1].nor?, t[2].nor?].map(|i| nor[i].normalize());
+            Some(
+                (0..3)
+                    .map(|k| n[k].dot(n[(k + 1) % 3]).clamp(-1.0, 1.0).acos())
+                    .fold(0.0, f64::max),
+            )
         })
         .fold(0.0, f64::max)
 }
