@@ -2029,8 +2029,11 @@ vi: Tạm ẩn đặc trưng trong cây để loại chúng khỏi cấu hình n
 en: Display
 vi: Hiển thị
 
-en: Opened {}; some shells could not be read (see the log)
-vi: Đã mở {}; một số vỏ không đọc được (xem nhật ký)
+en: Opened {}; {}
+vi: Đã mở {}; {}
+
+en: {}; {} bodies may have come in wrong (see the log)
+vi: {}; {} khối có thể bị nhập sai (xem nhật ký)
 
 en: Zoom Fit
 vi: Vừa màn hình
