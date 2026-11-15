@@ -2037,3 +2037,51 @@ vi: Vừa màn hình
 
 en: {} bodies
 vi: {} khối
+en: Text
+vi: Chữ
+en: Click where the text starts, then type it in the Properties panel
+vi: Bấm vào chỗ chữ bắt đầu, rồi gõ chữ trong bảng Thuộc tính
+en: Font
+vi: Phông chữ
+en: Along {}
+vi: Theo {}
+en: Flip side
+vi: Lật sang phía kia
+en: Straight
+vi: Thẳng
+en: Along the selected curve
+vi: Theo đường cong đã chọn
+en: Pick a curve…
+vi: Chọn đường cong…
+en: Then click a line, arc, circle or spline to put the text on it
+vi: Rồi bấm một đoạn thẳng, cung, đường tròn hoặc spline để đặt chữ lên đó
+en: Click the curve for the text (Esc cancels)
+vi: Bấm vào đường cong cho chữ (Esc để hủy)
+en: Drag the text, or dimension its start point, to place it. Emboss it with Extruded Boss, deboss it with Extruded Cut.
+vi: Kéo chữ, hoặc ghi kích thước cho điểm đầu của chữ, để đặt vị trí. Dập nổi bằng Extruded Boss, dập chìm bằng Extruded Cut.
+en: {} is not installed here; the built-in font is used
+vi: {} chưa được cài trên máy này; dùng phông chữ có sẵn
+en: Type the text first
+vi: Hãy gõ chữ trước
+en: By planes
+vi: Bằng các mặt phẳng
+en: Add the selected plane
+vi: Thêm mặt phẳng đã chọn
+en: Alignment pins
+vi: Chốt định vị
+en: Pins per plane
+vi: Số chốt mỗi mặt cắt
+en: Pins on one piece
+vi: Chốt liền trên một mảnh
+en: Separate dowels
+vi: Chốt rời
+en: Pins go where the cut face has room, spread out so the pieces cannot turn. The holes are wider by the clearance on each side and deeper by it; dowels come out as bodies of their own.
+vi: Chốt được đặt nơi mặt cắt còn chỗ, cách xa nhau để các mảnh không xoay được. Lỗ rộng thêm một khe hở ở mỗi phía và sâu thêm một khe hở; chốt rời là các khối riêng.
+en: Split for Printing
+vi: Tách để in
+en: Cut the part by the selected planes (Right Plane when none) into pieces that fit the bed, with alignment pins across each cut
+vi: Cắt chi tiết theo các mặt phẳng đã chọn (Right Plane nếu không chọn) thành các mảnh vừa bàn in, có chốt định vị ở mỗi mặt cắt
+en: Pin diameter
+vi: Đường kính chốt
+en: Pin length
+vi: Chiều dài chốt

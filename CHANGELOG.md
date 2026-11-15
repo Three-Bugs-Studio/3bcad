@@ -7,6 +7,24 @@ saved files and workflows; patch versions (0.x.y) only fix bugs.
 
 ## [Unreleased]
 
+### Added
+
+- Sketch text (#113): the **Text** sketch tool writes lettering in any installed font, with its height,
+  angle, and optionally along a line, arc, circle or spline (**Flip side** puts it on the curve's other
+  side). Every letter is a profile: emboss it with Extruded Boss, deboss it with Extruded Cut. The outlines
+  are saved in the part, so it keeps its lettering where the font is not installed.
+- Split for printing (#114): **Split for Printing** on the 3D Print tab cuts the part by the selected
+  planes and adds alignment pins across each cut, at a fit clearance (the Fit presets; slip fit for the
+  part's material to start with). Pins stand on one piece and go into holes in the other, or come out as
+  separate dowels with holes in both pieces. Split can now cut by several planes at once, and the pins'
+  size and clearance can be driven by equations.
+
+### Fixed
+
+- A boss or cut whose profile has a hole, sketched on a face of the part (a washer, a ring-shaped groove,
+  the letters O and A), no longer fails with "the boolean operation failed": the outline and the holes
+  are built one after the other.
+
 ## [1.1.0] - 2026-11-11
 
 ### Changed
