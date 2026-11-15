@@ -166,7 +166,7 @@ fn welded(meshed: &Meshed) -> PrintMesh {
                 .map(|t| (t.map(|v| base + v.pos), f as u32)),
         );
     }
-    let (vertices, remap) = weld(&positions, TOLERANCE);
+    let (vertices, remap) = weld(&positions, WELD);
     let mut out = PrintMesh {
         vertices,
         ..Default::default()
@@ -178,7 +178,85 @@ fn welded(meshed: &Meshed) -> PrintMesh {
             out.face_of.push(f);
         }
     }
+    mend(&mut out);
     out
+}
+
+/// Positions closer than this are one vertex (mm): the two faces along a curve a boolean made can
+/// place its points a little more than truck's `TOLERANCE` (1e-6) apart.
+const WELD: f64 = 1e-5;
+/// How far a vertex may lie off a triangle's edge and still split it (mm).
+const ON_EDGE: f64 = 1e-4;
+
+/// Closes T-junctions: truck can triangulate a flat face without some points of the curve it
+/// shares with a curved face (the seam of a round boss or hole sketched on a face), so the
+/// triangle along that edge is split at the points the other face has on it.
+fn mend(m: &mut PrintMesh) {
+    use crate::topology::{dot, norm, sub};
+    for _ in 0..8 {
+        let mut owner = std::collections::HashMap::new();
+        for (t, tri) in m.triangles.iter().enumerate() {
+            for k in 0..3 {
+                owner.insert((tri[k], tri[(k + 1) % 3]), t);
+            }
+        }
+        let mut open: Vec<(usize, usize, usize)> = owner
+            .iter()
+            .filter(|(&(a, b), _)| !owner.contains_key(&(b, a)))
+            .map(|(&(a, b), &t)| (t, a, b))
+            .collect();
+        if open.is_empty() {
+            return;
+        }
+        open.sort_unstable();
+        // The open edges' ends, by x, so the ones along an edge are found without a full scan.
+        let mut rim: Vec<usize> = open.iter().flat_map(|&(_, a, b)| [a, b]).collect();
+        rim.sort_unstable();
+        rim.dedup();
+        rim.sort_by(|&i, &j| m.vertices[i][0].total_cmp(&m.vertices[j][0]));
+        let mut split = HashSet::new();
+        for (t, a, b) in open {
+            if split.contains(&t) {
+                continue;
+            }
+            let tri = m.triangles[t];
+            let k = (0..3)
+                .find(|&k| tri[k] == a && tri[(k + 1) % 3] == b)
+                .expect("edge of t");
+            let c = tri[(k + 2) % 3];
+            let (pa, pb) = (m.vertices[a], m.vertices[b]);
+            let ab = sub(pb, pa);
+            let len = norm(ab);
+            let lo = pa[0].min(pb[0]) - ON_EDGE;
+            let hi = pa[0].max(pb[0]) + ON_EDGE;
+            let from = rim.partition_point(|&v| m.vertices[v][0] < lo);
+            let mut on: Vec<(f64, usize)> = rim[from..]
+                .iter()
+                .take_while(|&&v| m.vertices[v][0] <= hi)
+                .filter(|&&v| v != a && v != b && v != c)
+                .filter_map(|&v| {
+                    let w = sub(m.vertices[v], pa);
+                    let s = dot(w, ab) / len;
+                    let off = norm(sub(w, ab.map(|x| x * s / len)));
+                    (s > WELD && s < len - WELD && off <= ON_EDGE).then_some((s, v))
+                })
+                .collect();
+            if on.is_empty() {
+                continue;
+            }
+            on.sort_by(|x, y| x.0.total_cmp(&y.0));
+            let chain: Vec<usize> = std::iter::once(a).chain(on.iter().map(|o| o.1)).chain([b]).collect();
+            m.triangles[t] = [chain[0], chain[1], c];
+            for w in chain.windows(2).skip(1) {
+                m.triangles.push([w[0], w[1], c]);
+                m.face_of.push(m.face_of[t]);
+            }
+            split.insert(t);
+        }
+        if split.is_empty() {
+            return;
+        }
+    }
 }
 
 /// Merges positions closer than `eps`: the kept positions and each input's index among them.
@@ -418,6 +496,28 @@ mod tests {
             "only the caps are planar"
         );
         assert!(cyl.faces.iter().any(Option::is_none));
+    }
+
+    #[test]
+    fn a_t_junction_is_mended() {
+        // A tetrahedron whose base has a point m in the middle of edge a-b that the side face
+        // a-b-d does not have.
+        let (a, b, c, d, m) = (0, 1, 2, 3, 4);
+        let mut mesh = PrintMesh {
+            vertices: vec![
+                [0.0, 0.0, 0.0],
+                [2.0, 0.0, 0.0],
+                [1.0, 2.0, 0.0],
+                [1.0, 1.0, 2.0],
+                [1.0, 0.0, 0.0],
+            ],
+            triangles: vec![[a, c, m], [m, c, b], [a, b, d], [b, c, d], [c, a, d]],
+            face_of: vec![0, 0, 1, 2, 3],
+        };
+        mend(&mut mesh);
+        assert_watertight(&mesh);
+        assert_eq!(mesh.face_of, [0, 0, 1, 2, 3, 1]);
+        assert!((volume(&mesh) - 4.0 / 3.0).abs() < 1e-12, "{}", volume(&mesh));
     }
 
     #[test]

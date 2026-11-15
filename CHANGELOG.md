@@ -21,6 +21,9 @@ saved files and workflows; patch versions (0.x.y) only fix bugs.
 
 ### Fixed
 
+- STL and 3MF exports of a round boss or cut sketched on a face of the part are now watertight. The face
+  it sits on was meshed without some of the points along the round edge, which left pinholes there that
+  slicers report as open edges.
 - A boss or cut whose profile has a hole, sketched on a face of the part (a washer, a ring-shaped groove,
   the letters O and A), no longer fails with "the boolean operation failed": the outline and the holes
   are built one after the other.

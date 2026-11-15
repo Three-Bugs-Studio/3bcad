@@ -1107,8 +1107,9 @@ impl Eval {
     /// material behind the face (a boss) or the gap in front of it (a cut) where that is less. A
     /// micron keeps truck off coplanar faces too, but with lettering it leaves slivers whose
     /// meshes do not join, so the export is not watertight.
-    // shortcut: only text gets this (a wider lap changed the reference flange); use it for every
-    // many-sided profile once the parts corpus is checked against it.
+    // shortcut: only text gets this. Round profiles do not need it (the export mends their seams),
+    // and a wider lap makes truck fail booleans the micron gets through (one of the reference
+    // flange's patterned holes); check the parts corpus before using it for more.
     fn face_lap(&self, plane: &Plane, regions: &[ProfileRegion], into: P3) -> f64 {
         let tris: Vec<[P3; 3]> = self
             .s
