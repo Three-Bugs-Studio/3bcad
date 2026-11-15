@@ -951,6 +951,8 @@ impl SketchSession {
                 SELECTED
             } else if self.hover == Some(item) {
                 HOVER
+            } else if self.analysis.free_points.get(t.at.0).copied().unwrap_or(true) {
+                UNDER
             } else {
                 full()
             };

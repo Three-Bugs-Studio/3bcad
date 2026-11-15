@@ -924,13 +924,17 @@ pub(crate) fn shaping(app: &mut App, ui: &mut egui::Ui) {
 }
 
 /// Split for Printing (3D Print tab): the selected planes (Right Plane when none) cut every body,
-/// with two alignment pins at a slip fit for the part's material across each cut.
+/// with two alignment pins at a slip fit for the part's material across each cut. Planes count when
+/// picked in the view or in the feature tree.
 pub(crate) fn split_for_printing(app: &mut App) {
-    let mut planes: Vec<PlaneRef> = app
-        .selection
-        .iter()
-        .filter_map(|&r| app.plane_ref_of(r).map(|x| x.1))
-        .collect();
+    let picked = app.selection.iter().copied();
+    let in_tree = app.chosen_features().into_iter().map(ModelRef::Feature);
+    let mut planes: Vec<PlaneRef> = Vec::new();
+    for p in picked.chain(in_tree).filter_map(|r| app.plane_ref_of(r).map(|x| x.1)) {
+        if !planes.contains(&p) {
+            planes.push(p);
+        }
+    }
     if planes.is_empty() {
         planes.push(PlaneRef::Std(StdPlane::Right));
     }
