@@ -7,6 +7,15 @@ saved files and workflows; patch versions (0.x.y) only fix bugs.
 
 ## [Unreleased]
 
+### Fixed
+
+- The 3D Print tab no longer hangs 3BCAD on some imported STEP files, such as NIST's CTC-02, whose export mesh
+  never finished. Faces that a finer mesh does not straighten (the apex of a drill-point cone, a face truck's mesher
+  lays off its surface) no longer drive the whole part's export mesh down to 0.1 µm, and a face that a coarse mesh
+  shows far more bent than it is no longer makes the next mesh far finer than it needs (a dome's Coarse export now
+  has 2 600 triangles instead of 39 000, still within 0.1 mm and 30°). The tab also counts the export's triangles
+  on a worker thread, so the window keeps responding while a big part is meshed.
+
 ## [1.1.0] - 2026-11-11
 
 ### Changed

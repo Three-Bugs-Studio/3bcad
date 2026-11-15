@@ -99,6 +99,8 @@ pub struct App {
     pub slicer_missing: Option<Slicer>,
     /// Export meshes, before they are placed on the bed, and what they were made for.
     export_cache: Option<(ExportKey, Arc<Objects>)>,
+    /// Export meshes being made on a worker thread (a big part takes seconds), and what for.
+    export_meshing: Option<(ExportKey, std::sync::mpsc::Receiver<Objects>)>,
     pub geometry: Arc<SceneGeometry>,
     pub geometry_version: u64,
     /// Pick id -> model item.
@@ -184,6 +186,7 @@ impl App {
             print: PrintReport::default(),
             slicer_missing: None,
             export_cache: None,
+            export_meshing: None,
             geometry: Arc::default(),
             geometry_version: 0,
             refs: Vec::new(),
@@ -782,21 +785,56 @@ impl App {
     /// the export quality changed.
     pub fn export_objects(&mut self) -> Arc<Objects> {
         let key = self.export_key();
-        match &self.export_cache {
-            Some((k, objects)) if *k == key => objects.clone(),
-            _ => {
-                let s = &self.files.settings;
-                let objects = Arc::new(crate::print::export_meshes(&self.doc, s.chord, s.angle_deg));
-                self.export_cache = Some((key, objects.clone()));
-                objects
+        if let Some((k, objects)) = &self.export_cache {
+            if *k == key {
+                return objects.clone();
             }
         }
+        // A worker already making them: wait for it rather than mesh the part twice.
+        let made = match self.export_meshing.take() {
+            Some((k, worker)) if k == key => worker.recv().ok(),
+            _ => None,
+        };
+        let s = &self.files.settings;
+        let objects = Arc::new(made.unwrap_or_else(|| crate::print::export_meshes(&self.doc, s.chord, s.angle_deg)));
+        self.export_cache = Some((key, objects.clone()));
+        objects
     }
 
-    /// The export meshes' triangle count, if they are made for the current settings.
-    pub fn export_triangles(&self) -> Option<usize> {
-        let (k, objects) = self.export_cache.as_ref()?;
-        (*k == self.export_key()).then(|| objects.iter().map(|(_, m)| m.triangles.len()).sum())
+    /// The export meshes' triangle count for the current settings, or `None` while a worker thread
+    /// makes them. `start`: set a worker going when none is.
+    pub fn export_triangles(&mut self, start: bool) -> Option<usize> {
+        let key = self.export_key();
+        if self.export_cache.as_ref().is_none_or(|(k, _)| *k != key) {
+            let made = match &self.export_meshing {
+                // Still meshing, or the worker panicked (a face truck cannot mesh): no count.
+                Some((k, worker)) if *k == key => Some(worker.try_recv().ok()?),
+                _ => None,
+            };
+            match made {
+                Some(objects) => {
+                    self.export_cache = Some((key, Arc::new(objects)));
+                    self.export_meshing = None;
+                }
+                None => {
+                    if start {
+                        let s = &self.files.settings;
+                        let job = crate::print::export_job(&self.doc, s.chord, s.angle_deg);
+                        let (tx, worker) = std::sync::mpsc::channel();
+                        let ctx = self.egui_ctx.clone();
+                        std::thread::spawn(move || {
+                            // The part or the quality may have changed meanwhile: then nobody listens.
+                            let _ = tx.send(job());
+                            ctx.request_repaint();
+                        });
+                        self.export_meshing = Some((key, worker));
+                    }
+                    return None;
+                }
+            }
+        }
+        let (_, objects) = self.export_cache.as_ref()?;
+        Some(objects.iter().map(|(_, m)| m.triangles.len()).sum())
     }
 
     /// Drops everything cached for the open part: another part's revisions count from the start
@@ -810,6 +848,7 @@ impl App {
         self.body_meshes = None;
         self.meshing = None;
         self.export_cache = None;
+        self.export_meshing = None;
         self.mass = None;
         self.measured = None;
     }
@@ -829,7 +868,8 @@ impl App {
         // A copy of the part built in that configuration stands in for the open one meanwhile.
         let other = self.doc.in_configuration(i).map_err(io::Error::other)?;
         let open = std::mem::replace(&mut self.doc, other);
-        self.export_cache = None;
+        // Its revisions count apart from the open part's, so they could match those caches' keys.
+        (self.export_cache, self.export_meshing) = (None, None);
         let written = self.write_part(format, path);
         self.doc = open;
         self.export_cache = None;
