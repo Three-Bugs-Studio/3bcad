@@ -366,10 +366,15 @@ pub(crate) fn editor(ed: &mut Ed, ui: &mut egui::Ui, h: &History, me: FeatureId,
             face_line(ed, ui, "Main body (pick one of its faces)", main, p);
             faces_line(ed, ui, "bodies to combine (one face each)", tools, p);
         }
-        FeatureKind::Split { tool, bodies } => {
+        FeatureKind::Split {
+            tool,
+            bodies,
+            planes,
+            pins,
+        } => {
             let mut sketch = matches!(tool, SplitTool::Sketch(_));
             ui.horizontal(|ui| {
-                ed.track(ui.radio_value(&mut sketch, false, tr("By a plane")));
+                ed.track(ui.radio_value(&mut sketch, false, tr("By planes")));
                 ed.track(ui.radio_value(&mut sketch, true, tr("By a sketch")));
             });
             if sketch != matches!(tool, SplitTool::Sketch(_)) {
@@ -379,13 +384,54 @@ pub(crate) fn editor(ed: &mut Ed, ui: &mut egui::Ui, h: &History, me: FeatureId,
                 };
             }
             match tool {
-                SplitTool::Plane(pl) => plane_editor(ed, ui, h, pl, p, "Plane"),
+                SplitTool::Plane(pl) => {
+                    plane_editor(ed, ui, h, pl, p, "Plane");
+                    let mut gone = None;
+                    for (i, extra) in planes.iter_mut().enumerate() {
+                        ui.horizontal(|ui| {
+                            plane_editor(ed, ui, h, extra, p, "Plane");
+                            if ed.button(ui, "✖", true) {
+                                gone = Some(i);
+                            }
+                        });
+                    }
+                    if let Some(i) = gone {
+                        planes.remove(i);
+                    }
+                    if ed.button(ui, "Add the selected plane", p.plane.is_some()) {
+                        planes.push(p.plane.clone().unwrap().0);
+                    }
+                }
                 SplitTool::Sketch(id) => sketch_combo(ed, ui, "split_sketch", h, me, id),
             }
             bodies_line(ed, ui, bodies, p);
-            ui.weak(tr(
-                "A sketch splits off what lies inside its outlines, straight through the part.",
-            ));
+            ui.separator();
+            let mut on = pins.is_some();
+            ed.check(ui, &mut on, "Alignment pins");
+            if on != pins.is_some() {
+                *pins = on.then(|| Pins::new(FIT_PRESETS[0].1[1]));
+            }
+            if let Some(pin) = pins {
+                ed.length(ui, "Diameter", &mut pin.diameter, 0.1);
+                ed.length(ui, "Length", &mut pin.length, 0.1);
+                ui.horizontal(|ui| {
+                    ui.label(tr("Pins per plane"));
+                    ed.track(ui.add(number(&mut pin.count).range(1..=12)));
+                });
+                ed.length(ui, "Clearance", &mut pin.clearance, 0.0);
+                fit_presets(ed, ui, &mut pin.clearance);
+                ui.horizontal(|ui| {
+                    ed.track(ui.radio_value(&mut pin.dowels, false, tr("Pins on one piece")));
+                    ed.track(ui.radio_value(&mut pin.dowels, true, tr("Separate dowels")));
+                });
+                ui.weak(tr(
+                    "Pins go where the cut face has room, spread out so the pieces cannot turn. The holes are                      wider by the clearance on each side and deeper by it; dowels come out as bodies of their own.",
+                ));
+            } else {
+                ui.weak(tr(
+                    "A sketch splits off what lies inside its outlines, straight through the part.",
+                ));
+            }
         }
         FeatureKind::DeleteBody { bodies, keep } => {
             faces_line(ed, ui, "bodies (one face each)", bodies, p);
@@ -516,23 +562,7 @@ pub(crate) fn editor(ed: &mut Ed, ui: &mut egui::Ui, h: &History, me: FeatureId,
         FeatureKind::Fit { faces, clearance } => {
             faces_line(ed, ui, "faces to move", faces, p);
             ed.length(ui, "Clearance", clearance, 0.001);
-            ui.label(tr("Presets (per side)"));
-            egui::Grid::new("fit_presets").show(ui, |ui| {
-                ui.label("");
-                for fit in ["Press", "Slip", "Loose"] {
-                    ui.label(fit);
-                }
-                ui.end_row();
-                for (process, values) in FIT_PRESETS {
-                    ui.label(process);
-                    for v in values {
-                        if ed.button(ui, &crate::ui::properties::units().length(v), true) {
-                            *clearance = v;
-                        }
-                    }
-                    ui.end_row();
-                }
-            });
+            fit_presets(ed, ui, clearance);
             ui.weak(tr(
                 "Holes grow and pins, tabs and slots' walls move in by the clearance. Fit one part of each pair.",
             ));
@@ -543,25 +573,25 @@ pub(crate) fn editor(ed: &mut Ed, ui: &mut egui::Ui, h: &History, me: FeatureId,
     }
 }
 
-/// Clearance per side (mm) for press, slip and loose fits, by printing process and material.
-const FIT_PRESETS: [(&str, [f64; 3]); 4] = [
-    ("FDM: PLA, PETG", [0.05, 0.15, 0.3]),
-    ("FDM: ABS, ASA, nylon", [0.1, 0.2, 0.35]),
-    ("Resin (SLA, DLP)", [0.025, 0.075, 0.15]),
-    ("Powder (SLS, MJF)", [0.1, 0.2, 0.3]),
-];
-
-/// A slip fit for the part's material.
-fn slip_fit(material: &str) -> f64 {
-    let m = material.to_ascii_lowercase();
-    let row = if m.contains("resin") {
-        2
-    } else if ["abs", "asa", "nylon", "pc"].iter().any(|k| m.contains(k)) {
-        1
-    } else {
-        0
-    };
-    FIT_PRESETS[row].1[1]
+/// The press, slip and loose clearances for each printing process, as buttons that set `clearance`.
+fn fit_presets(ed: &mut Ed, ui: &mut egui::Ui, clearance: &mut f64) {
+    ui.label(tr("Presets (per side)"));
+    egui::Grid::new("fit_presets").show(ui, |ui| {
+        ui.label("");
+        for fit in ["Press", "Slip", "Loose"] {
+            ui.label(tr(fit));
+        }
+        ui.end_row();
+        for (process, values) in FIT_PRESETS {
+            ui.label(tr(process));
+            for v in values {
+                if ed.button(ui, &crate::ui::properties::units().length(v), true) {
+                    *clearance = v;
+                }
+            }
+            ui.end_row();
+        }
+    });
 }
 
 /// Sketches and helices picked for a command: the one selected in the feature tree first, then
@@ -893,6 +923,29 @@ pub(crate) fn shaping(app: &mut App, ui: &mut egui::Ui) {
     });
 }
 
+/// Split for Printing (3D Print tab): the selected planes (Right Plane when none) cut every body,
+/// with two alignment pins at a slip fit for the part's material across each cut.
+pub(crate) fn split_for_printing(app: &mut App) {
+    let mut planes: Vec<PlaneRef> = app
+        .selection
+        .iter()
+        .filter_map(|&r| app.plane_ref_of(r).map(|x| x.1))
+        .collect();
+    if planes.is_empty() {
+        planes.push(PlaneRef::Std(StdPlane::Right));
+    }
+    let pins = Pins::new(slip_fit(&app.doc.material().name));
+    create(
+        app,
+        FeatureKind::Split {
+            tool: SplitTool::Plane(planes.remove(0)),
+            bodies: Vec::new(),
+            planes,
+            pins: Some(pins),
+        },
+    );
+}
+
 /// Patterns driven by a sketch's points or along a curve.
 pub(crate) fn patterns(app: &mut App, ui: &mut egui::Ui) {
     stack(ui, |ui| {
@@ -976,6 +1029,8 @@ pub(crate) fn bodies(app: &mut App, ui: &mut egui::Ui) {
                 FeatureKind::Split {
                     tool,
                     bodies: Vec::new(),
+                    planes: Vec::new(),
+                    pins: None,
                 },
             );
         }
