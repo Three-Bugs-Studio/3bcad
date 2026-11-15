@@ -525,7 +525,7 @@ impl Eval {
                 tool: Tool::Shape(shape),
             };
             let before = self.s.bodies.clone();
-            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| self.apply(step, true)))
+            let result = threebcad_kernel::caught(|| self.apply(step, true))
                 .unwrap_or_else(|_| Err(anyhow::anyhow!("the geometry kernel could not compute this fillet")));
             match result {
                 Ok(()) => return Ok(()),

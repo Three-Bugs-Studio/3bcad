@@ -11,6 +11,7 @@ truck-modeling.workspace = true
 truck-meshalgo.workspace = true
 truck-shapeops.workspace = true
 truck-topology.workspace = true
+rayon-core.workspace = true
 nalgebra.workspace = true
 anyhow.workspace = true
 serde.workspace = true

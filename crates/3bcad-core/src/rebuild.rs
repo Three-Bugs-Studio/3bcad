@@ -1874,7 +1874,7 @@ pub fn rebuild(h: &mut History, cache: &mut Vec<CacheEntry>) -> Rebuild {
             let bodies = ev.s.bodies.clone();
             // The geometry library can panic deep in a boolean or a tessellation; that is this
             // feature failing, not the whole rebuild.
-            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| ev.run(h))).unwrap_or_else(|_| {
+            let result = threebcad_kernel::caught(|| ev.run(h)).unwrap_or_else(|_| {
                 Err(anyhow::anyhow!(
                     "the geometry kernel could not compute this feature; try other sizes or move it slightly"
                 ))

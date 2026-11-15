@@ -7,6 +7,12 @@ saved files and workflows; patch versions (0.x.y) only fix bugs.
 
 ## [Unreleased]
 
+### Fixed
+
+- A feature or STEP file the geometry kernel fails on no longer counts as a crash: the panic 3BCAD catches and
+  recovers from is logged as a warning, without a crash report, so the crash notice after a real crash or hang no
+  longer offers an unrelated earlier boolean failure as its report.
+
 ## [1.1.0] - 2026-11-11
 
 ### Changed

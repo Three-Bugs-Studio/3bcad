@@ -1,7 +1,8 @@
 //! The log file and crash reports. Release builds have no console on Windows, so everything goes
 //! to `logs/3bcad.log` in the user's config folder (Help > Open Log Folder), started afresh each
-//! run with the last three runs kept. A panic writes `logs/crash.txt`; when 3BCAD did not get to
-//! close normally, the next start keeps it as `crash-<time>.txt` and says so.
+//! run with the last three runs kept. A panic writes `logs/crash.txt`, unless the kernel catches it
+//! on purpose; when 3BCAD did not get to close normally, the next start keeps it as
+//! `crash-<time>.txt` and says so.
 
 use std::fs::{self, File, OpenOptions};
 use std::io::Write;
@@ -111,6 +112,23 @@ fn crash_report(message: &str, location: Option<String>, backtrace: &str) -> Str
     )
 }
 
+/// Logs a panic and, unless 3BCAD catches it on purpose (truck failing on geometry it cannot
+/// handle, which is a failed feature or file), writes `crash.txt` in `dir`. Returns whether it is a
+/// crash; that report is only offered if 3BCAD then fails to close normally.
+fn report_panic(dir: Option<PathBuf>, message: &str, location: Option<String>) -> bool {
+    let at = location.clone().unwrap_or_default();
+    if threebcad_kernel::catching() {
+        log::warn!("caught panic: {message} {at}");
+        return false;
+    }
+    log::error!("panic: {message} {at}");
+    if let Some(dir) = dir {
+        let backtrace = std::backtrace::Backtrace::force_capture().to_string();
+        let _ = fs::write(dir.join("crash.txt"), crash_report(message, location, &backtrace));
+    }
+    true
+}
+
 /// Starts the log, installs the crash reporter, and returns the crash report the last run left
 /// when it did not close normally.
 pub fn init() -> Option<PathBuf> {
@@ -160,15 +178,11 @@ pub fn init() -> Option<PathBuf> {
             .or_else(|| info.payload().downcast_ref::<String>().cloned())
             .unwrap_or_else(|| "panic".into());
         let location = info.location().map(|l| format!("{}:{}", l.file(), l.line()));
-        let backtrace = std::backtrace::Backtrace::force_capture().to_string();
-        // A panic the program catches (truck on a bad STEP file) also lands here: it is logged, and
-        // only reported if 3BCAD then fails to close normally.
-        log::error!("panic: {message} {}", location.clone().unwrap_or_default());
-        if let Some(dir) = log_dir() {
-            let _ = fs::write(dir.join("crash.txt"), crash_report(&message, location, &backtrace));
-        }
+        let crash = report_panic(log_dir(), &message, location);
         log::logger().flush();
-        default(info);
+        if crash {
+            default(info);
+        }
     }));
     log::info!(
         "3BCAD {VERSION} on {} {} (times in this log are UTC)",
@@ -230,5 +244,23 @@ mod tests {
         let r = crash_report("index out of bounds", Some("src/app.rs:10".into()), "frames");
         assert!(r.contains(VERSION) && r.contains("index out of bounds") && r.contains("at src/app.rs:10"));
         assert!(r.contains("Backtrace:\nframes") && r.contains("issues/new"));
+    }
+
+    #[test]
+    fn only_uncaught_panics_file_a_crash_report() {
+        let dir = std::env::temp_dir().join(format!("3bcad-crash-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let crash = dir.join("crash.txt");
+        let _ = fs::remove_file(&crash);
+        let inside = threebcad_kernel::caught(|| report_panic(Some(dir.clone()), "shell is not closed", None));
+        assert_eq!(inside.ok(), Some(false));
+        assert!(!crash.exists(), "a caught panic is not a crash");
+        assert!(report_panic(
+            Some(dir.clone()),
+            "index out of bounds",
+            Some("src/app.rs:10".into())
+        ));
+        assert!(fs::read_to_string(&crash).unwrap().contains("index out of bounds"));
+        fs::remove_dir_all(dir).ok();
     }
 }

@@ -285,7 +285,7 @@ pub fn read_step(bytes: &[u8]) -> io::Result<StepImport> {
     let text = String::from_utf8_lossy(bytes);
     // truck can panic deep inside a malformed file; that is a bad file, not a crash.
     let result =
-        std::panic::catch_unwind(|| import(&text)).unwrap_or_else(|_| Err("the STEP file is malformed".into()));
+        threebcad_kernel::caught(|| import(&text)).unwrap_or_else(|_| Err("the STEP file is malformed".into()));
     result.map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
 }
 
