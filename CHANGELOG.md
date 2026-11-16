@@ -30,6 +30,16 @@ saved files and workflows; patch versions (0.x.y) only fix bugs.
 - A boss or cut whose profile has a hole, sketched on a face of the part (a washer, a ring-shaped groove,
   the letters O and A), no longer fails with "the boolean operation failed": the outline and the holes
   are built one after the other.
+- STEP files that 1.1 opened wrong, checked against OpenCASCADE: OpenCASCADE's screw sample no longer
+  comes in 44 % too small (spindle tori and cones were turned inside out, and a split B-spline edge came
+  in twice), NIST CTC-02's drill points are built on the right side of their tip, and NIST STC-07 and
+  other files whose circles have no reference direction open instead of being refused. A concave fillet
+  written by OpenCASCADE closes, and periodic B-splines no longer run off to the origin (NIST CTC-02
+  "AP203 with PMI" never finished meshing).
+- A STEP face that truck would mesh in the wrong place (OpenCASCADE's linkrods sample) now opens with a
+  warning, "N bodies may have come in wrong", naming the faces in the log, and a face running round a
+  closed B-spline, which truck cannot mesh, is refused with the reason, instead of wrong geometry or a
+  hang.
 
 ## [1.1.0] - 2026-11-11
 
