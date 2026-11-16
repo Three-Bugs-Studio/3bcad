@@ -1,5 +1,6 @@
 //! Sketch text (#113) end to end: lettering sketched on a face, embossed with Extruded Boss and
 //! debossed with Extruded Cut. Volumes are checked against the letters' area times the depth.
+//! Round profiles on a face are here too: they share the on-face overlap with the lettering.
 
 use std::collections::HashMap;
 
@@ -62,8 +63,8 @@ fn plate(doc: &mut PartDocument) {
     });
 }
 
-/// "3BCAD", 10 high, in a sketch on the plate's top face.
-fn lettering(doc: &mut PartDocument) -> (FeatureId, f64) {
+/// "3BCAD", 10 high from `at`, in a sketch on the plate's top face.
+fn lettering(doc: &mut PartDocument, at: [f64; 2]) -> (FeatureId, f64) {
     let top = doc.bodies()[0]
         .topo
         .faces
@@ -76,7 +77,7 @@ fn lettering(doc: &mut PartDocument) -> (FeatureId, f64) {
     let face = doc.face_ref(0, top).unwrap();
     let plane = stable_plane(&doc.bodies()[0].topo.faces[top].plane.unwrap());
     let mut s = Sketch::default();
-    s.add_text("3BCAD", BUILTIN_FONT, 10.0, [-28.0, -5.0]);
+    s.add_text("3BCAD", BUILTIN_FONT, 10.0, at);
     let area = profile_area(&s);
     let id = doc.edit(|h| h.add_sketch_on(s, plane, PlaneRef::Face(face)).unwrap());
     (id, area)
@@ -86,7 +87,7 @@ fn lettering(doc: &mut PartDocument) -> (FeatureId, f64) {
 fn text_embossed_on_a_face_adds_its_area_times_the_height() {
     let mut doc = PartDocument::new("Label");
     plate(&mut doc);
-    let (sketch, area) = lettering(&mut doc);
+    let (sketch, area) = lettering(&mut doc, [-28.0, -5.0]);
     assert!(area > 100.0, "{area}");
     let t = std::time::Instant::now();
     doc.edit(|h| {
@@ -109,7 +110,7 @@ fn text_embossed_on_a_face_adds_its_area_times_the_height() {
 fn text_debossed_into_a_face_removes_its_area_times_the_depth() {
     let mut doc = PartDocument::new("Label");
     plate(&mut doc);
-    let (sketch, area) = lettering(&mut doc);
+    let (sketch, area) = lettering(&mut doc, [-28.0, -5.0]);
     let t = std::time::Instant::now();
     doc.edit(|h| {
         let mut e = Extrude::cut(sketch, 0.6);
@@ -164,7 +165,110 @@ fn a_ring_on_a_face_is_added_and_cut_with_its_hole() {
         let got = vol(&doc);
         assert!((got - want).abs() < 2e-3 * ring, "cut {cut}: volume {got}, want {want}");
         assert_eq!(doc.bodies().len(), 1);
-        // Not checked watertight: like any round boss sketched on a face (since v0.3), its micron
-        // overlap leaves mesh seams that do not join; text uses a wider overlap.
+        assert!(watertight(&print_mesh(&doc.bodies()[0].solid, 0.01)), "cut {cut}");
     }
+}
+
+/// A round boss and a round cut sketched on a block's top face. Until 1.2 their exports had holes
+/// along the seam: the flat face's triangles skipped some of the points the round wall has there.
+#[test]
+fn a_round_boss_and_cut_on_a_face_export_watertight() {
+    use std::f64::consts::PI;
+    use threebcad_kernel::mesher::print_mesh_within;
+    for cut in [false, true] {
+        let mut doc = PartDocument::new("Block");
+        doc.edit(|h| {
+            let s = h.add_sketch(Sketch::rectangle(70.0, 24.0), Plane::TOP);
+            h.add_extrude(s, 5.0).unwrap();
+        });
+        let top = doc.bodies()[0]
+            .topo
+            .faces
+            .iter()
+            .position(|f| {
+                f.plane
+                    .is_some_and(|p| p.normal()[2] > 0.999 && (p.origin[2] - 5.0).abs() < 1e-9)
+            })
+            .unwrap();
+        let face = doc.face_ref(0, top).unwrap();
+        let plane = stable_plane(&doc.bodies()[0].topo.faces[top].plane.unwrap());
+        let id = doc.edit(|h| {
+            h.add_sketch_on(Sketch::circle([36.0, 13.0], 6.0), plane, PlaneRef::Face(face))
+                .unwrap()
+        });
+        doc.edit(|h| {
+            let e = if cut {
+                Extrude::cut(id, 3.0)
+            } else {
+                Extrude::boss(id, 4.0)
+            };
+            h.add(FeatureKind::Extrude(e)).unwrap()
+        });
+        ok(&doc);
+        assert_eq!(doc.bodies().len(), 1);
+        let round = PI * 36.0 * if cut { -3.0 } else { 4.0 };
+        let (got, want) = (vol(&doc), 70.0 * 24.0 * 5.0 + round);
+        assert!(
+            (got - want).abs() < 2e-3 * round.abs(),
+            "cut {cut}: volume {got}, want {want}"
+        );
+        let solid = &doc.bodies()[0].solid;
+        // The Coarse and Fine export qualities, and the mesh the volumes are measured on.
+        for m in [
+            print_mesh_within(solid, 0.1, 30f64.to_radians()),
+            print_mesh_within(solid, 0.01, 10f64.to_radians()),
+            print_mesh(solid, 0.005),
+        ] {
+            assert!(watertight(&m), "cut {cut}: {} triangles", m.triangles.len());
+        }
+    }
+}
+
+/// Whether some corner of a body lies strictly between heights `z0` and `z1`.
+fn corner_between(doc: &PartDocument, z0: f64, z1: f64) -> bool {
+    doc.bodies()
+        .iter()
+        .flat_map(|b| &b.topo.vertices)
+        .any(|p| p[2] > z0 && p[2] < z1)
+}
+
+/// Lettering that runs off the plate's edge: the 0.1 mm lap that lettering gets on a face would
+/// hang under the letters past the edge (v1.2 added that much there).
+#[test]
+fn text_embossed_over_the_edge_adds_nothing_under_it() {
+    let mut doc = PartDocument::new("Label");
+    plate(&mut doc);
+    let (sketch, area) = lettering(&mut doc, [20.0, -5.0]);
+    doc.edit(|h| h.add(FeatureKind::Extrude(Extrude::boss(sketch, 1.0))).unwrap());
+    ok(&doc);
+    let (want, got) = (8400.0 + area * 1.0, vol(&doc));
+    assert!((got - want).abs() < 2e-3 * area, "volume {got}, want {want}");
+    assert!(!corner_between(&doc, 0.01, 4.99), "something hangs under the letters");
+}
+
+/// Lettering debossed into the plate where its last letter runs on under a higher block: the
+/// 0.1 mm lap above the face would cut into the block there (v1.2 also lost most of the cut).
+#[test]
+fn text_debossed_under_a_higher_part_cuts_only_its_depth() {
+    let mut doc = PartDocument::new("Label");
+    plate(&mut doc);
+    doc.edit(|h| {
+        let mut s = Sketch::default();
+        let p: Vec<_> = [[12.0, -12.0], [35.0, -12.0], [35.0, 12.0], [12.0, 12.0]]
+            .iter()
+            .map(|q| s.add_point(q[0], q[1]))
+            .collect();
+        for i in 0..4 {
+            s.add_line(p[i], p[(i + 1) % 4]);
+        }
+        let s = h.add_sketch(s, Plane::TOP);
+        h.add_extrude(s, 15.0).unwrap();
+    });
+    let (sketch, area) = lettering(&mut doc, [-28.0, -5.0]);
+    doc.edit(|h| h.add(FeatureKind::Extrude(Extrude::cut(sketch, 0.6))).unwrap());
+    ok(&doc);
+    assert!(!corner_between(&doc, 5.01, 14.99), "the cut reaches into the block");
+    // Where the letter crosses the block's wall truck's result is a few mm³ off.
+    let (want, got) = (8400.0 + 23.0 * 24.0 * 10.0 - area * 0.6, vol(&doc));
+    assert!((got - want).abs() < 0.05 * area * 0.6, "volume {got}, want {want}");
 }

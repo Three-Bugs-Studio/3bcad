@@ -21,6 +21,12 @@ saved files and workflows; patch versions (0.x.y) only fix bugs.
 
 ### Fixed
 
+- STL and 3MF exports of a round boss or cut sketched on a face of the part are now watertight. The face
+  it sits on was meshed without some of the points along the round edge, which left pinholes there that
+  slicers report as open edges.
+- Text embossed on a face no longer adds a 0.1 mm skin under the letters that run past the face's edge,
+  and text debossed into a face no longer cuts 0.1 mm into a higher part of the model that the letters
+  run under (a deboss like that could also lose most of its cut).
 - A boss or cut whose profile has a hole, sketched on a face of the part (a washer, a ring-shaped groove,
   the letters O and A), no longer fails with "the boolean operation failed": the outline and the holes
   are built one after the other.
