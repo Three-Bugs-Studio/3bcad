@@ -19,6 +19,14 @@ body:
         3. Export 3MF
     validations:
       required: true
+  - type: textarea
+    id: part
+    attributes:
+      label: Part file
+      description: >-
+        If the problem is in a part, assembly or drawing, zip the .3bcad, .3bcasm or .3bcdrw file and
+        drag the .zip here. It usually lets us reproduce the bug straight away.
+      placeholder: Drop part.zip here
   - type: input
     id: version
     attributes:

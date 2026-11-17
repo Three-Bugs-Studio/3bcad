@@ -1,0 +1,50 @@
+name: File won't open or imports wrong
+description: A STEP, STL, 3MF, OBJ or DXF file is refused, hangs, or comes in with the wrong shape or size
+labels: ["bug", "area:io"]
+body:
+  - type: textarea
+    id: file
+    attributes:
+      label: The file
+      description: >-
+        Zip the file and drag the .zip into this box (GitHub does not accept .step or .stl directly).
+        If you can't share it, say where it can be downloaded or describe the part.
+      placeholder: Drop part.zip here
+    validations:
+      required: true
+  - type: input
+    id: source
+    attributes:
+      label: Which program wrote it?
+      placeholder: SolidWorks 2024, Fusion 360, Onshape, FreeCAD, a download from Printables...
+    validations:
+      required: true
+  - type: dropdown
+    id: problem
+    attributes:
+      label: What goes wrong?
+      options:
+        - It is refused with an error
+        - It hangs or never finishes opening
+        - Wrong size or units
+        - Missing, extra or inside-out faces
+        - 3BCAD crashes
+        - Something else
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: Details
+      description: The error message, or what you expected next to what you got. A screenshot helps.
+  - type: input
+    id: version
+    attributes:
+      label: 3BCAD version
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Log file
+      description: In 3BCAD, click **Help → Open Log Folder** and drag `3bcad.log` here.
