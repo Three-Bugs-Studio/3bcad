@@ -1,5 +1,8 @@
 blank_issues_enabled: false
 contact_links:
+  - name: Ask a question
+    url: https://github.com/Three-Bugs-Studio/3bcad/discussions
+    about: How do I...? Questions, ideas and showing off parts go in Discussions.
   - name: Report a security vulnerability
     url: https://github.com/Three-Bugs-Studio/3bcad/security/advisories/new
     about: Please report security issues privately, not as public issues.
