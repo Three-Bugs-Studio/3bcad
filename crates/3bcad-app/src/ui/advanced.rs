@@ -24,8 +24,8 @@ fn above(h: &History, me: FeatureId, keep: impl Fn(&FeatureKind) -> bool) -> Vec
         .collect()
 }
 
-fn sketch_combo(ed: &mut Ed, ui: &mut egui::Ui, salt: &str, h: &History, me: FeatureId, cur: &mut FeatureId) {
-    egui::ComboBox::from_id_salt(salt)
+fn sketch_combo(ed: &mut Ed, ui: &mut egui::Ui, id: &str, h: &History, me: FeatureId, cur: &mut FeatureId) {
+    egui::ComboBox::from_id_salt(id)
         .selected_text(name_of(h, *cur))
         .show_ui(ui, |ui| {
             for (id, name) in above(h, me, FeatureKind::is_sketch) {
@@ -43,8 +43,8 @@ fn curve_name(h: &History, c: &CurveRef) -> String {
     }
 }
 
-fn curve_combo(ed: &mut Ed, ui: &mut egui::Ui, salt: &str, h: &History, me: FeatureId, cur: &mut CurveRef) {
-    egui::ComboBox::from_id_salt(salt)
+fn curve_combo(ed: &mut Ed, ui: &mut egui::Ui, id: &str, h: &History, me: FeatureId, cur: &mut CurveRef) {
+    egui::ComboBox::from_id_salt(id)
         .selected_text(curve_name(h, cur))
         .show_ui(ui, |ui| {
             for (id, name) in above(h, me, |k| k.is_sketch() || matches!(k, FeatureKind::Helix(_))) {
@@ -62,7 +62,7 @@ fn curve_combo(ed: &mut Ed, ui: &mut egui::Ui, salt: &str, h: &History, me: Feat
 }
 
 /// An ordered list of sketches with reorder/remove buttons and an "Add" menu.
-fn sketch_list(ed: &mut Ed, ui: &mut egui::Ui, salt: &str, h: &History, me: FeatureId, list: &mut Vec<FeatureId>) {
+fn sketch_list(ed: &mut Ed, ui: &mut egui::Ui, id: &str, h: &History, me: FeatureId, list: &mut Vec<FeatureId>) {
     let mut action = None;
     for (i, id) in list.iter().enumerate() {
         ui.horizontal(|ui| {
@@ -89,7 +89,7 @@ fn sketch_list(ed: &mut Ed, ui: &mut egui::Ui, salt: &str, h: &History, me: Feat
     if action.is_some() {
         ed.changed = true;
     }
-    egui::ComboBox::from_id_salt(salt)
+    egui::ComboBox::from_id_salt(id)
         .selected_text(tr("Add…"))
         .show_ui(ui, |ui| {
             for (id, name) in above(h, me, FeatureKind::is_sketch) {
@@ -139,7 +139,7 @@ fn signed(ed: &mut Ed, ui: &mut egui::Ui, label: &str, v: &mut f64) {
     });
 }
 
-fn size_editor(ed: &mut Ed, ui: &mut egui::Ui, salt: &str, standard: &mut HoleStandard, size: &mut String) {
+fn size_editor(ed: &mut Ed, ui: &mut egui::Ui, id: &str, standard: &mut HoleStandard, size: &mut String) {
     ui.horizontal(|ui| {
         let before = *standard;
         ed.track(ui.radio_value(standard, HoleStandard::Iso, tr("ISO metric")));
@@ -148,7 +148,7 @@ fn size_editor(ed: &mut Ed, ui: &mut egui::Ui, salt: &str, standard: &mut HoleSt
             *size = holes::table(*standard)[4].name.into();
         }
     });
-    egui::ComboBox::from_id_salt(salt)
+    egui::ComboBox::from_id_salt(id)
         .selected_text(size.clone())
         .show_ui(ui, |ui| {
             for s in holes::table(*standard) {

@@ -228,7 +228,7 @@ pub(crate) fn plane_editor(ed: &mut Ed, ui: &mut egui::Ui, h: &History, plane: &
     });
 }
 
-fn end_editor(ed: &mut Ed, ui: &mut egui::Ui, salt: &str, end: &mut End, p: &Picks) {
+fn end_editor(ed: &mut Ed, ui: &mut egui::Ui, id: &str, end: &mut End, p: &Picks) {
     let options: Vec<End> = {
         let depth = match end {
             End::Blind(d) | End::MidPlane(d) => *d,
@@ -245,7 +245,7 @@ fn end_editor(ed: &mut Ed, ui: &mut egui::Ui, salt: &str, end: &mut End, p: &Pic
         }
         v
     };
-    egui::ComboBox::from_id_salt(salt)
+    egui::ComboBox::from_id_salt(id)
         .selected_text(end.name())
         .show_ui(ui, |ui| {
             for o in options {
