@@ -3,10 +3,12 @@
 
 use std::f64::consts::TAU;
 
+use serde::{Deserialize, Serialize};
+
 use crate::geom::{self, P2};
 use crate::{EntityId, Geometry, Sketch};
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub enum Segment {
     Line {
         from: P2,
@@ -220,20 +222,30 @@ impl Sketch {
             }
             loops.push(lp);
         }
+        for i in 0..self.texts.len() {
+            loops.extend(self.text_loops(i));
+        }
         if loops.is_empty() {
             return Err("Sketch has no closed profile".into());
         }
 
         let polys: Vec<Vec<P2>> = loops.iter().map(|l| loop_polygon(l, 64)).collect();
+        // Bounds first: text makes many small loops, and most pairs are far apart.
+        let boxes: Vec<(P2, P2)> = polys.iter().map(|p| bounds(p)).collect();
+        let near = |i: usize, j: usize| {
+            let ((a0, a1), (b0, b1)) = (boxes[i], boxes[j]);
+            (0..2).all(|k| a0[k] <= b1[k] + tol && b0[k] <= a1[k] + tol)
+        };
         for i in 0..polys.len() {
             for j in i + 1..polys.len() {
-                if polylines_cross(&polys[i], &polys[j]) {
+                if near(i, j) && polylines_cross(&polys[i], &polys[j]) {
                     return Err("Contours intersect each other".into());
                 }
             }
         }
-        let contains =
-            |outer: usize, inner: usize| polys[inner].iter().all(|p| geom::point_in_polygon(*p, &polys[outer]));
+        let contains = |outer: usize, inner: usize| {
+            near(outer, inner) && polys[inner].iter().all(|p| geom::point_in_polygon(*p, &polys[outer]))
+        };
         let depth: Vec<usize> = (0..loops.len())
             .map(|i| (0..loops.len()).filter(|&j| j != i && contains(j, i)).count())
             .collect();
@@ -260,6 +272,13 @@ impl Sketch {
             .map(|p| self.point(p))
             .fold(0.0, |m: f64, q| m.max(q[0].abs()).max(q[1].abs()))
     }
+}
+
+fn bounds(poly: &[P2]) -> (P2, P2) {
+    poly.iter()
+        .fold(([f64::INFINITY; 2], [f64::NEG_INFINITY; 2]), |(lo, hi), p| {
+            ([lo[0].min(p[0]), lo[1].min(p[1])], [hi[0].max(p[0]), hi[1].max(p[1])])
+        })
 }
 
 fn polylines_cross(a: &[P2], b: &[P2]) -> bool {

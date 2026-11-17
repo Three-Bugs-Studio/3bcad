@@ -11,6 +11,7 @@ use threebcad_kernel::Plane;
 use threebcad_render::OrbitCamera;
 use threebcad_sketch::geom::{self, P2};
 use threebcad_sketch::inference::{self, Snap};
+use threebcad_sketch::text;
 use threebcad_sketch::tools::Item;
 use threebcad_sketch::{Analysis, Constraint, EntityId, PointId, Sketch, Status};
 
@@ -58,6 +59,7 @@ pub enum Tool {
     CenterSlot,
     Polygon,
     Point,
+    Text,
     Fillet,
     Chamfer,
     Trim,
@@ -88,6 +90,7 @@ impl Tool {
             Tool::CenterSlot => "Centerpoint Slot",
             Tool::Polygon => "Polygon",
             Tool::Point => "Point",
+            Tool::Text => "Text",
             Tool::Fillet => "Sketch Fillet",
             Tool::Chamfer => "Sketch Chamfer",
             Tool::Trim => "Trim Entities",
@@ -118,6 +121,7 @@ impl Tool {
             Tool::CenterSlot => "Click the slot center, an arc center, then the width",
             Tool::Polygon => "Click the center, then a vertex (or edge midpoint)",
             Tool::Point => "Click to place a point",
+            Tool::Text => "Click where the text starts, then type it in the Properties panel",
             Tool::Fillet | Tool::Chamfer => "Click a corner where two lines meet",
             Tool::Trim => "Click the piece of an entity to remove",
             Tool::Extend => "Click near the end of a line to extend",
@@ -131,7 +135,7 @@ impl Tool {
     /// Clicks that complete a drawing tool; `None` for tools that do not draw by clicking points.
     fn clicks(self) -> Option<usize> {
         match self {
-            Tool::Point => Some(1),
+            Tool::Point | Tool::Text => Some(1),
             Tool::Line
             | Tool::Centerline
             | Tool::CornerRect
@@ -175,6 +179,10 @@ pub struct ToolOptions {
     /// Radius typed for the next circle.
     pub radius: Option<f64>,
     pub show_relations: bool,
+    /// What the Text tool places: the words, the font (empty: the default) and the capital height.
+    pub text: String,
+    pub font: String,
+    pub text_height: f64,
 }
 
 impl Default for ToolOptions {
@@ -196,6 +204,9 @@ impl Default for ToolOptions {
             circular_total: 360.0,
             radius: None,
             show_relations: true,
+            text: "Text".into(),
+            font: String::new(),
+            text_height: 5.0,
         }
     }
 }
@@ -271,6 +282,8 @@ pub struct SketchSession {
     pub analysis: Analysis,
     pub message: Option<String>,
     pub diagnosis: Option<Vec<usize>>,
+    /// The next curve clicked carries this text (after "Pick a curve…").
+    pub text_curve_pick: Option<usize>,
 }
 
 impl SketchSession {
@@ -294,6 +307,7 @@ impl SketchSession {
             analysis: Analysis::default(),
             message: None,
             diagnosis: None,
+            text_curve_pick: None,
         };
         s.sketch.solve();
         s.refresh();
@@ -373,7 +387,8 @@ impl SketchSession {
     }
 
     pub fn escape(&mut self) {
-        if self.editing.take().is_some() {
+        if self.editing.take().is_some() || self.text_curve_pick.take().is_some() {
+            self.message = None;
             return;
         }
         if !self.clicks.is_empty() || !self.dim_items.is_empty() {
@@ -445,6 +460,25 @@ impl SketchSession {
         self.refresh();
     }
 
+    /// Changes text `i`'s words or font; says so when the font is not installed.
+    pub fn set_text(&mut self, i: usize, words: &str, font: &str) {
+        if !self.sketch.text_mut(i).set(words, font) {
+            self.message = Some(trf("{} is not installed here; the built-in font is used", &[&font]));
+        }
+        self.refresh();
+    }
+
+    /// Lays text `i` along `curve` (made construction geometry, so it is no profile) or straight.
+    pub fn set_text_curve(&mut self, i: usize, curve: Option<EntityId>) {
+        self.checkpoint();
+        if let Some(e) = curve {
+            self.sketch.set_construction(e, true);
+        }
+        self.sketch.set_text_curve(i, curve);
+        self.selection.retain(|it| matches!(it, Item::Point(_)));
+        self.solve_and_refresh();
+    }
+
     pub fn run_diagnosis(&mut self) {
         self.diagnosis = Some(self.sketch.diagnose());
     }
@@ -511,7 +545,10 @@ impl SketchSession {
 
     pub fn describe(&self, item: Item) -> String {
         match item {
-            Item::Point(p) => format!("Point{}", p.0 + 1),
+            Item::Point(p) => match self.sketch.text_at(p) {
+                Some(i) => format!("Text{} \"{}\"", i + 1, self.sketch.texts()[i].text),
+                None => format!("Point{}", p.0 + 1),
+            },
             Item::Entity(e) => format!("{}{}", self.sketch.entity(e).kind_name(), e.0 + 1),
             Item::Constraint(i) => self.describe_relation(i),
         }
@@ -600,11 +637,18 @@ impl SketchSession {
                 }
             }
         }
-        sk.entity_ids()
+        let entity = sk
+            .entity_ids()
             .filter_map(|e| Some((screen_distance(&view.polyline(&sk.polyline(e)), pos)?, e)))
             .filter(|(d, _)| *d <= PICK_PX)
             .min_by(|a, b| a.0.total_cmp(&b.0))
-            .map(|(_, e)| Item::Entity(e))
+            .map(|(_, e)| Item::Entity(e));
+        // Text is picked (and dragged, and deleted) by its start point, anywhere on its letters.
+        entity.or_else(|| {
+            (0..sk.texts().len())
+                .find(|&i| text_distance(view, sk, i, pos).is_some_and(|d| d <= PICK_PX))
+                .map(|i| Item::Point(sk.texts()[i].at))
+        })
     }
 
     /// Handles mouse input; returns true when it consumed a drag (so the camera should not orbit).
@@ -703,6 +747,16 @@ impl SketchSession {
 
     fn click(&mut self, view: &View, pos: Pos2, ctrl: bool) {
         let mut hit = self.hit(view, pos);
+        if let Some(i) = self.text_curve_pick.take() {
+            self.message = None;
+            if let Some(Item::Entity(e)) = hit {
+                self.set_text_curve(i, Some(e));
+                if let Some(t) = self.sketch.texts().get(i) {
+                    self.selection = vec![Item::Point(t.at)];
+                }
+                return;
+            }
+        }
         // The part origin is not a sketch point: dimensioning to it adds a point fixed there, as
         // the drawing tools' origin snap does.
         let origin = self.plane.to_local([0.0; 3]);
@@ -832,6 +886,13 @@ impl SketchSession {
                 self.opts.radius = None;
                 self.message = None;
                 self.solve_and_refresh();
+                // New text is selected, so the Properties panel shows it for editing.
+                if self.tool == Tool::Text {
+                    if let Some(t) = self.sketch.texts().last() {
+                        self.tool = Tool::Select;
+                        self.selection = vec![Item::Point(t.at)];
+                    }
+                }
                 // Lines chain from their end until the chain closes on its first point.
                 if self.tool == Tool::Line {
                     if let Some(&e) = created.first() {
@@ -883,6 +944,19 @@ impl SketchSession {
         for e in sk.entity_ids() {
             let color = self.entity_color(e);
             draw_entity(painter, view, sk, e, color, sk.entity(e).construction);
+        }
+        for (i, t) in sk.texts().iter().enumerate() {
+            let item = Item::Point(t.at);
+            let color = if self.selection.contains(&item) {
+                SELECTED
+            } else if self.hover == Some(item) {
+                HOVER
+            } else if self.analysis.free_points.get(t.at.0).copied().unwrap_or(true) {
+                UNDER
+            } else {
+                full()
+            };
+            draw_text(painter, view, sk, i, color);
         }
         for p in sk.point_ids() {
             let Some(s) = view.to_screen(sk.point(p)) else { continue };
@@ -1346,6 +1420,18 @@ fn build(sk: &mut Sketch, tool: Tool, snaps: &[Snap], opts: &ToolOptions) -> Res
             sk.add_polygon(c, pos[1], opts.polygon_sides, opts.inscribed)
                 .ok_or_else(too_small)
         }
+        Tool::Text => {
+            if opts.text.trim().is_empty() {
+                return Err("Type the text first".into());
+            }
+            let font = if opts.font.is_empty() {
+                text::default_font()
+            } else {
+                &opts.font
+            };
+            sk.add_text(&opts.text, font, opts.text_height, pos[0]);
+            Ok(Vec::new())
+        }
         _ => Ok(Vec::new()),
     }
 }
@@ -1423,11 +1509,35 @@ pub fn draw_entity(painter: &Painter, view: &View, sk: &Sketch, e: EntityId, col
     }
 }
 
+/// The outlines of text `i`.
+pub fn draw_text(painter: &Painter, view: &View, sk: &Sketch, i: usize, color: Color32) {
+    for lp in sk.text_loops(i) {
+        let mut pts = threebcad_sketch::profile::loop_polygon(&lp, 32);
+        pts.push(pts[0]);
+        painter.add(Shape::line(view.polyline(&pts), Stroke::new(1.5_f32, color)));
+    }
+}
+
+/// Screen distance from `pos` to text `i`: 0 inside a letter's box.
+fn text_distance(view: &View, sk: &Sketch, i: usize, pos: Pos2) -> Option<f32> {
+    sk.text_loops(i)
+        .iter()
+        .filter_map(|lp| {
+            let pts = view.polyline(&threebcad_sketch::profile::loop_polygon(lp, 32));
+            // A letter off the screen has no box.
+            (!pts.is_empty()).then(|| Rect::from_points(&pts).distance_to_pos(pos))
+        })
+        .min_by(|a, b| a.total_cmp(b))
+}
+
 /// Lines of a sketch shown outside sketch mode (not yet used by a feature).
 pub fn draw_sketch(painter: &Painter, view: &View, sk: &Sketch, color: Color32) {
     for e in sk.entity_ids() {
         let construction = sk.entity(e).construction;
         draw_entity(painter, view, sk, e, color, construction);
+    }
+    for i in 0..sk.texts().len() {
+        draw_text(painter, view, sk, i, color);
     }
 }
 
@@ -1435,6 +1545,7 @@ pub fn draw_sketch(painter: &Painter, view: &View, sk: &Sketch, color: Color32) 
 pub fn distance_to_sketch(view: &View, sk: &Sketch, pos: Pos2) -> Option<f32> {
     sk.entity_ids()
         .filter_map(|e| screen_distance(&view.polyline(&sk.polyline(e)), pos))
+        .chain((0..sk.texts().len()).filter_map(|i| text_distance(view, sk, i, pos)))
         .min_by(|a, b| a.total_cmp(b))
 }
 
@@ -1513,6 +1624,39 @@ mod tests {
         s.selection = vec![Item::Constraint(6)];
         s.delete_selection();
         assert_eq!(s.analysis.status, Status::UnderDefined);
+    }
+
+    #[test]
+    fn text_is_placed_edited_laid_on_a_curve_undone_and_deleted() {
+        let mut s = SketchSession::new(None, Sketch::default(), Plane::TOP, "Top Plane".into());
+        s.opts.font = text::BUILTIN_FONT.into();
+        s.opts.text = "AB".into();
+        s.checkpoint();
+        build(&mut s.sketch, Tool::Text, &[snap([3.0, 4.0])], &s.opts).unwrap();
+        assert_eq!(s.sketch.texts().len(), 1);
+        let at = s.sketch.texts()[0].at;
+        assert_eq!(s.sketch.point(at), [3.0, 4.0]);
+        assert_eq!(s.describe(Item::Point(at)), "Text1 \"AB\"");
+        s.checkpoint();
+        s.set_text(0, "ABC", "No Such Font");
+        assert_eq!(s.sketch.texts()[0].glyphs.len(), 3);
+        assert!(s.message.as_deref().is_some_and(|m| m.contains("not installed")));
+        // On a circle: the circle turns construction and the start point is held on it.
+        let c = s.sketch.add_point(3.0, -16.0);
+        let circle = s.sketch.add_circle(c, 20.0);
+        s.set_text_curve(0, Some(circle));
+        assert!(s.sketch.entity(circle).construction);
+        assert_eq!(s.sketch.texts()[0].curve, Some(circle));
+        assert!((geom::dist(s.sketch.point(at), [3.0, -16.0]) - 20.0).abs() < 1e-6);
+        s.undo();
+        assert_eq!(s.sketch.texts()[0].curve, None);
+        // Deleting the text's start point deletes the text.
+        s.selection = vec![Item::Point(at)];
+        s.delete_selection();
+        assert!(s.sketch.texts().is_empty());
+        let mut empty = s.opts.clone();
+        empty.text = " ".into();
+        assert!(build(&mut s.sketch, Tool::Text, &[snap([0.0, 0.0])], &empty).is_err());
     }
 
     #[test]

@@ -47,6 +47,15 @@ pub fn tab(app: &mut App, ui: &mut egui::Ui) {
     slicer(app, ui);
     ui.separator();
     bed(app, ui);
+    if tile(
+        ui,
+        "split",
+        "Split for Printing",
+        false,
+        "Cut the part by the selected planes (Right Plane when none) into pieces that fit the bed,          with alignment pins across each cut",
+    ) {
+        crate::ui::advanced::split_for_printing(app);
+    }
     ui.separator();
     checks(app, ui);
 }

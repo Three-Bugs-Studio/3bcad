@@ -355,6 +355,104 @@ fn ray_hit(o: P3, d: P3, tris: impl Iterator<Item = [P3; 3]>, min_t: f64) -> Opt
     best
 }
 
+/// Region `r` of a straight prism split into its outline (holes filled in) and its holes, each
+/// hole a micron longer at both ends. truck cannot add or cut a profile with holes where that
+/// leaves an island face (a ring or a letter "O" on a face), but it manages the outline and the
+/// holes one at a time.
+///
+/// For a boss (`floor_of` given: the body it joins), each hole starts a micron under the body's
+/// surface below it rather than where the tool starts, a little inside the body.
+fn prism_parts(tool: &Tool, r: usize, floor_of: Option<&Topology>) -> Option<(Solid, Vec<Solid>)> {
+    let Tool::Prism {
+        regions,
+        plane,
+        z0,
+        z1,
+        draft: None,
+    } = tool
+    else {
+        return None;
+    };
+    let region = regions.get(r).filter(|g| !g.holes.is_empty())?;
+    let (lo, hi) = (z0.min(*z1), z0.max(*z1));
+    let prism = |outer: Vec<ProfileSegment>, z0: f64, z1: f64| {
+        let regions = vec![ProfileRegion {
+            outer,
+            holes: Vec::new(),
+        }];
+        let mut s = Tool::Prism {
+            regions,
+            plane: *plane,
+            z0,
+            z1,
+            draft: None,
+        }
+        .solids()
+        .ok()?
+        .pop()?;
+        // Holes run clockwise: turn such a prism right side out.
+        if boolean::volume(&s)? < 0.0 {
+            s.not();
+        }
+        Some(s)
+    };
+    let outer = prism(region.outer.clone(), lo, hi)?;
+    let n = plane.normal();
+    let floor = |h: &[ProfileSegment]| -> f64 {
+        let Some(body) = floor_of else { return lo };
+        let tris: Vec<[P3; 3]> = body.faces.iter().flat_map(|f| f.tris.iter().copied()).collect();
+        let top = plane.to_world_3d(offset::seg_start(&h[0]), hi + 1.0);
+        match ray_hits(top, scale3(n, -1.0), &tris).first() {
+            Some(t) => (hi + 1.0 - t).clamp(lo, hi),
+            None => lo,
+        }
+    };
+    let holes = region
+        .holes
+        .iter()
+        .map(|h| prism(h.clone(), floor(h) - GROW, hi + GROW))
+        .collect::<Option<Vec<_>>>()?;
+    Some((outer, holes))
+}
+
+/// `a` ∪ (`outer` − `holes`), as (`a` ∪ `outer`) − `holes`. The holes run a micron past both ends
+/// (a hole whose end lies in the plane of a face of `a` loses truck volume), so a hole's floor on
+/// a face sits a micron below it.
+// shortcut: material of `a` inside a hole's outline and depth goes too (a post standing in the
+// letter O's counter); subtract `holes` − `a` instead if that is ever needed.
+fn union_with_holes(a: &Solid, outer: &Solid, holes: &[Solid]) -> Result<Option<Solid>> {
+    let Some(mut u) = boolean::union(a, outer)? else {
+        return Ok(None);
+    };
+    for h in holes {
+        let mut cut = boolean::subtract(&u, h)?;
+        ensure!(cut.len() == 1, "a hole of the profile cuts the body apart");
+        u = cut.remove(0);
+    }
+    Ok(Some(u))
+}
+
+/// `a` − (`outer` − `holes`), as (`a` − `outer`) ∪ (`a` ∩ `holes`): the islands go back in.
+fn cut_with_holes(a: &Solid, outer: &Solid, holes: &[Solid]) -> Result<Vec<Solid>> {
+    let mut pieces = boolean::subtract(a, outer)?;
+    for h in holes {
+        for island in boolean::intersect(a, h)? {
+            let mut joined = false;
+            for p in pieces.iter_mut() {
+                if let Some(u) = boolean::union(p, &island)? {
+                    *p = u;
+                    joined = true;
+                    break;
+                }
+            }
+            if !joined {
+                pieces.push(island);
+            }
+        }
+    }
+    Ok(pieces)
+}
+
 /// A solid with its topology and face names.
 type Tagged = (Solid, Arc<Topology>, Vec<FaceTag>);
 
@@ -593,7 +691,7 @@ impl Eval {
 
     fn apply_pieces(&mut self, step: Step, merge: bool) -> Result<()> {
         let pieces = self.tool_bodies(&step.tool, step.instance)?;
-        for (tool, ttopo, ttags) in pieces {
+        for (r, (tool, ttopo, ttags)) in pieces.into_iter().enumerate() {
             match step.op {
                 OpKind::Direct => bail!("a directly built step cannot be applied as a tool"),
                 OpKind::Add => {
@@ -608,7 +706,14 @@ impl Eval {
                             Some(m) => (m.solid.clone(), m.topo.clone(), m.tags.clone()),
                             None => (tool.clone(), ttopo.clone(), ttags.clone()),
                         };
-                        match boolean::union(&b.solid, &cur_solid)? {
+                        let united = match boolean::union(&b.solid, &cur_solid) {
+                            Err(e) if merged.is_none() => match prism_parts(&step.tool, r, Some(&b.topo)) {
+                                Some((outer, holes)) => union_with_holes(&b.solid, &outer, &holes).map_err(|_| e)?,
+                                None => return Err(e),
+                            },
+                            other => other?,
+                        };
+                        match united {
                             Some(u) => {
                                 let mut csg = b.csg.clone();
                                 if let Some(m) = &merged {
@@ -636,7 +741,13 @@ impl Eval {
                     let mut out = Vec::new();
                     for b in std::mem::take(&mut self.s.bodies) {
                         let parts = if step.op == OpKind::Sub {
-                            boolean::subtract(&b.solid, &tool)?
+                            match boolean::subtract(&b.solid, &tool) {
+                                Err(e) => match prism_parts(&step.tool, r, None) {
+                                    Some((outer, holes)) => cut_with_holes(&b.solid, &outer, &holes).map_err(|_| e)?,
+                                    None => return Err(e),
+                                },
+                                ok => ok?,
+                            }
                         } else {
                             boolean::intersect(&b.solid, &tool)?
                         };
@@ -955,17 +1066,26 @@ impl Eval {
             OpKind::Sub
         };
         let one_sided = e.end2.is_none() && !matches!(e.end, End::MidPlane(_));
-        // A sketch on a model face: start the tool a micron behind the face so truck never has to
-        // intersect two coplanar faces (the micron is inside the part for a boss, outside for a cut).
+        // A sketch on a model face: start the tool a little behind the face so truck never has to
+        // intersect two coplanar faces (inside the part for a boss, outside for a cut).
         let on_face = one_sided
             && self.s.bodies.iter().any(|b| {
                 b.topo.faces.iter().filter_map(|f| f.plane).any(|fp| {
                     dot(fp.normal(), n).abs() > 1.0 - 1e-9 && dot(sub(fp.origin, plane.origin), n).abs() < 1e-6
                 })
             });
+        // Lettering's many short walls need more than a micron, or the export meshes do not join.
+        // A boss kept as a new body would keep the lap as material of its own.
+        let lap = |into: P3| {
+            if sketch.texts().is_empty() || (op == OpKind::Add && !e.merge) {
+                GROW
+            } else {
+                self.face_lap(&plane, &regions, into, op == OpKind::Add)
+            }
+        };
         let (z0, z1) = match (on_face, sign > 0.0) {
-            (true, true) => (z0 - GROW, z1),
-            (true, false) => (z0, z1 + GROW),
+            (true, true) => (z0 - lap(scale3(n, -1.0)), z1),
+            (true, false) => (z0, z1 + lap(n)),
             _ => (z0, z1),
         };
         let tool = Tool::Prism {
@@ -982,6 +1102,51 @@ impl Eval {
             tool,
         };
         self.apply(step, e.merge)
+    }
+
+    /// How far a tool sketched on a face may run past it along `into`: 0.1 mm, or half the
+    /// material behind the face (a boss) or the gap in front of it (a cut) where that is less. A
+    /// micron keeps truck off coplanar faces too, but with lettering it leaves slivers whose
+    /// meshes do not join, so the export is not watertight. Where the outline leaves the face (a
+    /// boss over its edge, a cut running under a higher part) the lap would add material in the
+    /// air or take it from inside, so it stays a micron.
+    // shortcut: only text gets this. Round profiles do not need it (the export mends their seams),
+    // and a wider lap makes truck fail booleans the micron gets through (one of the reference
+    // flange's patterned holes); check the parts corpus before using it for more. Only the
+    // outline is sampled, not the inside of a stroke (a hole in the face under a wide letter).
+    fn face_lap(&self, plane: &Plane, regions: &[ProfileRegion], into: P3, boss: bool) -> f64 {
+        let pts: Vec<[f64; 2]> = regions
+            .iter()
+            .flat_map(|r| std::iter::once(&r.outer).chain(&r.holes))
+            .flat_map(|lp| offset::sample_loop(lp, 32))
+            .collect();
+        let (lo, hi) = pts
+            .iter()
+            .fold(([f64::INFINITY; 2], [f64::NEG_INFINITY; 2]), |(lo, hi), p| {
+                ([lo[0].min(p[0]), lo[1].min(p[1])], [hi[0].max(p[0]), hi[1].max(p[1])])
+            });
+        // Rays along the normal only meet triangles over the outline's box.
+        let over = |t: &[P3; 3]| {
+            let q = t.map(|p| plane.to_local(p));
+            (0..2).all(|i| q.iter().any(|p| p[i] <= hi[i] + 1e-3) && q.iter().any(|p| p[i] >= lo[i] - 1e-3))
+        };
+        let tris: Vec<[P3; 3]> = self
+            .s
+            .bodies
+            .iter()
+            .flat_map(|b| b.topo.faces.iter().flat_map(|f| f.tris.iter().copied()))
+            .filter(over)
+            .collect();
+        let mut lap: f64 = 0.1;
+        for c in pts {
+            // Just past the face, where the lap would go: material for a boss, air for a cut.
+            let hits = ray_hits(add3(plane.to_world(c), scale3(into, 1e-4)), into, &tris);
+            if (hits.len() % 2 == 1) != boss {
+                return GROW;
+            }
+            lap = lap.min(hits.first().map_or(f64::INFINITY, |t| t / 2.0));
+        }
+        lap.max(GROW)
     }
 
     fn revolve(&mut self, h: &History, r: &Revolve) -> Result<()> {
@@ -1874,7 +2039,7 @@ pub fn rebuild(h: &mut History, cache: &mut Vec<CacheEntry>) -> Rebuild {
             let bodies = ev.s.bodies.clone();
             // The geometry library can panic deep in a boolean or a tessellation; that is this
             // feature failing, not the whole rebuild.
-            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| ev.run(h))).unwrap_or_else(|_| {
+            let result = threebcad_kernel::caught(|| ev.run(h)).unwrap_or_else(|_| {
                 Err(anyhow::anyhow!(
                     "the geometry kernel could not compute this feature; try other sizes or move it slightly"
                 ))

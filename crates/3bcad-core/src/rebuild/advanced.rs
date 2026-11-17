@@ -139,6 +139,178 @@ fn mat_align(p: P3, from: P3, to: P3) -> [[f64; 4]; 4] {
     mat_rotate(p, scale3(ax, 1.0 / s), s.atan2(c))
 }
 
+/// `s` cut by the cutter solids into the pieces inside and outside them; just `s` when the cut
+/// leaves it whole (a plane beside it, or one touching it only along a face).
+fn cut_piece(s: &Solid, cutter: &[Solid], plane: Option<&Plane>) -> Result<Vec<Solid>> {
+    if let Some(plane) = plane {
+        let (blo, bhi) = boolean::bbox(s);
+        let eps = 1e-6 * (1.0 + norm(sub(bhi, blo)));
+        let d: Vec<f64> = (0..8)
+            .map(|k| {
+                let c = [0, 1, 2].map(|i| if k >> i & 1 == 0 { blo[i] } else { bhi[i] });
+                dot(sub(c, plane.origin), plane.normal())
+            })
+            .collect();
+        if d.iter().all(|&x| x <= eps) || d.iter().all(|&x| x >= -eps) {
+            return Ok(vec![s.clone()]);
+        }
+    }
+    let mut inside = Vec::new();
+    let mut rest = vec![s.clone()];
+    for c in cutter {
+        inside.extend(boolean::intersect(s, c)?);
+        rest = rest
+            .iter()
+            .map(|r| boolean::subtract(r, c))
+            .collect::<Result<Vec<_>>>()?
+            .concat();
+    }
+    // A cutter face lying on a face of the body leaves paper-thin pieces: they are not parts.
+    let whole = boolean::volume(s).unwrap_or(0.0).abs();
+    let solid_piece = |p: &Solid| boolean::volume(p).is_some_and(|v| v.abs() > 1e-6 * whole.max(1e-9));
+    inside.retain(solid_piece);
+    rest.retain(solid_piece);
+    if inside.is_empty() || rest.is_empty() {
+        return Ok(vec![s.clone()]);
+    }
+    inside.extend(rest);
+    Ok(inside)
+}
+
+fn mesh_tris(s: &Solid) -> Vec<[P3; 3]> {
+    let m = threebcad_kernel::mesher::print_mesh(s, topo_tol(s));
+    m.triangles.iter().map(|t| t.map(|i| m.vertices[i])).collect()
+}
+
+/// A cylinder on the axis through `at` along unit `n`, from `z0` to `z1` along it.
+fn cylinder(at: P3, n: P3, radius: f64, z0: f64, z1: f64) -> Result<Solid> {
+    let plane = Plane::from_origin_normal(add3(at, scale3(n, z0)), n);
+    let circle = ProfileRegion {
+        outer: vec![ProfileSegment::Circle {
+            center: [0.0, 0.0],
+            radius,
+            ccw: true,
+        }],
+        holes: Vec::new(),
+    };
+    Ok(threebcad_kernel::operations::extrude(&[circle], z1 - z0, &plane)?.remove(0))
+}
+
+fn one_piece(mut parts: Vec<Solid>) -> Result<Solid> {
+    ensure!(parts.len() == 1, "a pin hole cuts a piece apart; use smaller pins");
+    Ok(parts.remove(0))
+}
+
+/// Where the meshes cross the plane lifted by `lift` along its normal: the outline of the cut face
+/// as segments in plane coordinates.
+fn section(meshes: &[Vec<[P3; 3]>], plane: &Plane, lift: f64) -> Vec<([f64; 2], [f64; 2])> {
+    let n = plane.normal();
+    let h = |p: P3| dot(sub(p, plane.origin), n) - lift;
+    let mut out = Vec::new();
+    for t in meshes.iter().flatten() {
+        let d = t.map(h);
+        let mut pts = Vec::new();
+        for k in 0..3 {
+            let (a, b) = (k, (k + 1) % 3);
+            if (d[a] > 0.0) != (d[b] > 0.0) {
+                let f = d[a] / (d[a] - d[b]);
+                pts.push(plane.to_local(add3(t[a], scale3(sub(t[b], t[a]), f))));
+            }
+        }
+        if let [a, b] = pts[..] {
+            out.push((a, b));
+        }
+    }
+    out
+}
+
+/// Up to `count` spots on a cut face (its outline as segments) at least `margin` inside it, spread
+/// as far apart as they go so the pieces cannot turn about a pin. `fits` vets each spot.
+pub(super) fn pin_spots(
+    edges: &[([f64; 2], [f64; 2])],
+    margin: f64,
+    count: usize,
+    mut fits: impl FnMut([f64; 2]) -> bool,
+) -> Vec<[f64; 2]> {
+    let pts = edges.iter().flat_map(|(a, b)| [a, b]);
+    let (lo, hi) = pts.fold(([f64::INFINITY; 2], [f64::NEG_INFINITY; 2]), |(lo, hi), p| {
+        ([lo[0].min(p[0]), lo[1].min(p[1])], [hi[0].max(p[0]), hi[1].max(p[1])])
+    });
+    if edges.is_empty() || count == 0 {
+        return Vec::new();
+    }
+    let step = ((hi[0] - lo[0]).max(hi[1] - lo[1]) / 80.0).max(margin / 10.0).max(1e-3);
+    let dist = |a: [f64; 2], b: [f64; 2]| (a[0] - b[0]).hypot(a[1] - b[1]);
+    let inside = |q: [f64; 2]| {
+        let crossings = edges.iter().filter(|(a, b)| {
+            (a[1] > q[1]) != (b[1] > q[1]) && q[0] < a[0] + (q[1] - a[1]) / (b[1] - a[1]) * (b[0] - a[0])
+        });
+        crossings.count() % 2 == 1
+    };
+    let clear = |q: [f64; 2]| {
+        edges.iter().fold(f64::INFINITY, |m, &(a, b)| {
+            let ab = [b[0] - a[0], b[1] - a[1]];
+            let len2 = (ab[0] * ab[0] + ab[1] * ab[1]).max(1e-18);
+            let t = (((q[0] - a[0]) * ab[0] + (q[1] - a[1]) * ab[1]) / len2).clamp(0.0, 1.0);
+            m.min(dist(q, [a[0] + ab[0] * t, a[1] + ab[1] * t]))
+        })
+    };
+    let (nx, ny) = (
+        ((hi[0] - lo[0]) / step) as usize + 1,
+        ((hi[1] - lo[1]) / step) as usize + 1,
+    );
+    let grid: Vec<[f64; 2]> = (0..nx)
+        .flat_map(|i| (0..ny).map(move |j| [lo[0] + (i as f64 + 0.5) * step, lo[1] + (j as f64 + 0.5) * step]))
+        .filter(|&q| inside(q))
+        .collect();
+    if grid.is_empty() {
+        return Vec::new();
+    }
+    let centroid = grid
+        .iter()
+        .fold([0.0; 2], |s, q| [s[0] + q[0], s[1] + q[1]])
+        .map(|v| v / grid.len() as f64);
+    let mut cands: Vec<([f64; 2], f64)> = grid
+        .into_iter()
+        .map(|q| (q, clear(q)))
+        .filter(|(_, d)| *d >= margin)
+        .collect();
+    // One pin goes in the middle of the deepest part; more start from the far end of the face.
+    if count == 1 {
+        let key = |(q, d): &([f64; 2], f64)| (-(d / step).floor(), dist(*q, centroid));
+        cands.sort_by(|a, b| key(a).partial_cmp(&key(b)).unwrap());
+    } else {
+        cands.sort_by(|a, b| dist(b.0, centroid).total_cmp(&dist(a.0, centroid)));
+    }
+    let mut picks: Vec<[f64; 2]> = Vec::new();
+    let mut tried = vec![false; cands.len()];
+    // Each try costs a few ray casts against the pieces; give up on a face after this many.
+    let mut budget = 400;
+    while picks.len() < count && budget > 0 {
+        let next = (0..cands.len())
+            .filter(|&i| !tried[i])
+            .map(|i| {
+                (
+                    i,
+                    picks.iter().map(|&p| dist(p, cands[i].0)).fold(f64::INFINITY, f64::min),
+                )
+            })
+            .filter(|&(_, d)| d >= 2.0 * margin)
+            .max_by(|a, b| match picks.is_empty() {
+                // The first pick follows the sort order; later ones go as far from the others as they can.
+                true => b.0.cmp(&a.0),
+                false => a.1.total_cmp(&b.1),
+            });
+        let Some((i, _)) = next else { break };
+        tried[i] = true;
+        budget -= 1;
+        if fits(cands[i].0) {
+            picks.push(cands[i].0);
+        }
+    }
+    picks
+}
+
 impl Eval {
     pub(super) fn advanced(&mut self, h: &History, kind: FeatureKind) -> Result<()> {
         match kind {
@@ -149,7 +321,12 @@ impl Eval {
             FeatureKind::VariableFillet { edge, radii } => self.variable_fillet(&edge, &radii),
             FeatureKind::FaceFillet { a, b, radius } => self.face_fillet(&a, &b, radius),
             FeatureKind::Combine { op, main, tools } => self.combine(op, &main, &tools),
-            FeatureKind::Split { tool, bodies } => self.split(h, &tool, &bodies),
+            FeatureKind::Split {
+                tool,
+                bodies,
+                planes,
+                pins,
+            } => self.split(h, &tool, &planes, &bodies, pins.as_ref()),
             FeatureKind::DeleteBody { bodies, keep } => self.delete_bodies(&bodies, keep),
             FeatureKind::MoveBody(m) => self.move_bodies(&m),
             FeatureKind::ScaleBody { bodies, about, factors } => self.scale_bodies(&bodies, &about, factors),
@@ -525,7 +702,7 @@ impl Eval {
                 tool: Tool::Shape(shape),
             };
             let before = self.s.bodies.clone();
-            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| self.apply(step, true)))
+            let result = threebcad_kernel::caught(|| self.apply(step, true))
                 .unwrap_or_else(|_| Err(anyhow::anyhow!("the geometry kernel could not compute this fillet")));
             match result {
                 Ok(()) => return Ok(()),
@@ -638,7 +815,14 @@ impl Eval {
         Ok(())
     }
 
-    fn split(&mut self, h: &History, tool: &SplitTool, bodies: &[crate::naming::FaceRef]) -> Result<()> {
+    fn split(
+        &mut self,
+        h: &History,
+        tool: &SplitTool,
+        more: &[PlaneRef],
+        bodies: &[crate::naming::FaceRef],
+        pins: Option<&Pins>,
+    ) -> Result<()> {
         let targets = if bodies.is_empty() {
             (0..self.s.bodies.len()).collect()
         } else {
@@ -647,84 +831,138 @@ impl Eval {
         ensure!(!targets.is_empty(), "there is no body to split");
         let (lo, hi) = self.body_bbox().ok_or_else(|| anyhow!("there is no body to split"))?;
         let reach = norm(sub(hi, lo)) + 10.0;
-        // A plane that leaves a body wholly on one side (touching it at most, like the plane of its
-        // own bottom face) does not cut it; truck would fail or shave off a paper-thin body.
-        let mut beside: Vec<usize> = Vec::new();
-        let cutter: Vec<Solid> = match tool {
-            SplitTool::Plane(p) => {
-                let plane = self.plane_of(p)?;
-                let n = plane.normal();
-                for &t in &targets {
-                    let (blo, bhi) = boolean::bbox(&self.s.bodies[t].solid);
-                    let eps = 1e-6 * (1.0 + norm(sub(bhi, blo)));
-                    let d: Vec<f64> = (0..8)
-                        .map(|k| {
-                            let c = [0, 1, 2].map(|i| if k >> i & 1 == 0 { blo[i] } else { bhi[i] });
-                            dot(sub(c, plane.origin), n)
-                        })
-                        .collect();
-                    if d.iter().all(|&x| x <= eps) || d.iter().all(|&x| x >= -eps) {
-                        beside.push(t);
-                    }
+        let mut tools = vec![tool.clone()];
+        tools.extend(more.iter().cloned().map(SplitTool::Plane));
+        // Each target body and the pieces it is cut into so far; every further plane cuts them all again.
+        let mut pieces: Vec<(usize, Vec<Solid>)> = targets
+            .iter()
+            .map(|&t| (t, vec![self.s.bodies[t].solid.clone()]))
+            .collect();
+        let mut planes = Vec::new();
+        for tool in &tools {
+            let (cutter, plane) = match tool {
+                SplitTool::Plane(p) => {
+                    let plane = self.plane_of(p)?;
+                    let c = plane.to_local(scale3(add3(lo, hi), 0.5));
+                    let sq = threebcad_kernel::tool::polygon(&[
+                        [c[0] - reach, c[1] - reach],
+                        [c[0] + reach, c[1] - reach],
+                        [c[0] + reach, c[1] + reach],
+                        [c[0] - reach, c[1] + reach],
+                    ])?;
+                    let prism = Tool::Prism {
+                        regions: vec![sq],
+                        plane,
+                        z0: 0.0,
+                        z1: 2.0 * reach,
+                        draft: None,
+                    };
+                    (prism.solids()?, Some(plane))
                 }
-                let c = plane.to_local(scale3(add3(lo, hi), 0.5));
-                let sq = threebcad_kernel::tool::polygon(&[
-                    [c[0] - reach, c[1] - reach],
-                    [c[0] + reach, c[1] - reach],
-                    [c[0] + reach, c[1] + reach],
-                    [c[0] - reach, c[1] + reach],
-                ])?;
-                Tool::Prism {
-                    regions: vec![sq],
-                    plane,
-                    z0: 0.0,
-                    z1: 2.0 * reach,
-                    draft: None,
+                SplitTool::Sketch(id) => {
+                    let (sketch, plane) = self.sketch(h, *id)?;
+                    let regions = regions_of(sketch)?;
+                    ensure!(!regions.is_empty(), "the split sketch has no closed outline");
+                    let prism = Tool::Prism {
+                        regions,
+                        plane,
+                        z0: -2.0 * reach,
+                        z1: 2.0 * reach,
+                        draft: None,
+                    };
+                    (prism.solids()?, None)
                 }
-                .solids()?
-            }
-            SplitTool::Sketch(id) => {
-                let (sketch, plane) = self.sketch(h, *id)?;
-                let regions = regions_of(sketch)?;
-                ensure!(!regions.is_empty(), "the split sketch has no closed outline");
-                Tool::Prism {
-                    regions,
-                    plane,
-                    z0: -2.0 * reach,
-                    z1: 2.0 * reach,
-                    draft: None,
+            };
+            planes.extend(plane);
+            for (_, list) in &mut pieces {
+                let mut next = Vec::new();
+                for s in std::mem::take(list) {
+                    next.extend(cut_piece(&s, &cutter, plane.as_ref())?);
                 }
-                .solids()?
+                *list = next;
             }
-        };
-        let mut new = Vec::new();
-        let mut touched = Vec::new();
-        for &t in targets.iter().filter(|t| !beside.contains(t)) {
-            let s = self.s.bodies[t].solid.clone();
-            let mut inside = Vec::new();
-            let mut rest = vec![s.clone()];
-            for c in &cutter {
-                inside.extend(boolean::intersect(&s, c)?);
-                rest = rest
-                    .iter()
-                    .map(|r| boolean::subtract(r, c))
-                    .collect::<Result<Vec<_>>>()?
-                    .concat();
-            }
-            // A cutter face lying on a face of the body leaves paper-thin pieces: they are not parts.
-            let whole = boolean::volume(&s).unwrap_or(0.0).abs();
-            let solid_piece = |p: &Solid| boolean::volume(p).is_some_and(|v| v.abs() > 1e-6 * whole.max(1e-9));
-            inside.retain(solid_piece);
-            rest.retain(solid_piece);
-            if inside.is_empty() || rest.is_empty() {
-                continue;
-            }
-            touched.push(t);
-            new.extend(inside);
-            new.extend(rest);
         }
-        ensure!(!touched.is_empty(), "the split does not cut any body");
+        pieces.retain(|(_, l)| l.len() > 1);
+        ensure!(!pieces.is_empty(), "the split does not cut any body");
+        let touched: Vec<usize> = pieces.iter().map(|(t, _)| *t).collect();
+        let mut new: Vec<Solid> = pieces.into_iter().flat_map(|(_, l)| l).collect();
+        if let Some(p) = pins {
+            if planes.len() < tools.len() {
+                self.warn("Pins only go across planes; the sketch's cut has none");
+            }
+            self.add_pins(&mut new, &planes, p)?;
+        }
         self.replace_bodies(&touched, new);
+        Ok(())
+    }
+
+    /// Pins (or dowels and their holes) across each cut plane, between the pieces either side of it.
+    fn add_pins(&mut self, pieces: &mut Vec<Solid>, planes: &[Plane], p: &Pins) -> Result<()> {
+        ensure!(
+            p.diameter > 1e-3 && p.length > 1e-3 && p.clearance >= 0.0,
+            "pins need a positive diameter and length"
+        );
+        let (r, c) = (p.diameter / 2.0, p.clearance);
+        let hole_r = r + c;
+        // Each hole is half a pin deep plus the clearance; a wall of material stays round it.
+        let depth = p.length / 2.0 + c;
+        let wall = (0.3 * p.diameter).max(1.0);
+        // Tools reach this far past the cut face, so no boolean meets two faces lying in one plane.
+        let lap = 0.5f64.min(depth / 2.0);
+        let (mut placed, mut wanted) = (0, 0);
+        let mut dowels = Vec::new();
+        for plane in planes {
+            let n = plane.normal();
+            let meshes: Vec<Vec<[P3; 3]>> = pieces.iter().map(mesh_tris).collect();
+            let piece_at = |w: P3| meshes.iter().position(|m| inside(w, m));
+            // The two pieces either side of a spot, when the material behind it holds a hole.
+            let pair = |q: [f64; 2]| -> Option<(usize, usize)> {
+                let at = plane.to_world(q);
+                let sides: Vec<usize> = [1.0, -1.0]
+                    .iter()
+                    .map(|&s| {
+                        let i = piece_at(add3(at, scale3(n, s * 0.05)))?;
+                        let ring = (0..8).map(|k| {
+                            let a = k as f64 * TAU / 8.0;
+                            let off = add3(scale3(plane.x, a.cos()), scale3(plane.y, a.sin()));
+                            add3(at, add3(scale3(off, hole_r + wall / 2.0), scale3(n, s * depth)))
+                        });
+                        let axis = (1..=3).map(|k| add3(at, scale3(n, s * (depth + wall) * k as f64 / 3.0)));
+                        axis.chain(ring).all(|w| inside(w, &meshes[i])).then_some(i)
+                    })
+                    .collect::<Option<_>>()?;
+                (sides[0] != sides[1]).then_some((sides[0], sides[1]))
+            };
+            let edges = section(&meshes, plane, 0.02);
+            let spots = pin_spots(&edges, hole_r + wall, p.count, |q| pair(q).is_some());
+            wanted += p.count;
+            for q in spots {
+                let Some((above, below)) = pair(q) else { continue };
+                let at = plane.to_world(q);
+                let rod = |radius: f64, z0: f64, z1: f64| cylinder(at, n, radius, z0, z1);
+                let hole_below = rod(hole_r, -depth, lap)?;
+                if p.dowels {
+                    let hole_above = rod(hole_r, -lap, depth)?;
+                    pieces[above] = one_piece(boolean::subtract(&pieces[above], &hole_above)?)?;
+                    dowels.push(rod(r, -p.length / 2.0, p.length / 2.0)?);
+                } else {
+                    // The pin stands on the piece above and goes into the one below.
+                    let pin = rod(r, -p.length / 2.0, lap)?;
+                    pieces[above] = boolean::union(&pieces[above], &pin)?
+                        .ok_or_else(|| anyhow!("a pin does not touch its piece"))?;
+                }
+                pieces[below] = one_piece(boolean::subtract(&pieces[below], &hole_below)?)?;
+                placed += 1;
+            }
+        }
+        pieces.extend(dowels);
+        if placed < wanted {
+            self.warn(format!(
+                "{placed} of {wanted} pins fit: the cut face needs room for a {:.1} mm hole with {:.1} mm of wall round it",
+                2.0 * hole_r,
+                wall
+            ));
+        }
         Ok(())
     }
 

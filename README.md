@@ -61,6 +61,7 @@ toolchain to install, and one `cargo run` builds the whole application on Window
 - Lines, rectangles (corner, center, 3-point), circles, arcs (center, tangent, 3-point), splines, slots and
   polygons; sketch fillets and chamfers, trim, extend, offset, mirror, linear and circular patterns, and
   converting model edges into the sketch.
+- Text in any installed font, straight or along a curve, for embossed and debossed labels and logos.
 - Relations: coincident, horizontal, vertical, parallel, perpendicular, collinear, equal, midpoint,
   concentric, symmetric, tangent, point-on-curve and more. Inferencing adds them while you draw; hold `Ctrl`
   to draw freely.
@@ -99,6 +100,8 @@ toolchain to install, and one `cargo run` builds the whole application on Window
 - **Thin walls**: walls thinner than the nozzle (red) or than your minimum wall (orange) are coloured.
 - **Fit clearances**: moves a hole or pin (one click picks all of it) or the faces of a tab or slot by a
   press, slip or loose clearance, with presets for FDM (PLA/PETG, ABS/ASA/nylon), resin and powder printers.
+- **Split for printing**: cuts a part too big for the bed by planes into pieces, with alignment pins (or
+  separate dowels) at a fit clearance across each cut, placed where the cut face has room for them.
 - **Export quality**: coarse, fine or custom chord and angle tolerance, with the triangle count shown
   before you export.
 - **3MF with names, materials and colours**: one named object per body, the part's material and colour,
@@ -352,8 +355,9 @@ adding a feature type or a sketch relation. Every importer has a fuzz target in 
 | v0.6.0 | 3D Print studio: overhang and thin-wall checks, orientation, fits, rich 3MF (done) |
 | v0.7.0 | Assemblies: mates, interference, exploded views, BOM (done) |
 | v0.8.0 | Drawings: views, sections, dimensions, PDF/DXF (done) |
-| v0.9.0 | Design intent: equations, configurations, appearances (done, unreleased) |
-| v1.0.0 | Production ready: installers, signing, performance, docs, accessibility |
+| v0.9.0 | Design intent: equations, configurations, appearances (done) |
+| v1.0.0 | Production ready: installers, signing, performance, docs, accessibility (done) |
+| v1.2.0 | Sketch text with emboss/deboss, split for printing with alignment pins, STEP import fixes |
 
 ## Contributing
 

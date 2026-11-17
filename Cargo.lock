@@ -3802,6 +3802,7 @@ version = "1.1.0"
 dependencies = [
  "anyhow",
  "nalgebra",
+ "rayon-core",
  "serde",
  "truck-meshalgo",
  "truck-modeling",
@@ -3824,9 +3825,11 @@ name = "threebcad-sketch"
 version = "1.1.0"
 dependencies = [
  "anyhow",
+ "epaint_default_fonts",
  "nalgebra",
  "serde",
  "serde_json",
+ "ttf-parser",
 ]
 
 [[package]]

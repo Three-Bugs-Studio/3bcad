@@ -5,7 +5,7 @@ use eframe::egui::{self, Color32, RichText};
 use threebcad_core::holes;
 use threebcad_core::*;
 use threebcad_sketch::tools::Item;
-use threebcad_sketch::Status;
+use threebcad_sketch::{text, Status};
 
 use crate::app::App;
 use crate::ui::sketch_mode::{fmt_value, SketchSession, Tool};
@@ -228,7 +228,7 @@ pub(crate) fn plane_editor(ed: &mut Ed, ui: &mut egui::Ui, h: &History, plane: &
     });
 }
 
-fn end_editor(ed: &mut Ed, ui: &mut egui::Ui, salt: &str, end: &mut End, p: &Picks) {
+fn end_editor(ed: &mut Ed, ui: &mut egui::Ui, id: &str, end: &mut End, p: &Picks) {
     let options: Vec<End> = {
         let depth = match end {
             End::Blind(d) | End::MidPlane(d) => *d,
@@ -245,7 +245,7 @@ fn end_editor(ed: &mut Ed, ui: &mut egui::Ui, salt: &str, end: &mut End, p: &Pic
         }
         v
     };
-    egui::ComboBox::from_id_salt(salt)
+    egui::ComboBox::from_id_salt(id)
         .selected_text(end.name())
         .show_ui(ui, |ui| {
             for o in options {
@@ -884,6 +884,13 @@ fn sketch_panel(s: &mut SketchSession, ui: &mut egui::Ui) {
     for item in s.selection.clone() {
         ui.label(format!("• {}", s.describe(item)));
     }
+    let text = s.selection.iter().find_map(|it| match *it {
+        Item::Point(p) => s.sketch.text_at(p),
+        _ => None,
+    });
+    if let Some(i) = text {
+        text_editor(s, ui, i);
+    }
     let entities: Vec<_> = s
         .selection
         .iter()
@@ -946,9 +953,131 @@ fn sketch_panel(s: &mut SketchSession, ui: &mut egui::Ui) {
     }
 }
 
+/// A font picked from the installed ones; `None` while unchanged.
+fn font_combo(ui: &mut egui::Ui, current: &str) -> Option<String> {
+    let mut picked = None;
+    // An id from the combo's place in the panel: CodeQL takes a literal id "salt" for cryptography.
+    egui::ComboBox::from_id_salt(ui.next_auto_id())
+        .selected_text(current)
+        .height(360.0)
+        .show_ui(ui, |ui| {
+            for f in text::system_fonts() {
+                if ui.selectable_label(f.name == current, &f.name).clicked() && f.name != current {
+                    picked = Some(f.name.clone());
+                }
+            }
+        });
+    picked
+}
+
+/// Text in the sketch: the words, font, height, direction and the curve it follows.
+fn text_editor(s: &mut SketchSession, ui: &mut egui::Ui, i: usize) {
+    ui.separator();
+    ui.label(RichText::new(tr("Text")).strong());
+    let t = s.sketch.texts()[i].clone();
+    let mut words = t.text.clone();
+    let r = ui.add(egui::TextEdit::singleline(&mut words).desired_width(f32::INFINITY));
+    if r.gained_focus() {
+        s.checkpoint();
+    }
+    if r.changed() {
+        s.set_text(i, &words, &t.font);
+    }
+    ui.horizontal(|ui| {
+        ui.label(tr("Font"));
+        if let Some(f) = font_combo(ui, &t.font) {
+            s.checkpoint();
+            s.set_text(i, &words, &f);
+        }
+    });
+    // A drag is one undo step: the checkpoint is taken when it starts.
+    let edit = |s: &mut SketchSession, r: &egui::Response| {
+        if r.drag_started() || (r.changed() && !r.dragged()) {
+            s.checkpoint();
+        }
+        r.changed()
+    };
+    ui.horizontal(|ui| {
+        ui.label(tr("Height"));
+        let mut h = t.height;
+        let r = ui.add(length(&mut h).speed(0.1).range(0.1..=10_000.0));
+        if edit(s, &r) {
+            s.sketch.text_mut(i).height = h;
+            s.refresh();
+        }
+    });
+    match t.curve {
+        Some(e) => {
+            ui.label(trf("Along {}", &[&s.describe(Item::Entity(e))]));
+            ui.horizontal(|ui| {
+                let mut flip = t.flip;
+                if ui.checkbox(&mut flip, tr("Flip side")).changed() {
+                    s.checkpoint();
+                    s.sketch.text_mut(i).flip = flip;
+                    s.refresh();
+                }
+                if ui.button(tr("Straight")).clicked() {
+                    s.set_text_curve(i, None);
+                }
+            });
+        }
+        None => {
+            ui.horizontal(|ui| {
+                ui.label(tr("Angle"));
+                let mut deg = t.angle.to_degrees();
+                let r = ui.add(number(&mut deg).speed(1.0).suffix("°"));
+                if edit(s, &r) {
+                    s.sketch.text_mut(i).angle = deg.to_radians();
+                    s.refresh();
+                }
+            });
+            let curve = s.selection.iter().find_map(|it| match *it {
+                Item::Entity(e) => Some(e),
+                _ => None,
+            });
+            match curve {
+                Some(e) => {
+                    if ui.button(tr("Along the selected curve")).clicked() {
+                        s.set_text_curve(i, Some(e));
+                    }
+                }
+                None => {
+                    if ui
+                        .button(tr("Pick a curve…"))
+                        .on_hover_text(tr("Then click a line, arc, circle or spline to put the text on it"))
+                        .clicked()
+                    {
+                        s.text_curve_pick = Some(i);
+                        s.message = Some(tr("Click the curve for the text (Esc cancels)").into());
+                    }
+                }
+            }
+        }
+    }
+    ui.weak(tr("Drag the text, or dimension its start point, to place it. Emboss it with Extruded Boss, deboss it with Extruded Cut."));
+}
+
 fn tool_options(s: &mut SketchSession, ui: &mut egui::Ui) {
     let o = &mut s.opts;
     match s.tool {
+        Tool::Text => {
+            ui.add(egui::TextEdit::singleline(&mut o.text).desired_width(f32::INFINITY));
+            ui.horizontal(|ui| {
+                ui.label(tr("Font"));
+                let current = if o.font.is_empty() {
+                    text::default_font()
+                } else {
+                    o.font.as_str()
+                };
+                if let Some(f) = font_combo(ui, current) {
+                    o.font = f;
+                }
+            });
+            ui.horizontal(|ui| {
+                ui.label(tr("Height"));
+                ui.add(length(&mut o.text_height).speed(0.1).range(0.1..=10_000.0));
+            });
+        }
         Tool::Circle => {
             let mut typed = o.radius.is_some();
             ui.horizontal(|ui| {

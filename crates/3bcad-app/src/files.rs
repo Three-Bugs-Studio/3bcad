@@ -311,6 +311,13 @@ fn import_into(
                 );
                 log::warn!("{file}: skipped {:?}", import.skipped);
             }
+            if !import.warnings.is_empty() {
+                msg = trf(
+                    "{}; {} bodies may have come in wrong (see the log)",
+                    &[&msg, &import.warnings.len()],
+                );
+                log::warn!("{file}: {:?}", import.warnings);
+            }
             doc.edit(|h| {
                 h.add(FeatureKind::Imported {
                     file: file.clone(),
@@ -699,11 +706,10 @@ impl App {
                         let file = path
                             .file_name()
                             .map_or_else(String::new, |n| n.to_string_lossy().into_owned());
-                        let skipped = msg.contains(';');
-                        self.status = if skipped {
-                            trf("Opened {}; some shells could not be read (see the log)", &[&file])
-                        } else {
-                            trf("Opened {}", &[&file])
+                        // What went wrong follows a ';' (shells left out, bodies that may be wrong).
+                        self.status = match msg.split_once("; ") {
+                            Some((_, problems)) => trf("Opened {}; {}", &[&file, &problems]),
+                            None => trf("Opened {}", &[&file]),
                         };
                     }
                     Err(e) => {

@@ -273,11 +273,13 @@ pub fn write_step_assembly(
     std::fs::write(path, name_products(&text, &names))
 }
 
-/// What a STEP file gave: its solids in millimetres, and why any other shells were left out.
+/// What a STEP file gave: its solids in millimetres, why any other shells were left out, and
+/// why any solid may have come in wrong.
 #[derive(Debug, Default)]
 pub struct StepImport {
     pub solids: Vec<CompressedSolid>,
     pub skipped: Vec<String>,
+    pub warnings: Vec<String>,
 }
 
 /// Reads the closed shells of a STEP file (AP203, AP214 or AP242 B-Rep) as solids.
@@ -285,12 +287,13 @@ pub fn read_step(bytes: &[u8]) -> io::Result<StepImport> {
     let text = String::from_utf8_lossy(bytes);
     // truck can panic deep inside a malformed file; that is a bad file, not a crash.
     let result =
-        std::panic::catch_unwind(|| import(&text)).unwrap_or_else(|_| Err("the STEP file is malformed".into()));
+        threebcad_kernel::caught(|| import(&text)).unwrap_or_else(|_| Err("the STEP file is malformed".into()));
     result.map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
 }
 
 fn import(text: &str) -> Result<StepImport, String> {
     let text = edges_on_3d_curves(&cones_in_radians(&without_empty_lists(text)));
+    let text = placements_with_ref_directions(&text);
     let table = Table::from_step(&text).ok_or("this is not a STEP (ISO 10303-21) file")?;
     let scale = mm_per_unit(&text);
     let mut shells: Vec<_> = table.shell.iter().collect();
@@ -305,14 +308,18 @@ fn import(text: &str) -> Result<StepImport, String> {
             .map(|shell| in_mm(shell, scale))
             .and_then(convert_shell)
             .and_then(|shell| {
+                let astray = astray_faces(&shell)?;
                 let solid = extract_solid(&CompressedSolid {
                     boundaries: vec![shell],
                 })
                 .map_err(|e| format!("not a closed solid ({e})"))?;
-                Ok(solid.compress())
+                Ok((solid.compress(), astray))
             });
         match solid {
-            Ok(s) => out.solids.push(s),
+            Ok((s, astray)) => {
+                out.warnings.extend(astray.map(|w| format!("shell #{id}: {w}")));
+                out.solids.push(s);
+            }
             Err(e) => out.skipped.push(format!("shell #{id}: {e}")),
         }
     }
@@ -436,6 +443,72 @@ fn edges_on_3d_curves(text: &str) -> String {
     out
 }
 
+/// Each `AXIS2_PLACEMENT_3D` whose reference direction is unset or along its axis given one across
+/// it (STEP's own default, (0,1,0) for an axis along x): truck takes (1,0,0) and projects it off the
+/// axis, which leaves nothing to normalise, and every circle and surface placed so came out NaN
+/// (NIST's STC-07 has 72, all its holes along x).
+fn placements_with_ref_directions(text: &str) -> String {
+    let mut directions = std::collections::HashMap::new();
+    let mut top = 0u64;
+    for stmt in text.split(';') {
+        let Some((id, body)) = stmt.split_once('=') else {
+            continue;
+        };
+        top = top.max(id.trim().trim_start_matches('#').parse().unwrap_or(0));
+        let body = body.trim_start();
+        let Some(open) = body.rfind('(').filter(|_| body.starts_with("DIRECTION")) else {
+            continue;
+        };
+        let list = body[open + 1..].split(')').next().unwrap_or("");
+        let v: Vec<f64> = list.split(',').filter_map(|x| x.trim().parse().ok()).collect();
+        if let [x, y, z] = v[..] {
+            directions.insert(id.trim().to_string(), Vector3::new(x, y, z));
+        }
+    }
+    let direction = |r: &str, default| match r.trim() {
+        "$" => Some(default),
+        r => directions.get(r).copied(),
+    };
+    let mut out = String::with_capacity(text.len());
+    for (i, stmt) in text.split(';').enumerate() {
+        if i > 0 {
+            out.push(';');
+        }
+        let mut fixed = || -> Option<String> {
+            let open = stmt.find("AXIS2_PLACEMENT_3D(")? + "AXIS2_PLACEMENT_3D(".len();
+            let close = stmt.rfind(')')?;
+            let (rest, x) = stmt.get(open..close)?.rsplit_once(',')?;
+            let z = direction(rest.rsplit(',').next()?, Vector3::unit_z()).filter(|z| z.magnitude() > 0.0)?;
+            let (z, x) = (z.normalize(), direction(x, Vector3::unit_x())?);
+            if (x - z * x.dot(z)).magnitude() > 1e-9 * x.magnitude() {
+                return None;
+            }
+            let x = if z.x.abs() < 0.9 {
+                Vector3::unit_x()
+            } else {
+                Vector3::unit_y()
+            };
+            let x = (x - z * x.dot(z)).normalize();
+            top += 1;
+            let lead = stmt.len() - stmt.trim_start().len();
+            Some(format!(
+                "{}#{top}=DIRECTION('',({:.15},{:.15},{:.15}));{}{rest},#{top}{}",
+                &stmt[..lead],
+                x.x,
+                x.y,
+                x.z,
+                &stmt[lead..open],
+                &stmt[close..]
+            ))
+        };
+        match fixed() {
+            Some(s) => out.push_str(&s),
+            None => out.push_str(stmt),
+        }
+    }
+    out
+}
+
 /// truck reads a cone's semi-angle as radians, but a file whose angle unit is the degree (NIST's
 /// AP203 test parts, for one) writes `59.` for 59 degrees: those are turned into radians here.
 fn cones_in_radians(text: &str) -> String {
@@ -496,6 +569,84 @@ fn without_empty_lists(text: &str) -> String {
 
 type StepShell = CompressedShell<Point3, Curve3D, step::Surface>;
 
+/// Faces truck's mesher will not find on their own surface, walking their edges as it does in steps
+/// for a mesh a ten-thousandth of the part's size fine. It looks for each point within 1e-6 of the
+/// surface and, failing that, takes the nearest point it can find, which on a B-spline may be far
+/// off (OCCT's linkrods.step: two corner blends whose edges are 6e-6 off their surfaces came in
+/// 0.2 mm out): such faces, placed more than a thousandth of the part's size off, are named in the
+/// warning returned. And it sees no period in a closed B-spline, so a loop running round one
+/// (NIST's CTC-02 AP203: slots through a curved wall) jumps across the surface between points that
+/// are on it; that mesh comes out several times too big, or never ends, so the shell is refused.
+fn astray_faces(shell: &CompressedShell<Point3, Curve, Surface>) -> Result<Option<String>, String> {
+    let v = &shell.vertices;
+    let size = v
+        .iter()
+        .flat_map(|a| v.iter().take(64).map(move |b| a.distance(*b)))
+        .fold(1.0, f64::max);
+    // How far off the face's edge points are found, and how far the steps between them run.
+    let miss = |face: &CompressedFace<Surface>| {
+        let s = &face.surface;
+        // The mesher takes a periodic parameter the nearer way round.
+        let near = |t: f64, t0: f64, period: Option<f64>| period.map_or(t, |p| t + p * ((t0 - t) / p).round());
+        // Only a B-spline can be closed without a period (a cone's apex or a sphere's pole looks
+        // like a jump too, and the mesher copes there).
+        let spline = matches!(s, Surface::BSplineSurface(_) | Surface::NurbsSurface(_));
+        let (mut off, mut jump) = (0.0f64, 0.0f64);
+        for wire in &face.boundaries {
+            let mut hint: Option<(f64, f64)> = None;
+            let mut last = Point3::origin();
+            for e in wire {
+                let Some(edge) = shell.edges.get(e.index) else {
+                    return (f64::INFINITY, 0.0);
+                };
+                let (_, mut points) = edge.curve.parameter_division(edge.curve.range_tuple(), size * 1e-4);
+                if !e.orientation {
+                    points.reverse();
+                }
+                for p in points {
+                    // As truck-meshalgo's by_search_nearest_parameter looks.
+                    let found = s
+                        .search_parameter(p, hint, 100)
+                        .or_else(|| s.search_parameter(p, None, 100))
+                        .or_else(|| s.search_nearest_parameter(p, hint, 100))
+                        .or_else(|| s.search_nearest_parameter(p, None, 100));
+                    let Some((mut u, mut v)) = found else {
+                        return (f64::INFINITY, 0.0);
+                    };
+                    off = off.max(s.subs(u, v).distance(p));
+                    if let Some((u0, v0)) = hint.filter(|_| spline) {
+                        (u, v) = (near(u, u0, s.u_period()), near(v, v0, s.v_period()));
+                        jump = jump.max(s.subs((u0 + u) / 2.0, (v0 + v) / 2.0).distance(last.midpoint(p)));
+                    }
+                    (hint, last) = (Some((u, v)), p);
+                }
+            }
+        }
+        (off, jump)
+    };
+    let limit = size * 1e-3;
+    let (mut lost, mut astray) = (Vec::new(), Vec::new());
+    for (i, face) in shell.faces.iter().enumerate() {
+        match miss(face) {
+            (off, _) if off > limit => astray.push(i.to_string()),
+            (_, jump) if jump > limit => lost.push(i.to_string()),
+            _ => {}
+        }
+    }
+    if !lost.is_empty() {
+        return Err(format!(
+            "face(s) {} run round a closed B-spline surface, which truck cannot mesh",
+            lost.join(", ")
+        ));
+    }
+    Ok((!astray.is_empty()).then(|| {
+        format!(
+            "face(s) {} are not where truck's mesher looks for them on their surface, so they may be meshed wrong",
+            astray.join(", ")
+        )
+    }))
+}
+
 /// The shell scaled to millimetres before it is converted: truck's parameter searches work to a
 /// fixed tolerance (about 1e-6), which misses on a 2 mm hole written in metres (Onshape does).
 fn in_mm(mut shell: StepShell, scale: f64) -> StepShell {
@@ -508,8 +659,38 @@ fn in_mm(mut shell: StepShell, scale: f64) -> StepShell {
     shell
 }
 
+/// Each face's loops turned round where they run along more of its neighbours' edges the same way
+/// as the neighbours do than the other way: OpenCASCADE writes a reversed face bounded by full
+/// circles (a concave fillet round a boss) with its loops still the way its surface runs, and that
+/// shell did not close.
+fn consistent_loops(mut shell: StepShell) -> StepShell {
+    let runs = |f: &CompressedFace<step::Surface>| -> Vec<(usize, bool)> {
+        let wires = f.boundaries.iter().flat_map(|w| w.iter());
+        wires.map(|e| (e.index, e.orientation == f.orientation)).collect()
+    };
+    let mut uses = std::collections::HashMap::<usize, Vec<(usize, bool)>>::new();
+    for (i, f) in shell.faces.iter().enumerate() {
+        for (e, way) in runs(f) {
+            uses.entry(e).or_default().push((i, way));
+        }
+    }
+    for (i, f) in shell.faces.iter_mut().enumerate() {
+        let (same, opposite) = runs(f).into_iter().fold((0, 0), |(s, o), (e, way)| {
+            let others = uses[&e].iter().filter(|(j, _)| *j != i);
+            others.fold((s, o), |(s, o), &(_, w)| if w == way { (s + 1, o) } else { (s, o + 1) })
+        });
+        if same > opposite {
+            for wire in &mut f.boundaries {
+                wire.reverse();
+                wire.iter_mut().for_each(|e| e.orientation = !e.orientation);
+            }
+        }
+    }
+    shell
+}
+
 fn convert_shell(shell: StepShell) -> Result<CompressedShell<Point3, Curve, Surface>, String> {
-    let StepShell { vertices, edges, faces } = shell;
+    let StepShell { vertices, edges, faces } = consistent_loops(shell);
     let size = vertices
         .iter()
         .flat_map(|a| vertices.iter().take(64).map(move |b| a.distance(*b)))
@@ -591,23 +772,11 @@ fn split_closed_edges(mut s: CompressedShell<Point3, Curve, Surface>) -> Compres
 fn curve(c: Curve3D, ends: Option<(Point3, Point3)>) -> Result<Curve, String> {
     let converted = match c {
         Curve3D::Line(l) => Curve::Line(l),
-        Curve3D::BSplineCurve(b) => Curve::BSplineCurve(b),
-        Curve3D::NurbsCurve(n) => Curve::NurbsCurve(n),
+        Curve3D::BSplineCurve(b) => spline(Curve::BSplineCurve(b), ends),
+        Curve3D::NurbsCurve(n) => spline(Curve::NurbsCurve(n), ends),
         Curve3D::Polyline(p) => Curve::BSplineCurve(polyline(p.0)?),
         Curve3D::Conic(Conic3D::Ellipse(e)) => {
-            let (mut t0, mut t1) = e.entity().range_tuple();
-            // truck's trimming comes out NaN for some files' arcs (NIST's STC-07 fillet ends): take
-            // the angles from the edge's own ends instead.
-            if let (false, Some((a, b)), Some(inv)) = (t0.is_finite() && t1.is_finite(), ends, e.transform().invert()) {
-                let angle = |p: Point3| {
-                    let q = inv.transform_point(p);
-                    q.y.atan2(q.x)
-                };
-                let (from, to) = if e.orientation() { (a, b) } else { (b, a) };
-                t0 = angle(from);
-                let turn = (angle(to) - t0).rem_euclid(TAU);
-                t1 = t0 + if turn < 1e-9 { TAU } else { turn };
-            }
+            let (t0, t1) = e.entity().range_tuple();
             let mut arc = arc(Point3::origin(), Vector3::unit_x(), Vector3::unit_y(), t0, t1);
             arc.transform_by(*e.transform());
             if !e.orientation() {
@@ -626,6 +795,42 @@ fn curve(c: Curve3D, ends: Option<(Point3, Point3)>) -> Result<Curve, String> {
         return Err("an edge's curve could not be read".into());
     }
     Ok(converted)
+}
+
+/// A STEP B-spline as truck should take it. An unclamped one (NIST's CTC-02 AP203 writes its slots'
+/// closed outlines periodic) holds only from its degree-th knot to the degree-th from the end, and
+/// truck ran it over all its knots, whose ends fall toward the origin. And an edge may run along
+/// part of its B-spline, where truck takes the whole (OCCT's screw.step splits one slot curve in two
+/// at the dome's top, so each half came in as the whole and the dome's faces overlapped).
+fn spline(c: Curve, ends: Option<(Point3, Point3)>) -> Curve {
+    let (p, k) = match &c {
+        Curve::BSplineCurve(b) => (b.degree(), b.knot_vec()),
+        Curve::NurbsCurve(n) => (n.degree(), n.knot_vec()),
+        _ => return c,
+    };
+    let (lo, hi) = (k[p], k[k.len() - 1 - p]);
+    let c = cut_to(c, lo, hi);
+    let Some((a, b)) = ends else { return c };
+    match (
+        c.search_nearest_parameter(a, None, 100),
+        c.search_nearest_parameter(b, None, 100),
+    ) {
+        (Some(ta), Some(tb)) if ta < tb => cut_to(c, ta, tb),
+        _ => c,
+    }
+}
+
+/// `c` from parameter `lo` to `hi`, each where it is inside the curve's range.
+fn cut_to(mut c: Curve, lo: f64, hi: f64) -> Curve {
+    let (t0, t1) = c.range_tuple();
+    let eps = (t1 - t0) * 1e-9;
+    if hi < t1 - eps {
+        c.cut(hi);
+    }
+    if lo > t0 + eps {
+        c = c.cut(lo);
+    }
+    c
 }
 
 /// A polyline as a degree-1 B-spline through its points.
@@ -667,13 +872,38 @@ fn arc(center: Point3, u: Vector3, v: Vector3, t0: f64, t1: f64) -> NurbsCurve<V
     NurbsCurve::new(BSplineCurve::new(KnotVec::from(knots), points))
 }
 
+/// A B-spline surface only where it holds (see `curve`): NIST's CTC-02 AP203 writes some periodic,
+/// and truck's mesher, searching the rest for a face's edges, never came back.
+fn clamped<P: control_point::ControlPoint<f64> + Tolerance>(mut s: BSplineSurface<P>) -> BSplineSurface<P> {
+    let ((pu, pv), ku, kv) = (s.degrees(), s.uknot_vec().clone(), s.vknot_vec().clone());
+    let valid = |k: &KnotVec, p: usize| (k[p], k[k.len() - 1 - p], (k[k.len() - 1] - k[0]) * 1e-9);
+    let ((u0, u1, eu), (v0, v1, ev)) = (valid(&ku, pu), valid(&kv, pv));
+    if u1 < ku[ku.len() - 1] - eu {
+        s.ucut(u1);
+    }
+    if u0 > ku[0] + eu {
+        s = s.ucut(u0);
+    }
+    if v1 < kv[kv.len() - 1] - ev {
+        s.vcut(v1);
+    }
+    if v0 > kv[0] + ev {
+        s = s.vcut(v0);
+    }
+    s
+}
+
 /// `loops` are points along the wires of the face the surface is for.
 fn surface(s: step::Surface, size: f64, loops: &[Vec<Point3>]) -> Result<Surface, String> {
     let points = &loops.concat();
     let original = s.clone();
     let converted = match s {
-        step::Surface::BSplineSurface(b) => return Ok(Surface::BSplineSurface(*b)),
-        step::Surface::NurbsSurface(n) => return Ok(Surface::NurbsSurface(*n)),
+        step::Surface::BSplineSurface(b) => return Ok(Surface::BSplineSurface(clamped(*b))),
+        step::Surface::NurbsSurface(n) => {
+            return Ok(Surface::NurbsSurface(NurbsSurface::new(clamped(
+                n.into_non_rationalized(),
+            ))))
+        }
         step::Surface::ElementarySurface(e) => match *e {
             ElementarySurface::Plane(p) => return Ok(Surface::Plane(p)),
             ElementarySurface::CylindricalSurface(c) | ElementarySurface::ConicalSurface(c) => {
@@ -773,7 +1003,7 @@ fn surface(s: step::Surface, size: f64, loops: &[Vec<Point3>]) -> Result<Surface
             }
         },
     };
-    Ok(facing(&original, converted, points.first().copied()))
+    Ok(facing(&original, converted, points))
 }
 
 /// `profile` (in a surface's own frame `m`) turned round `axis` through `o`, rebuilt in world
@@ -831,7 +1061,9 @@ fn spanning(l: Line<Point3>, o: Point3, axis: Vector3, points: &[Point3]) -> Lin
     let pad = (hi - lo) * 0.1 + 1e-6;
     let (mut t0, mut t1) = (lo - pad, hi + pad);
     if let Some(apex) = apex {
-        if apex <= lo {
+        // The side the face is on: an apex vertex a rounding error past the apex (a cone placed at
+        // its apex, radius 0, as CATIA writes drill points) put the line on the other side.
+        if apex <= (lo + hi) / 2.0 {
             t0 = apex;
         } else {
             t1 = apex;
@@ -840,15 +1072,72 @@ fn spanning(l: Line<Point3>, o: Point3, axis: Vector3, points: &[Point3]) -> Lin
     Line(l.0 + d * t0, l.0 + d * t1)
 }
 
-/// The converted surface turned to face the same way as the original at `probe` (a point on the
-/// face, so on both surfaces), or at an arbitrary parameter of the original.
-fn facing(original: &step::Surface, s: Surface, probe: Option<Point3>) -> Surface {
-    let (u, v) = probe
-        .and_then(|p| original.search_parameter(p, None, 100))
-        .unwrap_or((0.37, 0.41));
-    let p = original.subs(u, v);
-    match s.search_parameter(p, None, 100) {
-        Some((u1, v1)) if original.normal(u, v).dot(s.normal(u1, v1)) < 0.0 => match s {
+/// The original surface's normal at `p`, a point on it. truck's search misses the points of a cone
+/// or cylinder past the unit line it is made of (a screw's chamfers) and those of a spindle torus's
+/// inner, lemon-shaped part, where truck's torus normal is also backwards (STEP's points into the
+/// lemon): for those the parameters are worked out in the surface's own frame.
+fn normal_at(original: &step::Surface, p: Point3) -> Option<Vector3> {
+    let step::Surface::ElementarySurface(e) = original else {
+        return original
+            .search_parameter(p, None, 100)
+            .map(|(u, v)| original.normal(u, v));
+    };
+    let (n, m, forward) = match &**e {
+        ElementarySurface::ToroidalSurface(t) => {
+            let e = t.entity();
+            let (big, small) = (e.large_radius(), e.small_radius());
+            let q = local_points(t.transform(), &[p])[0] - e.center();
+            let (rho, phi) = (q.x.hypot(q.y), q.y.atan2(q.x));
+            // A lemon point is on the tube circle across the axis.
+            let lemon = ((rho + big).hypot(q.z) - small).abs() < ((rho - big).hypot(q.z) - small).abs();
+            let n = if lemon {
+                -e.normal(phi + PI, q.z.atan2(-rho - big))
+            } else {
+                e.normal(phi, q.z.atan2(rho - big))
+            };
+            (n, t.transform(), t.orientation())
+        }
+        ElementarySurface::CylindricalSurface(c) | ElementarySurface::ConicalSurface(c) => {
+            let rc = c.entity();
+            let (Line(a, b), o, axis) = (*rc.entity_curve(), rc.origin(), rc.axis().normalize());
+            let q = local_points(c.transform(), &[p])[0];
+            let t = (q - a).dot(axis) / (b - a).dot(axis);
+            let perp = |v: Vector3| v - axis * v.dot(axis);
+            let (from, to) = (perp(a + (b - a) * t - o), perp(q - o));
+            if from.magnitude() < 1e-9 || to.magnitude() < 1e-9 {
+                return None; // the apex
+            }
+            (
+                rc.normal(t, axis.dot(from.cross(to)).atan2(from.dot(to))),
+                c.transform(),
+                c.orientation(),
+            )
+        }
+        _ => {
+            return original
+                .search_parameter(p, None, 100)
+                .map(|(u, v)| original.normal(u, v))
+        }
+    };
+    let n = m.transform_vector(if forward { n } else { -n });
+    (n.magnitude() > 1e-12).then(|| n.normalize())
+}
+
+/// The converted surface turned to face the same way as the original at the first of the face's
+/// `points` (so on both surfaces) where both normals are known, or at an arbitrary parameter of
+/// the original.
+fn facing(original: &step::Surface, s: Surface, points: &[Point3]) -> Surface {
+    let anywhere = (original.subs(0.37, 0.41), Some(original.normal(0.37, 0.41)));
+    let agree = points
+        .iter()
+        .map(|&p| (p, normal_at(original, p)))
+        .chain([anywhere])
+        .find_map(|(p, n)| {
+            let (u, v) = s.search_parameter(p, None, 100)?;
+            Some(n?.dot(s.normal(u, v)))
+        });
+    match agree {
+        Some(d) if d < 0.0 => match s {
             // Turning the profile round keeps truck's mesher happy; a flipped processor does not.
             Surface::RevolutedCurve(p) => {
                 let (o, a) = (p.entity().origin(), p.entity().axis());
@@ -911,6 +1200,21 @@ mod tests {
                      #3=(GEOMETRIC_REPRESENTATION_CONTEXT(3)GLOBAL_UNIT_ASSIGNED_CONTEXT((#2,#4))REPRESENTATION_CONTEXT('',''));\n\
                      #5=ADVANCED_BREP_SHAPE_REPRESENTATION('',(#6),#3);";
         assert_eq!(mm_per_unit(mixed), 1.0);
+    }
+
+    #[test]
+    fn placements_get_a_reference_direction_across_their_axis() {
+        let text = "#1=DIRECTION('',(-1.,0.,0.));\n#2=AXIS2_PLACEMENT_3D('',#9,#1,$);\n#3=DIRECTION('',(1.,0.,0.));\n\
+                    #4=AXIS2_PLACEMENT_3D('',#9,#1,#3);\n#5=AXIS2_PLACEMENT_3D('',#9,$,$);\n";
+        let x = "#6=DIRECTION('',(0.000000000000000,1.000000000000000,0.000000000000000));";
+        let y = "#7=DIRECTION('',(0.000000000000000,1.000000000000000,0.000000000000000));";
+        assert_eq!(
+            placements_with_ref_directions(text),
+            format!(
+                "#1=DIRECTION('',(-1.,0.,0.));\n{x}#2=AXIS2_PLACEMENT_3D('',#9,#1,#6);\n#3=DIRECTION('',(1.,0.,0.));\n\
+                 {y}#4=AXIS2_PLACEMENT_3D('',#9,#1,#7);\n#5=AXIS2_PLACEMENT_3D('',#9,$,$);\n"
+            )
+        );
     }
 
     #[test]
