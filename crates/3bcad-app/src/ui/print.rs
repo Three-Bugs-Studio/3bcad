@@ -125,12 +125,10 @@ fn quality(app: &mut App, ui: &mut egui::Ui) {
     // Meshing a big part takes a moment, so count only once a value is set, not while dragging.
     let dragging = ui.ctx().input(|i| i.pointer.any_down());
     let empty = app.doc.bodies().is_empty() && app.doc.built().meshes.is_empty();
-    if app.export_triangles().is_none() && !dragging && !empty {
-        app.export_objects();
-    }
+    let triangles = app.export_triangles(!dragging && !empty);
     ui.vertical(|ui| {
         ui.add_space(14.0);
-        match app.export_triangles() {
+        match triangles {
             Some(n) => ui.label(format!("{n} triangles")),
             None => ui.weak(tr("… triangles")),
         }

@@ -165,8 +165,13 @@ pub fn lay_out(g: &mut SceneGeometry, v: &PrintView) -> PrintReport {
 
 /// Bodies and imported meshes meshed at the export quality (chord in mm, angle in degrees), named.
 pub fn export_meshes(doc: &PartDocument, chord: f64, angle_deg: f64) -> Objects {
+    export_job(doc, chord, angle_deg)()
+}
+
+/// `export_meshes` as work for another thread: the bodies and meshes are copied out of the part.
+pub fn export_job(doc: &PartDocument, chord: f64, angle_deg: f64) -> impl FnOnce() -> Objects + Send + 'static {
     let bodies = doc.bodies();
-    bodies
+    let solids: Vec<_> = bodies
         .iter()
         .enumerate()
         .map(|(i, b)| {
@@ -175,13 +180,25 @@ pub fn export_meshes(doc: &PartDocument, chord: f64, angle_deg: f64) -> Objects 
             } else {
                 format!("{} - Body {}", doc.name, i + 1)
             };
-            (name, mesher::print_mesh_within(&b.solid, chord, angle_deg.to_radians()))
+            (name, b.solid.clone())
         })
-        .chain(doc.built().meshes.iter().map(|(id, m)| {
+        .collect();
+    let meshes: Vec<_> = doc
+        .built()
+        .meshes
+        .iter()
+        .map(|(id, m)| {
             let name = doc.history().get(*id).map_or_else(|| "Mesh".into(), |f| f.name.clone());
-            (name, (**m).clone())
-        }))
-        .collect()
+            (name, m.clone())
+        })
+        .collect();
+    move || {
+        solids
+            .into_iter()
+            .map(|(name, s)| (name, mesher::print_mesh_within(&s, chord, angle_deg.to_radians())))
+            .chain(meshes.into_iter().map(|(name, m)| (name, (*m).clone())))
+            .collect()
+    }
 }
 
 /// `objects` as the part is printed: turned onto its bed face `down` and centred on the plate.
