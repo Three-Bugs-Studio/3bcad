@@ -2,8 +2,6 @@
 //! escape, results are sanity-checked by volume, and coplanar-face failures are retried with the
 //! tool grown by a micron.
 
-use std::panic::{catch_unwind, AssertUnwindSafe};
-
 use anyhow::{anyhow, ensure, Result};
 use truck_meshalgo::prelude::*;
 use truck_modeling::*;
@@ -83,7 +81,7 @@ fn mesh_tol(s: &Solid, rel: f64, min: f64, max: f64) -> f64 {
 /// Volume meshed at `mesh_tol`.
 fn volume_at(s: &Solid, rel: f64, min: f64, max: f64) -> Option<f64> {
     let tol = mesh_tol(s, rel, min, max);
-    catch_unwind(AssertUnwindSafe(|| {
+    crate::caught(|| {
         // The signed volume does not need the duplicated boundary positions welded.
         let poly = s.robust_triangulation(tol).to_polygon();
         let p = poly.positions();
@@ -94,7 +92,7 @@ fn volume_at(s: &Solid, rel: f64, min: f64, max: f64) -> Option<f64> {
                 a.to_vec().dot(b.to_vec().cross(c.to_vec())) / 6.0
             })
             .sum::<f64>()
-    }))
+    })
     .ok()
     .filter(|v: &f64| v.is_finite())
 }
@@ -115,7 +113,7 @@ enum Op {
 }
 
 fn raw(op: Op, a: &Solid, b: &Solid) -> Option<Solid> {
-    catch_unwind(AssertUnwindSafe(|| match op {
+    crate::caught(|| match op {
         Op::Union => truck_shapeops::or(a, b, CURVE_TOL),
         Op::Intersect => truck_shapeops::and(a, b, CURVE_TOL),
         Op::Subtract => {
@@ -123,7 +121,7 @@ fn raw(op: Op, a: &Solid, b: &Solid) -> Option<Solid> {
             nb.not();
             truck_shapeops::and(a, &nb, CURVE_TOL)
         }
-    }))
+    })
     .ok()
     .flatten()
     .filter(|s| !s.boundaries().is_empty())
@@ -132,7 +130,7 @@ fn raw(op: Op, a: &Solid, b: &Solid) -> Option<Solid> {
 /// A mesh at the tolerance of `rough_volume`.
 fn rough_mesh(s: &Solid) -> Option<PolygonMesh> {
     let tol = mesh_tol(s, 5e-3, 5e-3, 0.25);
-    catch_unwind(AssertUnwindSafe(|| s.robust_triangulation(tol).to_polygon())).ok()
+    crate::caught(|| s.robust_triangulation(tol).to_polygon()).ok()
 }
 
 /// How many times the closed mesh `m` wraps around `p`: 1 inside, 0 outside, 1/2 on its surface.

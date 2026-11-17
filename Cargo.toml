@@ -44,6 +44,8 @@ truck-meshalgo = "0.4"
 truck-stepio = "0.3"
 truck-topology = "0.6"
 truck-shapeops = { version = "0.4", default-features = false }
+# truck meshes and intersects on its thread pool; the crash reporter asks whether it is on one.
+rayon-core = "1"
 
 # Documents and export
 serde = { version = "1", features = ["derive"] }
