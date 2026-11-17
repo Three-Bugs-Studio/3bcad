@@ -830,6 +830,11 @@ pub fn paint(p: &Painter, r: Rect, name: &str, enabled: bool) {
             k.ends(&[(0.5, 0.5)]);
         }
         "sketch_point" => k.bead(0.5, 0.5, 0.14, TEAL),
+        "sketch_text" => {
+            k.sk(&[(0.14, 0.88), (0.5, 0.1), (0.86, 0.88)]);
+            k.sk(&[(0.29, 0.58), (0.71, 0.58)]);
+            k.ends(&[(0.14, 0.88)]);
+        }
         "sketch_fillet" | "sketch_chamfer" => {
             k.dashed((0.15, 0.5), (0.15, 0.15), INK);
             k.dashed((0.15, 0.15), (0.5, 0.15), INK);

@@ -642,7 +642,7 @@ const TOOL_COLUMNS: &[&[Tool]] = &[
     &[Tool::Spline, Tool::Slot, Tool::CenterSlot],
     &[Tool::Fillet, Tool::Chamfer, Tool::Offset],
     &[Tool::Trim, Tool::Extend, Tool::Mirror],
-    &[Tool::LinearPattern, Tool::CircularPattern],
+    &[Tool::LinearPattern, Tool::CircularPattern, Tool::Text],
 ];
 
 fn tool_icon(t: Tool) -> &'static str {
@@ -663,6 +663,7 @@ fn tool_icon(t: Tool) -> &'static str {
         Tool::Slot | Tool::CenterSlot => "slot",
         Tool::Polygon => "polygon",
         Tool::Point => "sketch_point",
+        Tool::Text => "sketch_text",
         Tool::Fillet => "sketch_fillet",
         Tool::Chamfer => "sketch_chamfer",
         Tool::Trim => "trim",

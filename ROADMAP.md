@@ -164,6 +164,15 @@ Polished UX, installers, signing, performance, docs and accessibility.
 - [x] #108 Localization framework (English, Vietnamese)
 - [x] #109 Accessibility: UI scaling, high contrast and keyboard navigation
 
+## [v1.2.0 – Text & Split for Printing](https://github.com/Three-Bugs-Studio/3bcad/milestone/11)
+
+Labels and logos in sketches, splitting big parts for the printer bed, and the STEP files 1.0 still gets wrong.
+
+- [ ] #113 Sketch text and emboss/deboss
+- [ ] #114 Split part for the printer bed with alignment pins
+- [ ] STEP import fixes: NIST STC-07 and CTC-02, the OpenCASCADE screw and linkrods samples and a concave boss
+  fillet open correctly, or report an error instead of wrong geometry
+
 ## [Future](https://github.com/Three-Bugs-Studio/3bcad/milestone/10)
 
 Post-1.0 workbenches: sheet metal, weldments, surfacing, simulation, scripting.
@@ -171,8 +180,6 @@ Post-1.0 workbenches: sheet metal, weldments, surfacing, simulation, scripting.
 - [ ] #110 Sheet metal: base flange, edge flange, bends and flat pattern
 - [ ] #111 Weldments: structural members from profiles
 - [ ] #112 Surface modeling: extruded/revolved/lofted surfaces, knit, thicken
-- [ ] #113 Sketch text and emboss/deboss
-- [ ] #114 Split part for the printer bed with alignment pins
 - [ ] #115 Scripting and plugin API
 - [ ] #116 Simulation: linear static FEA
 - [ ] #117 Photorealistic rendering

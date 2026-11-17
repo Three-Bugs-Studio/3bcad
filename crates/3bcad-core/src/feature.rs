@@ -475,6 +475,54 @@ pub enum SplitTool {
     Sketch(FeatureId),
 }
 
+/// Alignment pins across each split plane, so printed pieces glue back in line (#114).
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct Pins {
+    pub diameter: f64,
+    /// Length across the joint, half in each piece.
+    pub length: f64,
+    /// Pins per plane; fewer when the cut face has no room for them.
+    pub count: usize,
+    /// Gap per side between a pin and its hole (the Fit presets).
+    pub clearance: f64,
+    /// Separate dowels in holes on both sides, instead of pins standing on one piece.
+    pub dowels: bool,
+}
+
+impl Pins {
+    /// 5 mm pins, 10 long, two per plane, with `clearance`.
+    pub fn new(clearance: f64) -> Self {
+        Self {
+            diameter: 5.0,
+            length: 10.0,
+            count: 2,
+            clearance,
+            dowels: false,
+        }
+    }
+}
+
+/// Clearance per side (mm) for press, slip and loose fits, by printing process and material.
+pub const FIT_PRESETS: [(&str, [f64; 3]); 4] = [
+    ("FDM: PLA, PETG", [0.05, 0.15, 0.3]),
+    ("FDM: ABS, ASA, nylon", [0.1, 0.2, 0.35]),
+    ("Resin (SLA, DLP)", [0.025, 0.075, 0.15]),
+    ("Powder (SLS, MJF)", [0.1, 0.2, 0.3]),
+];
+
+/// A slip fit for a material (by its name).
+pub fn slip_fit(material: &str) -> f64 {
+    let m = material.to_ascii_lowercase();
+    let row = if m.contains("resin") {
+        2
+    } else if ["abs", "asa", "nylon", "pc"].iter().any(|k| m.contains(k)) {
+        1
+    } else {
+        0
+    };
+    FIT_PRESETS[row].1[1]
+}
+
 /// Moves (or copies) bodies: a translation, then a rotation, or a face mated onto a plane.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct MoveBody {
@@ -585,6 +633,12 @@ pub enum FeatureKind {
         tool: SplitTool,
         /// Bodies to split (empty: all).
         bodies: Vec<FaceRef>,
+        /// More planes, each cutting the pieces again (v1.2).
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        planes: Vec<PlaneRef>,
+        /// Alignment pins across every plane (v1.2).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pins: Option<Pins>,
     },
     /// Removes the bodies, or with `keep` removes every other body.
     DeleteBody {
@@ -873,11 +927,14 @@ impl FeatureKind {
             FeatureKind::Combine { main, tools, .. } => {
                 std::iter::once(main).chain(tools).for_each(|f| face(f, &mut out))
             }
-            FeatureKind::Split { tool, bodies } => {
+            FeatureKind::Split {
+                tool, bodies, planes, ..
+            } => {
                 match tool {
                     SplitTool::Plane(p) => plane(p, &mut out),
                     SplitTool::Sketch(id) => out.push(*id),
                 }
+                planes.iter().for_each(|p| plane(p, &mut out));
                 bodies.iter().for_each(|f| face(f, &mut out));
             }
             FeatureKind::DeleteBody { bodies, .. } => bodies.iter().for_each(|f| face(f, &mut out)),
