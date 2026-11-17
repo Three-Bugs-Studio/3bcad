@@ -44,6 +44,7 @@ Pick a tool on the **Sketch** tab. The Properties panel shows the tool's options
 - **Spline**: click points; double-click or press `Enter` to finish.
 - **Straight Slot**: both arc centers, then the width. **Centerpoint Slot**: the slot's center, an arc
   center, then the width.
+- **Text**: click where the text starts. See [Text](#text) below.
 
 ## Editing tools
 
@@ -114,6 +115,36 @@ The status bar, the Properties panel and the colours show how far the sketch is 
 
 An under-defined sketch still makes features. Fully defining it means a later change to one dimension
 moves only what you expect.
+
+## Text
+
+**Text** writes lettering into the sketch in any font installed on your computer, for labels, part
+numbers and logos.
+
+1. Pick **Text** on the **Sketch** tab. In the Properties panel, type the text, choose a **Font** and set
+   the **Height** (the height of the capital letters).
+2. Click where the text should start: the left end of its baseline. The new text is selected.
+3. With the text selected, the Properties panel changes it: the words, **Font**, **Height** and **Angle**.
+   Drag the text to move it, or dimension its start point (a small point at the left end of the
+   baseline) to place it exactly.
+4. To put the text on a curve, click **Pick a curve…**, then click a line, arc, circle or spline (or
+   Ctrl+click the curve and click **Along the selected curve**). The curve becomes construction geometry,
+   and the letters stand on it, starting where the start point sits; drag the start point along the curve
+   to slide the text. On an arc or a circle the
+   letters stand outside the curve and read clockwise; tick **Flip side** to hang them inside it, reading
+   the other way. **Straight** takes the text off the curve.
+
+Every letter is a closed profile, so the sketch's features use it like any other outline:
+
+- **Emboss** (raised lettering): sketch the text on a face of the part and use **Extruded Boss/Base**.
+- **Deboss** (engraved lettering): the same with **Extruded Cut**.
+- **Stencil**: text inside a closed outline in the same sketch becomes holes in it.
+
+Letters' curves are made of short straight lines no further than 0.2 % of the height (0.02 mm at most)
+from the font's curves, which is what keeps exported meshes closed. The outlines are saved in the part,
+so it opens with the same lettering on a computer without the font (changing the text then uses the
+built-in font, Ubuntu Light). A few fonts draw letters from overlapping outlines; those are refused with
+"Contours intersect each other", so pick another font. Letter pairs are not kerned.
 
 ## Profiles
 

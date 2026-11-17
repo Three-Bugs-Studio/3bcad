@@ -531,6 +531,11 @@ impl FeatureKind {
             FeatureKind::Dome { height, .. } => put!(1, "Height", Length, Some(height)),
             FeatureKind::Wrap { depth, .. } => put!(1, "Depth", Length, Some(depth)),
             FeatureKind::Fit { clearance, .. } => put!(1, "Clearance", Length, Some(clearance)),
+            FeatureKind::Split { pins: Some(p), .. } => {
+                put!(1, "Pin diameter", Length, Some(&mut p.diameter));
+                put!(2, "Pin length", Length, Some(&mut p.length));
+                put!(3, "Clearance", Length, Some(&mut p.clearance));
+            }
             _ => {}
         }
         out

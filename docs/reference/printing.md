@@ -55,6 +55,36 @@ on the `PATH`. If the slicer is somewhere else:
 - click **Locate…** under the list and pick the slicer's program; **Default** forgets it again; or
 - click **Send to Slicer** anyway: 3BCAD says the slicer was not found and offers **Locate…**.
 
+## Split for printing
+
+A part too big for the bed can be printed in pieces and glued together. **Split for Printing** cuts the
+part by planes and adds alignment pins across each cut, so the pieces line up again.
+
+1. Make a plane where each cut should go, if the standard planes are not in the right place: **Plane**
+   on the **Features** tab, offset from the Right, Front or Top Plane. The **✔ Fits** line under the
+   printer shows how long the part is.
+2. Select the planes (Ctrl+click for more), then click **Split for Printing**. With nothing selected, it
+   cuts at the Right Plane.
+3. The Properties panel of the new **Split** feature sets the pins:
+   - **Diameter** and **Length** of the pins (5 mm and 10 mm to start with); half of each pin goes into
+     each piece;
+   - **Pins per plane** (two to start with; two stop the pieces turning about a pin);
+   - **Clearance** per side, which starts at the slip fit for the part's material, with the same presets
+     as Fit (below);
+   - **Pins on one piece**: at each cut one piece carries the pins and the other has the holes, or
+     **Separate dowels**: both pieces get holes and the pins become bodies of their own, to print
+     separately (or use metal dowels of that size).
+
+The pins go where the cut face has room for the hole plus a wall of material round it (0.3 × the
+diameter, at least 1 mm), spread as far apart as the face allows, and only where the material behind the
+face is deep enough for the hole. If a cut face has room for fewer pins than asked for, the split still
+happens and the What's Wrong list says how many fitted. Holes are wider than the pins by the clearance
+on each side and deeper by the clearance.
+
+**Export 3MF** then writes each piece (and each dowel) as an object of its own, so the slicer can lay
+them out on the bed; turn each piece onto its cut face in the slicer. More planes can be added to the
+Split later, under **Add the selected plane**.
+
 ## Fit clearances
 
 Two printed parts made to the same size do not slide together: plastic spreads a little. **Fit**, on

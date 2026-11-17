@@ -10,6 +10,9 @@ rust-version.workspace = true
 nalgebra.workspace = true
 anyhow.workspace = true
 serde.workspace = true
+# Both already come with egui: the font parser, and the font that ships with 3BCAD.
+ttf-parser = { version = "0.25", default-features = false, features = ["std"] }
+epaint_default_fonts = "0.31"
 
 [dev-dependencies]
 serde_json.workspace = true
