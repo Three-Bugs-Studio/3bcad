@@ -7,8 +7,39 @@ saved files and workflows; patch versions (0.x.y) only fix bugs.
 
 ## [Unreleased]
 
+### Added
+
+- Sketch text (#113): the **Text** sketch tool writes lettering in any installed font, with its height,
+  angle, and optionally along a line, arc, circle or spline (**Flip side** puts it on the curve's other
+  side). Every letter is a profile: emboss it with Extruded Boss, deboss it with Extruded Cut. The outlines
+  are saved in the part, so it keeps its lettering where the font is not installed.
+- Split for printing (#114): **Split for Printing** on the 3D Print tab cuts the part by the selected
+  planes and adds alignment pins across each cut, at a fit clearance (the Fit presets; slip fit for the
+  part's material to start with). Pins stand on one piece and go into holes in the other, or come out as
+  separate dowels with holes in both pieces. Split can now cut by several planes at once, and the pins'
+  size and clearance can be driven by equations.
+
 ### Fixed
 
+- STL and 3MF exports of a round boss or cut sketched on a face of the part are now watertight. The face
+  it sits on was meshed without some of the points along the round edge, which left pinholes there that
+  slicers report as open edges.
+- Text embossed on a face no longer adds a 0.1 mm skin under the letters that run past the face's edge,
+  and text debossed into a face no longer cuts 0.1 mm into a higher part of the model that the letters
+  run under (a deboss like that could also lose most of its cut).
+- A boss or cut whose profile has a hole, sketched on a face of the part (a washer, a ring-shaped groove,
+  the letters O and A), no longer fails with "the boolean operation failed": the outline and the holes
+  are built one after the other.
+- STEP files that 1.1 opened wrong, checked against OpenCASCADE: OpenCASCADE's screw sample no longer
+  comes in 44 % too small (spindle tori and cones were turned inside out, and a split B-spline edge came
+  in twice), NIST CTC-02's drill points are built on the right side of their tip, and NIST STC-07 and
+  other files whose circles have no reference direction open instead of being refused. A concave fillet
+  written by OpenCASCADE closes, and periodic B-splines no longer run off to the origin (NIST CTC-02
+  "AP203 with PMI" never finished meshing).
+- A STEP face that truck would mesh in the wrong place (OpenCASCADE's linkrods sample) now opens with a
+  warning, "N bodies may have come in wrong", naming the faces in the log, and a face running round a
+  closed B-spline, which truck cannot mesh, is refused with the reason, instead of wrong geometry or a
+  hang.
 - A feature or STEP file the geometry kernel fails on no longer counts as a crash: the panic 3BCAD catches and
   recovers from is logged as a warning, without a crash report, so the crash notice after a real crash or hang no
   longer offers an unrelated earlier boolean failure as its report.

@@ -8,12 +8,14 @@ pub mod inference;
 pub mod profile;
 pub mod scalar;
 pub mod solver;
+pub mod text;
 pub mod tools;
 
 pub use constraint::Constraint;
 pub use entity::{Entity, EntityId, Geometry, PointId};
 pub use profile::{Region, Segment};
 pub use solver::SolveReport;
+pub use text::Text;
 
 use geom::P2;
 use scalar::Dual;
@@ -33,6 +35,9 @@ pub struct Sketch {
     /// relations. Parallel to `constraints`, or empty in sketches saved before v0.9.
     #[serde(default)]
     numbers: Vec<u32>,
+    /// Lettering (v1.2); each text's start point is one of `points`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    texts: Vec<Text>,
 }
 
 /// How well the sketch is defined, as shown in the status bar.
@@ -135,6 +140,10 @@ impl Sketch {
                 .constraints
                 .iter()
                 .all(|c| c.points().iter().all(|p| p.0 < np) && c.entities().iter().all(|e| e.0 < ne))
+            && self
+                .texts
+                .iter()
+                .all(|t| t.at.0 < np && t.curve.is_none_or(|e| e.0 < ne) && t.height.is_finite() && t.angle.is_finite())
     }
 
     pub fn point_count(&self) -> usize {
@@ -353,6 +362,15 @@ impl Sketch {
                 new_numbers.push(self.numbers[i]);
             }
         }
+        // Text goes with its start point; text on a deleted curve lies straight again.
+        let texts = std::mem::take(&mut self.texts)
+            .into_iter()
+            .filter_map(|mut t| {
+                t.at = fp(t.at)?;
+                t.curve = t.curve.and_then(fe);
+                Some(t)
+            })
+            .collect();
         *self = Sketch {
             params,
             points: new_points,
@@ -360,6 +378,7 @@ impl Sketch {
             constraints: new_constraints,
             labels: new_labels,
             numbers: new_numbers,
+            texts,
         };
     }
 

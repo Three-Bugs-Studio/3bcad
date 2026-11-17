@@ -109,7 +109,9 @@ there to select it; Ctrl+click to add more. A boss with **Merge result** unticke
 
 - **Combine**: select a face of the main body, then Ctrl+click a face of each other body. Choose **Add**,
   **Subtract** or **Common**.
-- **Split**: cuts the bodies with a selected plane or sketch (the Right Plane to start with).
+- **Split**: cuts the bodies with a selected plane or sketch (the Right Plane to start with). More
+  planes can be added (**Add the selected plane**), and **Alignment pins** adds pins or dowels across
+  each plane: see [Split for printing](printing.md#split-for-printing).
 - **Delete/Keep Body**: select a face of each body; choose **Delete these** or **Keep only these**.
 - **Move/Copy Body**: moves the selected bodies (or all) by **ΔX**, **ΔY**, **ΔZ**, then optionally
   **Rotate** about an axis, or **Mate a face against a plane**. Tick **Copy (keep the original)** to copy.

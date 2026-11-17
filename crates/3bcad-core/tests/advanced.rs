@@ -522,6 +522,8 @@ fn split_by_a_plane_then_keep_one_half() {
         h.add(FeatureKind::Split {
             tool: SplitTool::Plane(PlaneRef::Std(StdPlane::Right)),
             bodies: Vec::new(),
+            planes: Vec::new(),
+            pins: None,
         })
         .unwrap()
     });
@@ -556,6 +558,8 @@ fn a_split_plane_on_a_face_cuts_nothing() {
         h.add(FeatureKind::Split {
             tool: SplitTool::Plane(PlaneRef::Std(StdPlane::Top)),
             bodies: Vec::new(),
+            planes: Vec::new(),
+            pins: None,
         })
         .unwrap()
     });
@@ -573,6 +577,8 @@ fn split_by_a_sketch_cuts_out_a_core() {
         h.add(FeatureKind::Split {
             tool: SplitTool::Sketch(s),
             bodies: Vec::new(),
+            planes: Vec::new(),
+            pins: None,
         })
         .unwrap()
     });

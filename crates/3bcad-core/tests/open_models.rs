@@ -27,6 +27,9 @@ fn open(path: &Path) -> Result<String, String> {
             if !import.skipped.is_empty() {
                 note = format!(" skipped={} ({})", import.skipped.len(), import.skipped[0]);
             }
+            if !import.warnings.is_empty() {
+                note += &format!(" warnings={:?}", import.warnings);
+            }
             let read = t.elapsed();
             doc.edit(|h| {
                 h.add(FeatureKind::Imported {
